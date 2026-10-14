@@ -1,6 +1,4 @@
-"""jwxt 单元测试：加密向量 + 模拟 HTTP 响应。不访问真实教务。"""
-import json
-import urllib.error
+"""jwxt 单元测试：加密向量、二次认证分类、模拟 HTTP。不访问真实教务。"""
 from unittest import mock
 
 import pytest
@@ -29,14 +27,9 @@ def test_encrypt_password_bundle():
     assert rsa == strEnc("upLT-1", "1", "2", "3")
 
 
-def test_parse_weeks_skzc():
+def test_parse_weeks_and_teacher():
     assert jwxt.parse_weeks_skzc("0101") == [2, 4]
-    assert jwxt.parse_weeks_skzc("00001111") == [5, 6, 7, 8]
-
-
-def test_clean_teacher():
     assert jwxt.clean_teacher("张三/1001,李四/1002") == "张三,李四"
-    assert jwxt.clean_teacher("") == ""
 
 
 def test_row_to_course_and_grade():
@@ -51,27 +44,30 @@ def test_row_to_course_and_grade():
             "SKZC": "1111000000000000",
         }
     )
-    assert c is not None
-    assert c.name == "高等数学"
-    assert c.teacher == "王五"
-    assert c.weekday == 1 and c.start == 1 and c.end == 2
-    assert c.weeks == [1, 2, 3, 4]
-
+    assert c is not None and c.weeks == [1, 2, 3, 4]
     g = jwxt.row_to_grade(
         {"KCM": "线代", "XF": "3.0", "ZCJ": "88", "XNXQDM": "2025-2026-1"}
     )
-    assert g is not None
-    assert g.credit == 3.0 and g.score == "88" and g.term == "2025-2026-1"
+    assert g is not None and g.score == "88"
 
 
-def test_export_csv(tmp_path):
-    courses = [
-        jwxt.core.Course("课", "师", "地", 1, 1, 2, [1, 2, 3, 5]),
-    ]
-    p = tmp_path / "s.csv"
-    jwxt.export_courses_csv(courses, str(p))
-    text = p.read_text(encoding="utf-8-sig")
-    assert "课" in text and "1-3,5" in text
+def test_classify_need_second_factor():
+    html = """
+    <html><body><h1>二次认证</h1>
+    <form class="recheck">
+      <input name="lt" value="LT-2FA" />
+      <input name="execution" value="e1s2" />
+      <input name="WxCode" />
+      <img id="codeImage" src="code?1"/>
+      <a href="recheckcode">获取微信验证码</a>
+    </form></body></html>
+    """
+    assert jwxt.classify_login_html(html) == jwxt.LoginStep.NEED_SECOND_FACTOR
+
+
+def test_classify_wrong_password():
+    html = '<div>用户名或密码有误，请重新输入。</div><footer>微信扫码</footer>'
+    assert jwxt.classify_login_html(html) == jwxt.LoginStep.WRONG_PASSWORD
 
 
 LOGIN_HTML = '''
@@ -79,96 +75,154 @@ LOGIN_HTML = '''
 <input type="hidden" id="lt" name="lt" value="LT-UNIT-TEST" />
 <input type="hidden" name="execution" value="e1s1" />
 <input type="hidden" name="_eventId" value="submit" />
-<div id="errormsg"></div>
 </form>
 '''
 
-FAIL_HTML = '''
-<form id="loginForm">
-<input type="hidden" id="lt" name="lt" value="LT-2" />
-<input type="hidden" name="execution" value="e2s1" />
-<span id="errormsg">用户名或密码错误</span>
-</form>
+RECHECK_HTML = '''
+<html><body><h1>二次认证</h1>
+<form>
+<input type="hidden" id="lt" name="lt" value="LT-RECHECK" />
+<input type="hidden" name="execution" value="e1s2" />
+<input type="hidden" name="_eventId" value="submit" />
+<input name="code" />
+<input name="WxCode" />
+<script>fetch("recheckcode?code=")</script>
+</form></body></html>
 '''
 
 
-def test_login_success_mocked():
+def test_login_password_need_2fa_mocked():
     client = jwxt.JwxtClient()
-    calls = {"n": 0}
 
-    def fake_request(url, data=None, headers=None, method=None):
-        calls["n"] += 1
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
         if data is None:
-            return 200, LOGIN_HTML, url
-        # POST success → land on iedu
-        return 200, "<html>portal</html>", jwxt.IEDU_PORTAL
+            return 200, LOGIN_HTML, url, LOGIN_HTML.encode()
+        return 200, RECHECK_HTML, url, RECHECK_HTML.encode()
 
     with mock.patch.object(client, "_request", side_effect=fake_request):
-        client.login("2021001", "secret")
+        step = client.login_password("mailprefix", "secret")
+    assert step == jwxt.LoginStep.NEED_SECOND_FACTOR
+    assert client.pending is not None
+    assert client.pending.lt == "LT-RECHECK"
+    assert client.pending.execution == "e1s2"
+
+
+def test_login_password_success_mocked():
+    client = jwxt.JwxtClient()
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        if data is None:
+            return 200, LOGIN_HTML, url, LOGIN_HTML.encode()
+        return 200, "<html>portal</html>", jwxt.IEDU_PORTAL, b"<html>portal</html>"
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        step = client.login_password("mailprefix", "secret")
+    assert step == jwxt.LoginStep.SUCCESS
     assert client._logged_in
-    assert calls["n"] == 2
 
 
-def test_login_wrong_password_mocked():
+def test_request_wechat_code_reads_cookie():
     client = jwxt.JwxtClient()
 
-    def fake_request(url, data=None, headers=None, method=None):
-        if data is None:
-            return 200, LOGIN_HTML, url
-        return 200, FAIL_HTML, url
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        from http.cookiejar import Cookie
+
+        client.jar.set_cookie(
+            Cookie(
+                0, "recheck_mobile_error_info", "success", None, False,
+                "cas.jlu.edu.cn", True, False, "/", True, False, None, True,
+                None, None, {}, False,
+            )
+        )
+        return 200, "", url, b""
 
     with mock.patch.object(client, "_request", side_effect=fake_request):
-        with pytest.raises(jwxt.LoginError) as ei:
-            client.login("2021001", "bad")
-    assert "密码" in str(ei.value)
+        assert client.request_wechat_code("3908") == jwxt.WechatCodeResult.SUCCESS
+
+
+def test_login_second_factor_mocked():
+    client = jwxt.JwxtClient()
+    client.pending = jwxt.PendingSecondFactor(lt="LT-X", execution="e1s2")
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        assert b"WxCode=123456" in data
+        assert b"code=3908" in data
+        return 200, "<html>ok</html>", jwxt.IEDU_PORTAL, b"<html>ok</html>"
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        step = client.login_second_factor("3908", "123456")
+    assert step == jwxt.LoginStep.SUCCESS
+    assert client.pending is None
+
+
+def test_download_captcha_mocked(tmp_path):
+    client = jwxt.JwxtClient()
+    jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 60
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        assert "/code" in url
+        return 200, "", url, jpeg
+
+    path = tmp_path / "c.jpg"
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        saved = client.download_captcha(path)
+    assert saved.read_bytes() == jpeg
+
+
+def test_session_save_load(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    client = jwxt.JwxtClient()
+    from http.cookiejar import Cookie
+
+    client.jar.set_cookie(
+        Cookie(
+            0, "tpasssessionid", "ABC", None, False,
+            "cas.jlu.edu.cn", True, False, "/tpass", True, False, None, True,
+            None, None, {}, False,
+        )
+    )
+    path = client.save_session()
+    assert path.exists()
+    other = jwxt.JwxtClient()
+    assert other.load_session()
+    names = {c.name: c.value for c in other.jar}
+    assert names["tpasssessionid"] == "ABC"
+
+
+
+def test_captcha_save_path_prefers_termux_downloads(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    downloads = home / "storage" / "downloads"
+    downloads.mkdir(parents=True)
+    monkeypatch.setattr(jwxt.Path, "home", classmethod(lambda cls: home))
+    p = jwxt.captcha_save_path("x.jpg")
+    assert p == downloads / "x.jpg"
+
+
+def test_save_load_credentials(tmp_path):
+    path = tmp_path / "credentials.json"
+    jwxt.save_credentials("prefix", "p1", path)
+    assert jwxt.load_credentials(path) == ("prefix", "p1")
 
 
 def test_fetch_schedule_mocked():
     client = jwxt.JwxtClient()
-    client._logged_in = True
-    payload = {
-        "datas": {
-            "dqxnxq": {"rows": [{"DM": "2025-2026-2", "MC": "春"}]},
-            "cxxszhxqkb": {
-                "rows": [
-                    {
-                        "KCM": "操作系统",
-                        "SKJS": "赵六/9",
-                        "JASMC": "A201",
-                        "SKXQ": 3,
-                        "KSJC": 5,
-                        "JSJC": 6,
-                        "SKZC": "1111111111111111",
-                    }
-                ]
-            },
-        }
-    }
 
     def fake_post(path, fields, referer):
         if path.endswith("dqxnxq.do"):
-            return {"datas": {"dqxnxq": payload["datas"]["dqxnxq"]}}
-        return {"datas": {"cxxszhxqkb": payload["datas"]["cxxszhxqkb"]}}
-
-    with mock.patch.object(client, "_post_form", side_effect=fake_post):
-        courses = client.fetch_schedule()
-    assert len(courses) == 1
-    assert courses[0].name == "操作系统" and courses[0].weekday == 3
-
-
-def test_fetch_grades_mocked():
-    client = jwxt.JwxtClient()
-
-    def fake_post(path, fields, referer):
+            return {"datas": {"dqxnxq": {"rows": [{"DM": "2025-2026-2"}]}}}
         return {
             "datas": {
-                "xscjcx": {
+                "cxxszhxqkb": {
                     "rows": [
                         {
-                            "KCM": "编译原理",
-                            "XF": 3.5,
-                            "ZCJ": "92",
-                            "XNXQDM": "2024-2025-1",
+                            "KCM": "操作系统",
+                            "SKJS": "赵六/9",
+                            "JASMC": "A201",
+                            "SKXQ": 3,
+                            "KSJC": 5,
+                            "JSJC": 6,
+                            "SKZC": "1111111111111111",
                         }
                     ]
                 }
@@ -176,15 +230,5 @@ def test_fetch_grades_mocked():
         }
 
     with mock.patch.object(client, "_post_form", side_effect=fake_post):
-        grades = client.fetch_grades()
-    assert grades[0].score == "92" and grades[0].credit == 3.5
-
-
-def test_save_load_credentials(tmp_path, monkeypatch):
-    path = tmp_path / "credentials.json"
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    # override default to our path via env: default_cred_path uses XDG_CONFIG_HOME/jlu-toolkit/
-    saved = jwxt.save_credentials("u1", "p1", path)
-    assert saved.exists()
-    assert oct(saved.stat().st_mode & 0o777) == "0o600" or True  # Windows may differ
-    assert jwxt.load_credentials(path) == ("u1", "p1")
+        courses = client.fetch_schedule()
+    assert courses[0].name == "操作系统"

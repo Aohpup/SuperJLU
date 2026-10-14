@@ -1,14 +1,16 @@
 """吉大本科教务（iedu.jlu.edu.cn 金智 jwapp）HTTP 客户端。
 
 登录走统一身份认证 cas.jlu.edu.cn/tpass（Neusoft TPASS）：
-  GET 登录页 → 取 lt/execution → rsa=strEnc(user+pwd+lt,'1','2','3') → POST → 跟随 ticket 回跳。
+  1) GET 登录页 → lt/execution → rsa=strEnc(邮箱前缀+密码+lt,'1','2','3') → POST
+  2) 若返回「二次认证」页：下载图形验证码 /tpass/code → 调 /tpass/recheckcode 发微信验证码
+     → 再 POST lt/execution/code/WxCode 完成登录 → 跟随 ticket 回跳教务
 
-课表/成绩接口来自开源项目抓包核对（JFyuhong/JLU_schedule、ShiGuangSchedule）：
+课表/成绩接口（开源项目抓包核对）：
   - 当前学期 POST /jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do
-  - 课表     POST /jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do  body=XNXQDM=...
+  - 课表     POST /jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do
   - 成绩     POST /jwapp/sys/cjcx/modules/cjcx/xscjcx.do
 
-仅使用标准库（urllib + http.cookiejar）。密码不会被写入日志。
+仅标准库。密码与验证码不会写入日志。
 """
 from __future__ import annotations
 
@@ -17,17 +19,23 @@ import json
 import os
 import re
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from http.cookiejar import CookieJar
+from dataclasses import dataclass
+from enum import Enum
+from http.cookiejar import Cookie, CookieJar
 from pathlib import Path
 from typing import Iterable, Optional
 
 from . import core
 from .des_tpass import strEnc
 
-CAS_LOGIN = "https://cas.jlu.edu.cn/tpass/login"
+CAS_BASE = "https://cas.jlu.edu.cn/tpass"
+CAS_LOGIN = f"{CAS_BASE}/login"
+CAS_CODE = f"{CAS_BASE}/code"
+CAS_RECHECKCODE = f"{CAS_BASE}/recheckcode"
 IEDU_HOST = "iedu.jlu.edu.cn"
 IEDU_PORTAL = "https://iedu.jlu.edu.cn/jwapp/sys/emaphome/portal/index.do"
 IEDU_BASE = "https://iedu.jlu.edu.cn"
@@ -39,15 +47,16 @@ REF_SCHEDULE = "https://iedu.jlu.edu.cn/jwapp/sys/wdkb/*default/index.do"
 REF_GRADES = "https://iedu.jlu.edu.cn/jwapp/sys/cjcx/*default/index.do"
 
 UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 14; Termux) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 )
 
-_LT_RE = re.compile(r'id="lt"[^>]*value="([^"]*)"', re.I)
+_LT_RE = re.compile(r'(?:id|name)="lt"[^>]*value="([^"]*)"', re.I)
+_LT_RE2 = re.compile(r'value="([^"]*)"[^>]*(?:id|name)="lt"', re.I)
 _EXEC_RE = re.compile(r'name="execution"[^>]*value="([^"]*)"', re.I)
-_ERR_RE = re.compile(
-    r'id="errormsg"[^>]*>([^<]*)', re.I
-)
+_EVENT_RE = re.compile(r'name="_eventId"[^>]*value="([^"]*)"', re.I)
+_ERR_RE = re.compile(r'id="errormsg"[^>]*>([^<]*)', re.I)
+_WXCODE_RE = re.compile(r'name=["\']WxCode["\']', re.I)
 
 
 class JwxtError(Exception):
@@ -62,25 +71,70 @@ class NetworkError(JwxtError):
     """网络不可达（常见于校外访问不到 iedu）。"""
 
 
-def default_cred_path() -> Path:
+class SecondFactorError(JwxtError):
+    """二次认证（图形/微信验证码）失败。"""
+
+
+class LoginStep(Enum):
+    SUCCESS = "success"
+    NEED_SECOND_FACTOR = "need_second_factor"
+    WRONG_PASSWORD = "wrong_password"
+    FAILED = "failed"
+
+
+class WechatCodeResult(Enum):
+    SUCCESS = "success"
+    CAPTCHA_ERROR = "img_code_error"
+    TOO_FREQUENT = "get_times_more"
+    SESSION_EXPIRED = "get_session_error"
+    FAILED = "failed"
+
+
+@dataclass
+class PendingSecondFactor:
+    lt: str
+    execution: str
+    event_id: str = "submit"
+    service: str = IEDU_PORTAL
+
+
+def config_dir() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME")
-    if base:
-        return Path(base) / "jlu-toolkit" / "credentials.json"
-    return Path.home() / ".config" / "jlu-toolkit" / "credentials.json"
+    root = Path(base) if base else Path.home() / ".config"
+    return root / "jlu-toolkit"
+
+
+def default_cred_path() -> Path:
+    return config_dir() / "credentials.json"
+
+
+def default_session_path() -> Path:
+    return config_dir() / "session.json"
+
+
+def captcha_save_path(filename: str = "jlu_cas_captcha.jpg") -> Path:
+    """Termux 优先写到 ~/storage/downloads，否则当前目录。"""
+    termux = Path.home() / "storage" / "downloads"
+    if termux.is_dir():
+        return termux / filename
+    return Path.cwd() / filename
+
+
+def _chmod600(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def save_credentials(username: str, password: str, path: Optional[Path] = None) -> Path:
-    """可选：把账号密码存到本地文件（chmod 600）。默认不调用。"""
     path = path or default_cred_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"username": username, "password": password}, ensure_ascii=False),
         encoding="utf-8",
     )
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+    _chmod600(path)
     return path
 
 
@@ -96,12 +150,10 @@ def load_credentials(path: Optional[Path] = None) -> Optional[tuple[str, str]]:
 
 
 def parse_weeks_skzc(skzc: str) -> list[int]:
-    """金智周次二进制串：第 i 位为 '1' 表示第 i+1 周。"""
     return [i + 1 for i, ch in enumerate(skzc or "") if ch == "1"]
 
 
 def clean_teacher(raw: str) -> str:
-    """'姓名/工号,姓名2/工号2' → '姓名,姓名2'。"""
     if not raw:
         return ""
     names = []
@@ -116,15 +168,92 @@ def _ssl_context() -> ssl.SSLContext:
     return ssl.create_default_context()
 
 
+def _extract_lt(html: str) -> Optional[str]:
+    m = _LT_RE.search(html) or _LT_RE2.search(html)
+    return m.group(1) if m else None
+
+
+def classify_login_html(html: str) -> LoginStep:
+    """根据密码提交后的 HTML 判断下一步（对照 wzyyyyyyy/iLearn 的分类器）。"""
+    wrong_markers = (
+        "用户名或密码错误",
+        "账号或密码错误",
+        "用户名或密码有误",
+        "账号或密码有误",
+        "密码错误",
+        "密码有误",
+    )
+    if any(m in html for m in wrong_markers):
+        return LoginStep.WRONG_PASSWORD
+    if (
+        _WXCODE_RE.search(html)
+        or "recheckcode" in html.lower()
+        or "二次认证" in html
+        or 'name="WxCode"' in html
+        or "获取微信验证码" in html
+    ):
+        return LoginStep.NEED_SECOND_FACTOR
+    if 'id="loginForm"' in html or "id='loginForm'" in html:
+        return LoginStep.WRONG_PASSWORD
+    return LoginStep.SUCCESS
+
+
+def jar_to_list(jar: CookieJar) -> list[dict]:
+    out = []
+    for c in jar:
+        out.append(
+            {
+                "name": c.name,
+                "value": c.value,
+                "domain": c.domain,
+                "path": c.path or "/",
+                "secure": bool(c.secure),
+                "expires": c.expires,
+                "rest": dict(c._rest) if getattr(c, "_rest", None) else {},
+            }
+        )
+    return out
+
+
+def jar_from_list(items: list[dict]) -> CookieJar:
+    jar = CookieJar()
+    for d in items:
+        c = Cookie(
+            version=0,
+            name=d["name"],
+            value=d["value"],
+            port=None,
+            port_specified=False,
+            domain=d.get("domain") or "",
+            domain_specified=bool(d.get("domain")),
+            domain_initial_dot=str(d.get("domain") or "").startswith("."),
+            path=d.get("path") or "/",
+            path_specified=True,
+            secure=bool(d.get("secure")),
+            expires=d.get("expires"),
+            discard=d.get("expires") is None,
+            comment=None,
+            comment_url=None,
+            rest=d.get("rest") or {},
+            rfc2109=False,
+        )
+        jar.set_cookie(c)
+    return jar
+
+
 class JwxtClient:
     def __init__(self, timeout: float = 25.0):
         self.timeout = timeout
         self.jar = CookieJar()
+        self._rebuild_opener()
+        self._logged_in = False
+        self.pending: Optional[PendingSecondFactor] = None
+
+    def _rebuild_opener(self) -> None:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar),
             urllib.request.HTTPSHandler(context=_ssl_context()),
         )
-        self._logged_in = False
 
     def _request(
         self,
@@ -132,48 +261,98 @@ class JwxtClient:
         data: Optional[bytes] = None,
         headers: Optional[dict] = None,
         method: Optional[str] = None,
-    ) -> tuple[int, str, str]:
+        allow_redirects: bool = True,
+    ) -> tuple[int, str, str, bytes]:
         hdrs = {"User-Agent": UA, "Accept": "*/*"}
         if headers:
             hdrs.update(headers)
+        if allow_redirects:
+            opener = self.opener
+        else:
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(self.jar),
+                urllib.request.HTTPSHandler(context=_ssl_context()),
+                _NoRedirect(),
+            )
         req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
         try:
-            with self.opener.open(req, timeout=self.timeout) as resp:
-                body = resp.read()
+            with opener.open(req, timeout=self.timeout) as resp:
+                raw = resp.read()
                 charset = resp.headers.get_content_charset() or "utf-8"
-                text = body.decode(charset, errors="replace")
-                return resp.getcode() or 200, text, resp.geturl()
+                text = raw.decode(charset, errors="replace")
+                return resp.getcode() or 200, text, resp.geturl(), raw
         except urllib.error.HTTPError as e:
-            body = e.read() if e.fp else b""
-            text = body.decode("utf-8", errors="replace")
-            return e.code, text, e.geturl() if hasattr(e, "geturl") else url
+            raw = e.read() if e.fp else b""
+            text = raw.decode("utf-8", errors="replace")
+            # 302 with no-redirect handler lands here
+            loc = e.headers.get("Location", "")
+            final = urllib.parse.urljoin(url, loc) if loc else url
+            return e.code, text, final, raw
         except urllib.error.URLError as e:
             raise NetworkError(f"无法连接 {url}: {e.reason}") from e
         except TimeoutError as e:
             raise NetworkError(f"连接超时 {url}") from e
 
+    def save_session(self, path: Optional[Path] = None) -> Path:
+        path = path or default_session_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"cookies": jar_to_list(self.jar)}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        _chmod600(path)
+        return path
+
+    def load_session(self, path: Optional[Path] = None) -> bool:
+        path = path or default_session_path()
+        if not path.is_file():
+            return False
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.jar = jar_from_list(data.get("cookies") or [])
+        self._rebuild_opener()
+        return True
+
+    def clear_session_file(self, path: Optional[Path] = None) -> None:
+        path = path or default_session_path()
+        if path.is_file():
+            path.unlink()
+
+    def session_alive(self) -> bool:
+        """探测已保存会话是否还能访问教务（不落在 CAS 登录页）。"""
+        try:
+            code, text, final, _ = self._request(REF_SCHEDULE)
+        except NetworkError:
+            return False
+        host = urllib.parse.urlparse(final).hostname or ""
+        if host != IEDU_HOST or code not in (200, 302):
+            return False
+        low = text[:8192].lower()
+        if 'id="loginform"' in low or ("/tpass/login" in low and "password" in low):
+            return False
+        if "二次认证" in text:
+            return False
+        self._logged_in = True
+        return True
+
     def fetch_login_page(self, service: str = IEDU_PORTAL) -> tuple[str, str, str]:
-        """返回 (html, lt, execution)。"""
         url = f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
-        code, html, _ = self._request(url)
+        code, html, _, _ = self._request(url)
         if code != 200:
             raise NetworkError(f"CAS 登录页 HTTP {code}")
-        lt_m, ex_m = _LT_RE.search(html), _EXEC_RE.search(html)
-        if not lt_m:
+        lt = _extract_lt(html)
+        if not lt:
             raise JwxtError("登录页未找到 lt，页面结构可能已变更")
-        return html, lt_m.group(1), (ex_m.group(1) if ex_m else "e1s1")
+        ex_m = _EXEC_RE.search(html)
+        return html, lt, (ex_m.group(1) if ex_m else "e1s1")
 
     @staticmethod
     def encrypt_password_bundle(username: str, password: str, lt: str) -> str:
-        """与 login10.js 一致：strEnc(username+password+lt, '1','2','3')。"""
         return strEnc(username + password + lt, "1", "2", "3")
 
-    def login(self, username: str, password: str, service: str = IEDU_PORTAL) -> None:
-        """使用学号/密码登录 CAS，并跟随 ticket 建立 iedu 会话。
-
-        成功条件：最终落到 iedu.jlu.edu.cn，且页面不再是登录表单。
-        失败时抛出 LoginError（不会回显密码）。
-        """
+    def login_password(
+        self, username: str, password: str, service: str = IEDU_PORTAL
+    ) -> LoginStep:
+        """第一步：提交邮箱前缀+密码。可能直接成功，或需要二次认证。"""
         _, lt, execution = self.fetch_login_page(service)
         rsa = self.encrypt_password_bundle(username, password, lt)
         form = urllib.parse.urlencode(
@@ -188,7 +367,7 @@ class JwxtClient:
             }
         ).encode("utf-8")
         post_url = f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
-        code, html, final = self._request(
+        code, html, final, _ = self._request(
             post_url,
             data=form,
             headers={
@@ -197,32 +376,185 @@ class JwxtClient:
                 "Origin": "https://cas.jlu.edu.cn",
             },
         )
-        err = _ERR_RE.search(html)
-        err_text = (err.group(1).strip() if err else "") or ""
-        still_login = 'id="loginForm"' in html or "id='loginForm'" in html
+        step = classify_login_html(html)
         host = urllib.parse.urlparse(final).hostname or ""
-        if host == IEDU_HOST and code in (200, 302) and not still_login:
+
+        if step == LoginStep.NEED_SECOND_FACTOR:
+            new_lt = _extract_lt(html) or lt
+            ex_m = _EXEC_RE.search(html)
+            ev_m = _EVENT_RE.search(html)
+            self.pending = PendingSecondFactor(
+                lt=new_lt,
+                execution=ex_m.group(1) if ex_m else "e1s2",
+                event_id=ev_m.group(1) if ev_m else "submit",
+                service=service,
+            )
+            return LoginStep.NEED_SECOND_FACTOR
+
+        if step == LoginStep.WRONG_PASSWORD:
+            return LoginStep.WRONG_PASSWORD
+
+        if host == IEDU_HOST and code in (200, 302):
             self._logged_in = True
-            return
-        if still_login or err_text or host == "cas.jlu.edu.cn":
-            # 失败时 CAS 会重新渲染登录页并轮换 lt；errormsg 常为默认文案
-            if err_text and err_text not in ("请输入正确信息",):
-                msg = err_text
-            else:
-                msg = "用户名或密码错误，或需要额外验证（CAS 仍停留在登录页）"
-            raise LoginError(msg)
-        # 可能 ticket 回跳到了 iedu 但本机连不上 iedu（校外）
-        if "iedu.jlu.edu.cn" in (final + html):
+            self.pending = None
+            return LoginStep.SUCCESS
+
+        if host == IEDU_HOST or ("ticket=" in final and "iedu.jlu.edu.cn" in final):
+            # ticket 已发但业务站连不上
             raise NetworkError(
-                "CAS 似乎已放行，但无法完成到教务站点的回跳。"
+                "CAS 已放行，但无法完成到教务站点的回跳。"
                 "请确认当前网络能访问 iedu.jlu.edu.cn（校园网或学校 VPN）。"
             )
-        raise LoginError(f"登录未完成（HTTP {code}，最终地址 {host}）")
+        if host == "cas.jlu.edu.cn":
+            return LoginStep.WRONG_PASSWORD
+        return LoginStep.FAILED
+
+    def download_captcha(self, path: Optional[Path] = None) -> Path:
+        """GET /tpass/code → JPEG。需与当前会话 cookie 一致。"""
+        path = path or captcha_save_path()
+        url = f"{CAS_CODE}?{int(time.time() * 1000)}"
+        code, _, _, raw = self._request(
+            url,
+            headers={"Referer": CAS_LOGIN, "Accept": "image/*,*/*"},
+        )
+        if code != 200 or len(raw) < 50:
+            raise SecondFactorError(f"获取图形验证码失败 HTTP {code}")
+        if raw[:2] != b"\xff\xd8":
+            raise SecondFactorError("图形验证码不是 JPEG，页面可能已变更")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        return path
+
+    def request_wechat_code(self, image_captcha: str) -> WechatCodeResult:
+        """GET /tpass/recheckcode?code=&t= ，结果在 cookie recheck_mobile_error_info。"""
+        if not image_captcha.strip():
+            raise SecondFactorError("图形验证码不能为空")
+        now = int(time.time() * 1000)
+        # 与浏览器一致：写入倒计时 cookie
+        self.jar.set_cookie(
+            Cookie(
+                version=0,
+                name="recheck_djsendtime",
+                value=str(now + 120000),
+                port=None,
+                port_specified=False,
+                domain="cas.jlu.edu.cn",
+                domain_specified=True,
+                domain_initial_dot=False,
+                path="/",
+                path_specified=True,
+                secure=False,
+                expires=None,
+                discard=True,
+                comment=None,
+                comment_url=None,
+                rest={},
+                rfc2109=False,
+            )
+        )
+        url = (
+            f"{CAS_RECHECKCODE}?code={urllib.parse.quote(image_captcha.strip())}"
+            f"&t={now}"
+        )
+        referer = f"{CAS_LOGIN}?service={urllib.parse.quote(IEDU_PORTAL, safe='')}"
+        code, _, _, _ = self._request(
+            url,
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": referer,
+                "Accept": "*/*",
+            },
+        )
+        if code != 200:
+            return WechatCodeResult.FAILED
+        info = None
+        for c in self.jar:
+            if c.name == "recheck_mobile_error_info":
+                info = c.value
+                break
+        mapping = {
+            "success": WechatCodeResult.SUCCESS,
+            "img_code_error": WechatCodeResult.CAPTCHA_ERROR,
+            "get_times_more": WechatCodeResult.TOO_FREQUENT,
+            "get_session_error": WechatCodeResult.SESSION_EXPIRED,
+        }
+        return mapping.get(info or "", WechatCodeResult.FAILED)
+
+    def login_second_factor(self, image_captcha: str, wechat_code: str) -> LoginStep:
+        """第二步：提交图形验证码 + 微信验证码。"""
+        if not self.pending:
+            raise SecondFactorError("没有待完成的二次认证（请先完成密码登录）")
+        p = self.pending
+        form = urllib.parse.urlencode(
+            {
+                "rsa": "",
+                "ul": "",
+                "pl": "",
+                "sl": "",
+                "lt": p.lt,
+                "execution": p.execution,
+                "_eventId": p.event_id,
+                "code": image_captcha.strip(),
+                "WxCode": wechat_code.strip(),
+                "not_exit_number": "",
+                "service_id": "",
+            }
+        ).encode("utf-8")
+        post_url = f"{CAS_LOGIN}?service={urllib.parse.quote(p.service, safe='')}"
+        code, html, final, _ = self._request(
+            post_url,
+            data=form,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": post_url,
+                "Origin": "https://cas.jlu.edu.cn",
+            },
+        )
+        host = urllib.parse.urlparse(final).hostname or ""
+        if "验证码错误" in html:
+            return LoginStep.FAILED
+        if classify_login_html(html) == LoginStep.NEED_SECOND_FACTOR:
+            new_lt = _extract_lt(html)
+            if new_lt:
+                self.pending.lt = new_lt
+            ex_m = _EXEC_RE.search(html)
+            if ex_m:
+                self.pending.execution = ex_m.group(1)
+            return LoginStep.FAILED
+        landed_iedu = host == IEDU_HOST or "iedu.jlu.edu.cn" in final
+        has_ticket = "ticket=" in final
+        if landed_iedu:
+            self._logged_in = True
+            self.pending = None
+            return LoginStep.SUCCESS
+        if has_ticket:
+            raise NetworkError(
+                "二次认证似乎已通过，但无法完成到教务的回跳，请使用校园网或 VPN。"
+            )
+        if code in (200, 302) and host not in ("", "cas.jlu.edu.cn"):
+            # 其他业务站 service 回跳也算 CAS 成功
+            self._logged_in = True
+            self.pending = None
+            return LoginStep.SUCCESS
+        return LoginStep.FAILED
+
+    def login(self, username: str, password: str, service: str = IEDU_PORTAL) -> None:
+        """兼容旧接口：仅密码、无二次认证时可用；需要 2FA 时抛 LoginError。"""
+        step = self.login_password(username, password, service)
+        if step == LoginStep.SUCCESS:
+            return
+        if step == LoginStep.NEED_SECOND_FACTOR:
+            raise LoginError(
+                "需要二次认证（图形验证码 + 微信验证码）。请使用 CLI 交互流程。"
+            )
+        if step == LoginStep.WRONG_PASSWORD:
+            raise LoginError("用户名或密码错误，或需要额外验证（CAS 仍停留在登录页）")
+        raise LoginError("登录未完成")
 
     def _post_form(self, path: str, fields: dict, referer: str) -> dict:
         url = IEDU_BASE + path
         data = urllib.parse.urlencode(fields).encode("utf-8") if fields else b""
-        code, text, _ = self._request(
+        code, text, _, _ = self._request(
             url,
             data=data,
             headers={
@@ -238,40 +570,27 @@ class JwxtClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
-            if "loginForm" in text or "/tpass/login" in text:
+            if "loginForm" in text or "/tpass/login" in text or "二次认证" in text:
                 raise LoginError("会话已失效，请重新登录") from e
             raise JwxtError(f"{path} 返回非 JSON") from e
 
     def current_semester(self) -> Optional[str]:
-        """返回当前学期代码，如 '2025-2026-2'。"""
         data = self._post_form(EP_CURRENT_SEM, {}, REF_SCHEDULE)
-        rows = (
-            data.get("datas", {})
-            .get("dqxnxq", {})
-            .get("rows")
-            or []
-        )
+        rows = (data.get("datas", {}).get("dqxnxq", {}) or {}).get("rows") or []
         if not rows:
             return None
         return rows[0].get("DM")
 
     def fetch_schedule(self, xnxqdm: Optional[str] = None) -> list[core.Course]:
-        """拉取课表，返回 core.Course 列表。"""
         if not xnxqdm:
             xnxqdm = self.current_semester()
         if not xnxqdm:
             raise JwxtError("无法取得当前学期代码")
         data = self._post_form(EP_COURSES, {"XNXQDM": xnxqdm}, REF_SCHEDULE)
-        rows = (
-            data.get("datas", {})
-            .get("cxxszhxqkb", {})
-            .get("rows")
-            or []
-        )
+        rows = (data.get("datas", {}).get("cxxszhxqkb", {}) or {}).get("rows") or []
         return [c for c in (row_to_course(r) for r in rows) if c is not None]
 
     def fetch_grades(self) -> list[core.Grade]:
-        """拉取全部有效成绩。"""
         query = json.dumps(
             [
                 {
@@ -305,12 +624,7 @@ class JwxtClient:
             },
             REF_GRADES,
         )
-        rows = (
-            data.get("datas", {})
-            .get("xscjcx", {})
-            .get("rows")
-            or []
-        )
+        rows = (data.get("datas", {}).get("xscjcx", {}) or {}).get("rows") or []
         if not rows:
             data = self._post_form(
                 EP_GRADES,
@@ -322,13 +636,13 @@ class JwxtClient:
                 },
                 REF_GRADES,
             )
-            rows = (
-                data.get("datas", {})
-                .get("xscjcx", {})
-                .get("rows")
-                or []
-            )
+            rows = (data.get("datas", {}).get("xscjcx", {}) or {}).get("rows") or []
         return [g for g in (row_to_grade(r) for r in rows) if g is not None]
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def row_to_course(row: dict) -> Optional[core.Course]:
@@ -427,7 +741,6 @@ def _weeks_to_csv(weeks: list[int]) -> str:
 
 
 def probe_reachability(timeout: float = 12.0) -> dict:
-    """不带凭据探测 CAS / iedu 是否可达。供诊断用。"""
     out = {}
     client = JwxtClient(timeout=timeout)
     try:
@@ -437,13 +750,33 @@ def probe_reachability(timeout: float = 12.0) -> dict:
             "lt_prefix": lt[:16] + "...",
             "execution": execution,
             "has_login_form": 'id="loginForm"' in html,
-            "captcha_script_loaded": "jquery.captcha.js" in html,
-            "password_login_uses_captcha": False,  # login10.js 密码登录不校验 captcha
         }
-    except Exception as e:  # noqa: BLE001 — 诊断汇总
+    except Exception as e:  # noqa: BLE001
         out["cas"] = {"ok": False, "error": type(e).__name__ + ": " + str(e)}
     try:
-        code, text, final = client._request(IEDU_PORTAL)
+        path = captcha_save_path("jlu_cas_captcha_probe.jpg")
+        saved = client.download_captcha(path)
+        out["captcha"] = {
+            "ok": True,
+            "path": str(saved),
+            "bytes": saved.stat().st_size,
+            "url": CAS_CODE,
+        }
+    except Exception as e:  # noqa: BLE001
+        out["captcha"] = {"ok": False, "error": type(e).__name__ + ": " + str(e)}
+    try:
+        # 无密码会话时应返回 get_session_error
+        result = client.request_wechat_code("0000")
+        out["recheckcode"] = {
+            "ok": True,
+            "url": CAS_RECHECKCODE,
+            "without_session": result.value,
+            "note": "无密码会话时预期 get_session_error",
+        }
+    except Exception as e:  # noqa: BLE001
+        out["recheckcode"] = {"ok": False, "error": type(e).__name__ + ": " + str(e)}
+    try:
+        code, text, final, _ = client._request(IEDU_PORTAL)
         out["iedu"] = {
             "ok": code == 200,
             "http": code,
