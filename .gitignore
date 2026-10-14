@@ -1,3 +1,7 @@
 __pycache__/
 *.ics
 *.egg-info/
+credentials.json
+.venv/
+dist/
+build/
