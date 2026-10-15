@@ -23,6 +23,13 @@ SERVICE = "jlu-toolkit"
 KEY_ENTRY = "storage-key"
 _MAGIC = b"JLUT1"
 _warned = False
+last_error: Optional[str] = None
+
+
+def _warn(msg: str) -> None:
+    if os.environ.get("JLU_TOOLKIT_QUIET_STORE"):
+        return
+    print(f"[jlu-toolkit] 警告：{msg}", file=sys.stderr)
 
 
 class SecureStoreError(Exception):
@@ -74,6 +81,7 @@ def backend_name() -> str:
 
 
 def _get_key(create: bool) -> Optional[bytes]:
+    global last_error
     kr = _keyring()
     if kr is None:
         return None
@@ -87,9 +95,11 @@ def _get_key(create: bool) -> Optional[bytes]:
         kr.set_password(SERVICE, KEY_ENTRY, base64.b64encode(key).decode())
         # 回读确认真的写进去了（有些后端静默失败）
         if kr.get_password(SERVICE, KEY_ENTRY) is None:
+            last_error = "写入钥匙串后回读为空（后端静默失败）"
             return None
         return key
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        last_error = f"钥匙串读写失败：{type(e).__name__}: {e}"
         return None
 
 
@@ -139,7 +149,10 @@ class SecretFile:
             if self.plain_path.is_file():
                 self.plain_path.unlink()
             return self.enc_path
-        _warn_plain(self.plain_path)
+        if AESGCM is not None and _keyring() is not None:
+            _warn(f"钥匙串后端可用但取不到密钥（{last_error or '原因未知'}），本次以明文保存到 {self.plain_path}")
+        else:
+            _warn_plain(self.plain_path)
         self.plain_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
         _chmod600(self.plain_path)
         if self.enc_path.is_file():
@@ -166,9 +179,13 @@ class SecretFile:
             # 透明迁移：钥匙串可用时改存加密文件（save 会删除明文）
             if backend_name() != "file":
                 try:
-                    self.save(obj)
-                except Exception:  # noqa: BLE001
-                    pass
+                    out = self.save(obj)
+                    if out != self.enc_path:
+                        _warn(f"{self.plain_path} 未能迁移为加密文件，仍是明文")
+                except Exception as e:  # noqa: BLE001
+                    _warn(f"{self.plain_path} 迁移为加密文件失败：{type(e).__name__}: {e}")
+            else:
+                _warn_plain(self.plain_path)
             return obj
         return None
 
