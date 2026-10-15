@@ -194,7 +194,6 @@ def _interactive_second_factor(client: jwxt.JwxtClient, show_captcha: bool = Fal
         auto_try = 0  # allow auto again on full retry
 
 
-
 def _ensure_login(x) -> jwxt.JwxtClient:
     debug = bool(getattr(x, "debug", False))
     client = jwxt.JwxtClient(debug=debug)
@@ -203,6 +202,13 @@ def _ensure_login(x) -> jwxt.JwxtClient:
         print("发现本地会话，正在检测是否有效…", file=sys.stderr)
         if client.session_alive():
             print("会话有效，跳过登录。", file=sys.stderr)
+            try:
+                client.bootstrap_emap_apps()
+                client.save_session()
+            except (jwxt.LoginError, jwxt.JwxtError, jwxt.NetworkError) as e:
+                print(f"会话探测通过但进入应用失败：{e}；将尝试继续。", file=sys.stderr)
+            if getattr(x, "debug", False):
+                print(f"[debug] {client.session_cookie_summary()}", file=sys.stderr)
             return client
         print("会话已失效，需要重新登录。", file=sys.stderr)
         client.clear_session_file()
@@ -280,8 +286,33 @@ def _ensure_login(x) -> jwxt.JwxtClient:
         print(f"已保存凭据到 {path}（权限 600）", file=sys.stderr)
     password = None  # noqa: F841
 
+    # 预进入课表/成绩应用，写入 _WEU 等，再落盘会话
+    try:
+        print("正在进入教务应用（课表/成绩）…", file=sys.stderr)
+        client.bootstrap_emap_apps()
+    except jwxt.LoginError as e:
+        print(f"进入教务应用失败：{e}", file=sys.stderr)
+        sys.exit(1)
+    except jwxt.NetworkError as e:
+        print(f"网络错误：{e}", file=sys.stderr)
+        sys.exit(1)
+
     sess = client.save_session()
-    print(f"已保存会话到 {sess}（权限 600），下次可免登录。", file=sys.stderr)
+    summary = client.session_cookie_summary()
+    print(f"已保存会话到 {sess}（权限 600）。", file=sys.stderr)
+    if summary.get("has_CASTGC"):
+        print(
+            "会话含 CASTGC：下次若教务 Cookie 过期，仍可能靠它静默换票（通常无需再过微信验证）。",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "注意：会话里没有 CASTGC（CAS 长期票据）。"
+            "下次主要依赖教务站 Cookie；失效后需要 --force-login 再走一遍认证。",
+            file=sys.stderr,
+        )
+    if getattr(x, "debug", False):
+        print(f"[debug] cookies={summary.get('cookie_names')}", file=sys.stderr)
     return client
 
 

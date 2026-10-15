@@ -288,6 +288,75 @@ def test_fetch_schedule_mocked():
             }
         }
 
-    with mock.patch.object(client, "_post_form", side_effect=fake_post):
+    with mock.patch.object(client, "enter_emap_app") as enter, mock.patch.object(
+        client, "_post_form", side_effect=fake_post
+    ):
         courses = client.fetch_schedule()
     assert courses[0].name == "操作系统"
+    enter.assert_called_with(jwxt.REF_SCHEDULE)
+
+
+def test_enter_emap_app_sets_context():
+    client = jwxt.JwxtClient(debug=False)
+    calls = []
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        calls.append(url)
+        if "wdkb" in url or "emaphome" in url:
+            return 200, "<html>ok</html>", url, b"<html>ok</html>"
+        return 200, "", url, b""
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        client.enter_emap_app(jwxt.REF_SCHEDULE)
+    assert any("wdkb" in u for u in calls)
+    assert client.last_debug.get("step") == "emap_enter_done"
+
+
+def test_enter_emap_app_requires_castgc_when_bounced_to_cas():
+    client = jwxt.JwxtClient()
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        return (
+            200,
+            '<form id="loginForm"></form>',
+            "https://cas.jlu.edu.cn/tpass/login",
+            b"<form id=\"loginForm\"></form>",
+        )
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        with pytest.raises(jwxt.LoginError, match="CASTGC"):
+            client.enter_emap_app(jwxt.REF_SCHEDULE)
+
+
+def test_post_form_403_message():
+    client = jwxt.JwxtClient()
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        return 403, "forbidden", url, b"forbidden"
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        with pytest.raises(jwxt.JwxtError, match="403"):
+            client._post_form("/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do", {}, jwxt.REF_SCHEDULE)
+
+
+def test_session_cookie_summary_flags():
+    client = jwxt.JwxtClient()
+    from http.cookiejar import Cookie
+
+    client.jar.set_cookie(
+        Cookie(
+            0, "CASTGC", "TGT-1", None, False,
+            "cas.jlu.edu.cn", True, False, "/", True, False, None, True,
+            None, None, {}, False,
+        )
+    )
+    client.jar.set_cookie(
+        Cookie(
+            0, "_WEU", "abc", None, False,
+            "iedu.jlu.edu.cn", True, False, "/jwapp", True, False, None, True,
+            None, None, {}, False,
+        )
+    )
+    s = client.session_cookie_summary()
+    assert s["has_CASTGC"] and s["has__WEU"]
+    assert client.has_cas_tgc()

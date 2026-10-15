@@ -7,10 +7,12 @@
   2) 若返回「二次认证」页：下载图形验证码 /tpass/code → 调 /tpass/recheckcode 发微信验证码
      → 再 POST lt/execution/code/WxCode 完成登录 → 跟随 ticket 回跳教务
 
-课表/成绩接口（开源项目抓包核对）：
+课表/成绩接口（对照 JFyuhong/JLU_schedule ScheduleRemoteSource）：
+  - 先 GET 应用入口 *default/index.do 激活 _WEU 等业务 Cookie（可顺带用 CASTGC 换票）
   - 当前学期 POST /jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do
   - 课表     POST /jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do
   - 成绩     POST /jwapp/sys/cjcx/modules/cjcx/xscjcx.do
+  - 请求头需带 X-Requested-With / Referer=对应应用入口
 
 仅标准库。密码与验证码不会写入日志。
 """
@@ -356,6 +358,23 @@ class JwxtClient:
 
     def _cookie_names(self) -> list[str]:
         return sorted({c.name for c in self.jar})
+
+    def _has_cookie(self, name: str) -> bool:
+        return any(c.name == name for c in self.jar)
+
+    def has_cas_tgc(self) -> bool:
+        """CAS 长期票据（通常名 CASTGC）。有则可对多个教务应用静默换票。"""
+        return self._has_cookie("CASTGC") or self._has_cookie("TGC")
+
+    def session_cookie_summary(self) -> dict:
+        names = self._cookie_names()
+        return {
+            "cookie_names": names,
+            "has_CASTGC": "CASTGC" in names or "TGC" in names,
+            "has__WEU": "_WEU" in names,
+            "has_MOD_AUTH_CAS": "MOD_AUTH_CAS" in names,
+            "has_tpasssessionid": "tpasssessionid" in names,
+        }
 
     def _request(
         self,
@@ -817,10 +836,19 @@ class JwxtClient:
             return LoginStep.SUCCESS
         return LoginStep.FAILED
 
+    def bootstrap_emap_apps(self) -> None:
+        """登录成功后预进入课表/成绩应用，写入 _WEU 等 Cookie（失败不致命）。"""
+        for app in (REF_SCHEDULE, REF_GRADES):
+            try:
+                self.enter_emap_app(app)
+            except (LoginError, JwxtError, NetworkError) as e:
+                self._dbg(step="emap_bootstrap_skip", app=app, error=str(e))
+
     def login(self, username: str, password: str, service: str = CAS_SERVICE) -> None:
         """兼容旧接口：仅密码、无二次认证时可用；需要 2FA 时抛 LoginError。"""
         step = self.login_password(username, password, service)
         if step == LoginStep.SUCCESS:
+            self.bootstrap_emap_apps()
             return
         if step == LoginStep.NEED_SECOND_FACTOR:
             raise LoginError(
@@ -830,10 +858,87 @@ class JwxtClient:
             raise LoginError("用户名或密码错误，或需要额外验证（CAS 仍停留在登录页）")
         raise LoginError("登录未完成")
 
+    def enter_emap_app(self, app_index: str) -> None:
+        """进入金智 EMAP 应用页，换发/刷新业务 Cookie（如 _WEU）。
+
+        对照 JLU_schedule：先 GET wdkb|cjcx/*default/index.do（可跟随 CAS 换票），
+        再 POST 模块接口。若落到 CAS 登录页且本地无 CASTGC，则无法静默换票。
+        """
+        code, html, final, _ = self._request(
+            app_index,
+            headers={
+                "Referer": IEDU_PORTAL,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Upgrade-Insecure-Requests": "1",
+            },
+        )
+        host = urllib.parse.urlparse(final).hostname or ""
+        summary = self.session_cookie_summary()
+        self._dbg(
+            step="emap_enter",
+            app_index=app_index,
+            status=code,
+            final_url=_redact_url(final),
+            final_host=host,
+            **summary,
+        )
+
+        on_cas = host == "cas.jlu.edu.cn" or 'id="loginForm"' in html or "id='loginForm'" in html
+        if on_cas or (host != IEDU_HOST and code in (200, 302)):
+            if not self.has_cas_tgc():
+                raise LoginError(
+                    "进入教务应用时被送回统一认证，且本地会话没有 CASTGC，"
+                    "无法自动换票。请加 --force-login 重新登录。"
+                )
+            # 用 CASTGC 对「该应用入口」显式换票
+            cas_url = f"{CAS_LOGIN}?service={urllib.parse.quote(app_index, safe='')}"
+            code, html, final, _ = self._request(
+                cas_url,
+                headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Upgrade-Insecure-Requests": "1",
+                },
+            )
+            host = urllib.parse.urlparse(final).hostname or ""
+            summary = self.session_cookie_summary()
+            self._dbg(
+                step="emap_cas_exchange",
+                service=app_index,
+                status=code,
+                final_url=_redact_url(final),
+                final_host=host,
+                **summary,
+            )
+            if host != IEDU_HOST or 'id="loginForm"' in html:
+                raise LoginError(
+                    "CASTGC 换票后仍未进入教务应用，票据可能已失效。"
+                    "请加 --force-login 重新登录。"
+                )
+
+        if code == 403:
+            raise JwxtError(
+                f"打开教务应用入口被拒绝 HTTP 403：{app_index}。"
+                "可能未完成应用鉴权，请 --force-login 后重试。"
+            )
+        if host != IEDU_HOST:
+            raise NetworkError(
+                f"无法打开教务应用入口（最终落在 {host or '未知主机'}）。"
+                "请确认校园网/VPN 可访问 iedu.jlu.edu.cn。"
+            )
+        # 再轻量请求一次门户，部分部署会在此写入通用 Cookie
+        try:
+            self._request(
+                IEDU_PORTAL,
+                headers={"Referer": app_index, "Accept": "text/html,*/*"},
+            )
+        except NetworkError:
+            pass
+        self._dbg(step="emap_enter_done", app_index=app_index, **self.session_cookie_summary())
+
     def _post_form(self, path: str, fields: dict, referer: str) -> dict:
         url = IEDU_BASE + path
         data = urllib.parse.urlencode(fields).encode("utf-8") if fields else b""
-        code, text, _, _ = self._request(
+        code, text, final, _ = self._request(
             url,
             data=data,
             headers={
@@ -844,6 +949,19 @@ class JwxtClient:
                 "Origin": IEDU_BASE,
             },
         )
+        self._dbg(
+            step="emap_post",
+            path=path,
+            status=code,
+            final_url=_redact_url(final),
+            **self.session_cookie_summary(),
+        )
+        if code == 403:
+            raise JwxtError(
+                f"{path} HTTP 403：通常是未先进入应用入口（缺少 _WEU 等）。"
+                "已按 JLU_schedule 流程在请求前打开 *default/index.do；"
+                "若仍失败请 --force-login，并加 --debug 查看 cookie_names。"
+            )
         if code != 200:
             raise JwxtError(f"{path} HTTP {code}")
         try:
@@ -854,6 +972,7 @@ class JwxtClient:
             raise JwxtError(f"{path} 返回非 JSON") from e
 
     def current_semester(self) -> Optional[str]:
+        self.enter_emap_app(REF_SCHEDULE)
         data = self._post_form(EP_CURRENT_SEM, {}, REF_SCHEDULE)
         rows = (data.get("datas", {}).get("dqxnxq", {}) or {}).get("rows") or []
         if not rows:
@@ -863,6 +982,8 @@ class JwxtClient:
     def fetch_schedule(self, xnxqdm: Optional[str] = None) -> list[core.Course]:
         if not xnxqdm:
             xnxqdm = self.current_semester()
+        else:
+            self.enter_emap_app(REF_SCHEDULE)
         if not xnxqdm:
             raise JwxtError("无法取得当前学期代码")
         data = self._post_form(EP_COURSES, {"XNXQDM": xnxqdm}, REF_SCHEDULE)
@@ -870,6 +991,7 @@ class JwxtClient:
         return [c for c in (row_to_course(r) for r in rows) if c is not None]
 
     def fetch_grades(self) -> list[core.Grade]:
+        self.enter_emap_app(REF_GRADES)
         query = json.dumps(
             [
                 {

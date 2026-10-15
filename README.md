@@ -46,6 +46,8 @@ jlu-toolkit fetch --user 你的邮箱前缀 --save-credentials
 
 # 强制重登（忽略已保存会话）
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login
+# 登录成功后会自动打开课表/成绩应用入口（避免接口 403）
+# 若仍 403：加 --debug 查看是否有 CASTGC / _WEU
 
 # 只拉课表 / 成绩 / 指定学期
 jlu-toolkit fetch --user 你的邮箱前缀 --what schedule --term 2025-2026-2
@@ -64,6 +66,8 @@ termux-setup-storage
 pip install -U --force-reinstall "git+https://github.com/Runa-Asahi/JLU-Toolkit.git@feat/jwxt-http-fetch"
 jlu-toolkit fetch --probe
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login
+# 登录成功后会自动打开课表/成绩应用入口（避免接口 403）
+# 若仍 403：加 --debug 查看是否有 CASTGC / _WEU
 # 图形验证码默认自动识别（纯 Pillow，无需 ddddocr）
 # 识别错了会自动刷新最多 5 次，再不行才让你手输
 # 需要看图时加：--show-captcha
