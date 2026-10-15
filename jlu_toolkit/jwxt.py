@@ -1372,6 +1372,8 @@ def row_to_grade(row: dict) -> Optional[core.Grade]:
         score=score,
         term=_emap_str(row.get("XNXQDM")),
         jw_point=_first_float(row, GRADE_POINT_FIELDS),
+        nature=next((_emap_str(row.get(k)) for k in ("KCXZDM_DISPLAY", "KCXZMC", "KCXZ_DISPLAY", "KCXZ")
+                     if _emap_str(row.get(k))), ""),
     )
 
 
@@ -1412,13 +1414,13 @@ def export_courses_csv(courses: Iterable[core.Course], path: str) -> None:
 
 def export_grades_csv(grades: Iterable[core.Grade], path: str) -> None:
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["课程", "学分", "成绩", "学期", "教务绩点"])
+        w = csv.DictWriter(f, fieldnames=["课程", "学分", "成绩", "学期", "教务绩点", "课程性质"])
         w.writeheader()
         for g in grades:
             jp = getattr(g, "jw_point", None)
             w.writerow(
                 {"课程": g.name, "学分": g.credit, "成绩": g.score, "学期": g.term,
-                 "教务绩点": "" if jp is None else jp}
+                 "教务绩点": "" if jp is None else jp, "课程性质": g.nature}
             )
 
 

@@ -17,12 +17,14 @@ classifiers = [
 dependencies = [
     "keyring>=24",
     "cryptography>=41",
+    "openpyxl>=3.1",
+    "xlrd>=2.0",
 ]
 [project.urls]
 Homepage = "https://github.com/Runa-Asahi/JLU-Toolkit"
 Issues = "https://github.com/Runa-Asahi/JLU-Toolkit/issues"
 [project.optional-dependencies]
-mcp = ["mcp>=1.0"]
+mcp = ["mcp>=1.0; python_version >= '3.10'"]
 captcha = ["pillow>=9.0"]
 ocr = ["pillow>=9.0", "ddddocr"]
 desktop = ["pystray>=0.19", "pillow>=9.0"]

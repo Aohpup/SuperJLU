@@ -32,6 +32,8 @@ header small{color:var(--sub);font-size:12px;font-weight:450;white-space:nowrap;
 .btn:hover{filter:brightness(.97)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.55;cursor:default}
 .btn.pri{background:var(--pri);color:#fff}.btn.pri:hover{background:var(--pri-h);filter:none}
 .btn.ghost{background:var(--card);border-color:var(--line);color:var(--txt)}
+.btn[hidden]{display:none}
+#del:disabled{display:none}
 header .btn{background:var(--card);border-color:var(--line);color:var(--txt)}
 :focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 main{max-width:1000px;margin:0 auto;padding:8px 14px 16px}
@@ -81,10 +83,19 @@ nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
 .cls i{font-style:normal;opacity:.9}
 .empty{color:var(--sub);text-align:center;padding:36px 0}
 /* 成绩 */
-.gpa{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.gpa{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center}
 .gpa div{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px 4px}
-.gpa div:first-child{background:var(--pri2);border-color:transparent}
-.gpa b{display:block;font-size:26px;color:var(--txt);font-weight:720;font-variant-numeric:tabular-nums;letter-spacing:-.3px}.gpa div:first-child b{color:var(--pri)}.gpa span{font-size:12px;color:var(--sub)}
+.gpa div:nth-child(-n+2){background:var(--pri2);border-color:transparent}
+.gpa b{display:block;font-size:26px;color:var(--txt);font-weight:720;font-variant-numeric:tabular-nums;letter-spacing:-.3px}.gpa div:nth-child(-n+2) b{color:var(--pri)}.gpa span{font-size:12px;color:var(--sub)}
+.grade-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grade-toolbar select{flex:1;min-width:160px}.grade-toolbar input[type=search]{flex:2;min-width:180px}
+.grade-secondary{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.grade-secondary>summary{font-size:12px;color:var(--sub)}.grade-secondary p{margin:8px 0}.grade-secondary .btn{font-size:12px}.grade-sync-status{min-height:20px;margin:6px 0 0}
+.grade-caption{display:flex;align-items:center;gap:8px;margin:12px 0 0;flex-wrap:wrap}.grade-caption p{flex:1;margin:0;min-width:180px}.grade-policy{padding:10px 12px;margin-top:12px;background:var(--card2);border-radius:var(--r-sm);font-size:13px;color:var(--sub)}
+#grade-filter{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}#grade-filter>summary{font-size:13px;font-weight:600;color:var(--pri)}#grade-filter .rgrid{margin-top:12px}
+.grade-choices{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.grade-choices label{display:flex;align-items:center;gap:5px;font-size:12px;padding:4px 9px;background:var(--card2);border:1px solid var(--line);border-radius:999px}.grade-choices label:has(:checked){background:var(--pri2);border-color:var(--pri);color:var(--pri)}.grade-choices input{width:14px;height:14px;margin:0}
+.grade-table{overflow-x:auto;padding:4px 8px}.grade-table table{min-width:640px}.grade-table th{position:static;white-space:nowrap}.grade-table th button{background:none;border:0;color:inherit;padding:0;font:inherit;cursor:pointer;text-align:inherit}.grade-table th[aria-sort=ascending],.grade-table th[aria-sort=descending]{color:var(--pri)}.grade-table .name{font-weight:550}.grade-table .chip{margin-top:3px}.grade-table tr.failed td,.grade-table tr.failed .sub,.grade-table tr.failed .chip{color:var(--bad)}.grade-table tr.failed .chip{background:var(--bad2)}.grade-table tr.failed.off td{opacity:.75}
+.grade-table input[type=checkbox]{cursor:pointer}.grade-table .selected-label{display:block}.grade-badge{font-size:11px;color:var(--sub);font-weight:400;display:block}.grade-import-notes{margin-top:10px}.grade-import-notes p{margin:5px 0}.grade-import-notes summary{font-size:12px;color:var(--sub)}
+dialog.grade-dialog{border:1px solid var(--line);border-radius:var(--r);padding:22px;width:min(92vw,540px);max-height:85vh;overflow:auto;background:var(--card);color:var(--txt);box-shadow:0 20px 65px rgba(0,0,0,.25)}dialog.grade-dialog::backdrop{background:rgba(0,0,0,.4);backdrop-filter:blur(3px)}.grade-dialog h3{font-size:14px;margin:18px 0 6px}.grade-dialog p{font-size:13px;color:var(--sub)}.grade-dialog a{color:var(--pri)}.grade-dialog .college-links{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grade-dialog .college-links a{font-size:13px;padding:10px;border:1px solid var(--line);border-radius:var(--r-sm);text-decoration:none}.grade-keywords{display:flex;flex-wrap:wrap;gap:7px}.grade-keywords button{white-space:normal;text-align:left;font-size:12px}
+@media(max-width:520px){#t-cj .gpa{grid-template-columns:repeat(2,1fr)}.grade-toolbar input[type=search]{width:100%;flex-basis:100%}.grade-toolbar .btn{font-size:12px;padding:7px 11px}.grade-dialog .college-links{grid-template-columns:1fr}}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left}
 tbody tr:last-child td{border-bottom:0}
@@ -104,7 +115,7 @@ select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px 
 .cd b{display:block;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}.cd span{font-size:11px}
 .cd.soon{background:var(--bad2);color:var(--bad)}.cd.past{background:var(--card2);color:var(--sub)}
 .exam .t{flex:1}.exam .t b{display:block}
-#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--txt);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:14px;display:none;z-index:9;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+#toast{position:fixed;right:20px;bottom:96px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:100;max-width:min(420px,90vw);pointer-events:none}.toast-item{background:var(--txt);color:var(--bg);padding:10px 18px;border-radius:var(--r-sm);font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:toast-in .18s ease-out}.toast-item.bad{background:var(--bad);color:#fff}.toast-item.leaving{opacity:0;transform:translateY(-5px);transition:opacity .35s,transform .35s}@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.toast-item{animation:none}.toast-item.leaving{transition:none}}
 .seg{display:flex;gap:4px;margin-bottom:14px;background:var(--card2);border:1px solid var(--line);padding:4px;border-radius:999px}.seg button{flex:1;padding:7px;border:0;background:transparent;border-radius:999px;color:var(--sub);font:inherit;font-size:14px;cursor:pointer}.seg button.on{background:var(--card);color:var(--pri);font-weight:650;box-shadow:var(--sh)}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:5px;color:var(--sub);font-weight:550}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
 .rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:12px}
@@ -153,14 +164,29 @@ dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
  </div>
 </section>
 <section class="tab" id="t-cj">
- <div class="card"><div class="gpa"><div><b id="g-gpa">-</b><span>自选方案绩点</span></div><div><b id="g-cr">-</b><span>计入学分</span></div><div><b id="g-n">-</b><span>计入课程</span></div></div>
-  <p class="sub" style="margin:10px 0 0">按学分加权平均：百分制 60 分记 1.0，每分 +0.1，90 分及以上 4.0；“通过”类不计入。各类官方口径（保研/综测）请勾选课程自行组合。</p></div>
+ <div class="card"><div class="row" style="margin-bottom:14px"><h2 style="margin:0">成绩与绩点</h2><span class="sp"></span><span class="chip" id="grade-source">教务成绩</span><button class="btn ghost" id="grade-help" aria-label="成绩帮助" title="成绩帮助">?</button></div>
+  <div class="gpa"><div><b id="g-score">—</b><span>加权成绩</span></div><div><b id="g-gpa">—</b><span>加权绩点</span></div><div><b id="g-cr">—</b><span>计入学分</span></div><div><b id="g-n">—</b><span>计入课程</span></div></div>
+  <div class="grade-caption"><p class="sub" id="grade-calc-note"></p></div><div class="grade-policy" id="grade-policy"></div></div>
  <div class="card off-card" id="ogpa" hidden></div>
  <div class="card">
-  <div class="row"><select id="scheme" style="flex:1"></select><button class="btn pri" id="saveas">保存为方案</button><button class="btn ghost" id="del">删除</button></div>
-  <div class="row" style="margin-top:8px"><select id="termf" style="flex:1"><option value="">全部学期</option></select><button class="btn ghost" id="all">全选</button><button class="btn ghost" id="none">清空</button></div><div class="sub" id="dirty" style="margin-top:6px"></div>
+  <div class="grade-toolbar"><select id="scheme" aria-label="计算模板"></select><button class="btn pri" id="saveas">另存为自定义模板</button><button class="btn ghost" id="del">删除</button></div>
+  <div class="grade-toolbar" style="margin-top:12px"><input id="grade-search" type="search" placeholder="搜索课程名称、性质或学期" aria-label="搜索课程"><select id="termf" aria-label="学期筛选"><option value="">全部学期</option></select><button class="btn" id="grade-sync">⟳ 同步教务成绩</button><button class="btn" id="grade-use-jwxt" hidden>返回教务成绩</button></div>
+  <p class="sub grade-sync-status" id="grade-sync-status" role="status">默认显示当前登录账号的教务成绩。</p>
+  <details id="grade-filter"><summary>⚲ 高级筛选 <span id="grade-filter-count"></span></summary>
+   <div class="sub" style="margin-top:12px">学期（可多选）</div><div class="grade-choices" id="grade-terms"></div>
+   <div class="sub" style="margin-top:12px">课程性质（可多选）</div><div class="grade-choices" id="grade-natures"></div>
+   <div class="rgrid"><label>成绩范围<span class="rng"><input type="number" id="grade-score-min" placeholder="最低" min="0" max="100" step="any" aria-label="最低成绩">–<input type="number" id="grade-score-max" placeholder="最高" min="0" max="100" step="any" aria-label="最高成绩"></span></label>
+    <label>绩点范围<span class="rng"><input type="number" id="grade-point-min" placeholder="最低" min="0" step="any" aria-label="最低绩点">–<input type="number" id="grade-point-max" placeholder="最高" min="0" step="any" aria-label="最高绩点"></span></label>
+    <label>学分范围<span class="rng"><input type="number" id="grade-credit-min" placeholder="最低" min="0" step="any" aria-label="最低学分">–<input type="number" id="grade-credit-max" placeholder="最高" min="0" step="any" aria-label="最高学分"></span></label>
+    <label>计入状态<select id="grade-inclusion"><option value="">全部</option><option value="in">已计入</option><option value="out">已排除</option></select></label>
+    <label>成绩状态<select id="grade-status"><option value="">全部</option><option value="pass">及格</option><option value="fail">不及格</option><option value="unknown">无法换算</option></select></label></div>
+   <div class="row" style="margin-top:10px"><span class="sp"></span><button class="btn ghost" id="grade-reset">重置筛选</button></div></details>
+  <div class="row" style="margin-top:12px"><span class="sub" id="grade-visible"></span><span class="sp"></span><button class="btn ghost" id="all">计入筛选结果</button><button class="btn ghost" id="none">排除筛选结果</button><button class="btn ghost" id="grade-required">计入所有必修</button></div>
+  <div class="sub" id="dirty" role="status" style="margin-top:6px"></div><div id="grade-notes" class="grade-import-notes"></div>
+  <details class="grade-secondary"><summary>其他方式 · 文件导入（可选）</summary><p class="sub">需要计算其他成绩单时，可以临时查看 Excel / CSV 文件；重新打开页面会回到当前账号的教务成绩。</p><div class="row"><button class="btn ghost" id="grade-import">导入成绩单</button><button class="btn ghost" id="grade-view-import" hidden>查看已导入成绩</button><input type="file" id="grade-file" accept=".xlsx,.xls,.csv" hidden></div></details>
  </div>
- <div class="card" style="padding:4px 8px"><table><thead><tr><th style="width:30px"></th><th>课程</th><th class="n" style="text-align:right">学分</th><th class="n" style="text-align:right">成绩</th><th class="n" style="text-align:right">绩点</th></tr></thead><tbody id="gt"></tbody></table></div>
+ <div class="card grade-table"><table aria-label="成绩列表"><thead><tr><th style="width:38px">计入</th><th>课程</th><th data-grade-sort="nature" aria-sort="none"><button>性质 ↕</button></th><th class="n" data-grade-sort="credit" aria-sort="none"><button>学分 ↕</button></th><th class="n" data-grade-sort="numeric_score" aria-sort="none"><button>成绩 ↕</button></th><th class="n" data-grade-sort="point" aria-sort="none"><button>绩点 ↕</button></th><th data-grade-sort="term" aria-sort="none"><button>学期 ↕</button></th></tr></thead><tbody id="gt"></tbody></table></div>
+ <p class="sub" style="text-align:center">筛选只改变列表显示；上方结果始终统计所有已勾选课程。</p>
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
@@ -214,14 +240,22 @@ dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
  <p class="err" id="lge" role="alert"></p>
  <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="lgx">取消</button><span style="flex:1"></span><button type="submit" class="btn pri" id="lgo">登录</button></div>
 </form></dialog>
-<div id="toast"></div>
+<dialog id="grade-help-dialog" class="grade-dialog" aria-labelledby="grade-help-title"><div class="row"><h2 id="grade-help-title" style="margin:0">成绩帮助（适用于吉林大学）</h2><span class="sp"></span><button class="btn ghost" data-grade-close aria-label="关闭成绩帮助">✕</button></div>
+ <p>不同学院保研政策不同。请先核对本学院当年规则，调整计入课程，再点击「另存为自定义模板」。内置模板仅供起步参考，不代表官方统计。</p>
+ <h3>内置模板</h3><p>保研加权：排除选修、<span style="color:var(--bad)">限选</span>、通用学术英语、体育、军事理论、军事训练。奖学金加权：只计必修，排除英语、体育、军事训练；军事理论计入。所有课程：计入全部有学分课程。</p>
+ <h3>计算与导入</h3><p>成绩、绩点分别按学分加权。等级成绩：优秀 95、良好 85、中等 75、及格 65、不及格 55。教务课程优先用单科绩点，缺失时按原程序规则估算并标注；导入成绩单缺少绩点时显示「—」。无法识别的成绩会标注，计入时按 0 分处理，请核对后再使用结果。</p>
+ <p>支持 Excel / CSV（最多 25 MB），中英文表头、标题行和多工作表。导入数据只保存在本机，独立于教务数据，可随时返回教务成绩。自定义模板保留基础规则及手动选择，新增课程按基础规则计入。</p>
+ <h3>筛选与批量操作</h3><p>搜索、高级筛选和排序只控制显示。批量计入 / 排除作用于当前筛选结果，「计入所有必修」作用于整份成绩单。点击列标题切换降序、升序和默认顺序。</p>
+ <h3>学院官网与政策查询</h3><div class="college-links" id="grade-college-links"><span class="sub">正在读取学院官网…</span></div><p>到学院官网搜索以下关键词寻找方案，点击可复制：</p><div class="grade-keywords"><button class="btn ghost" data-grade-copy>免试</button><button class="btn ghost" data-grade-copy>推荐优秀应届本科毕业生免试攻读研究生</button><button class="btn ghost" data-grade-copy>推免</button></div><div class="row" style="margin-top:18px"><span class="sp"></span><button class="btn pri" data-grade-close>我知道了</button></div></dialog>
+<dialog id="grade-save-dialog" class="grade-dialog" aria-labelledby="grade-save-title"><form id="grade-save-form"><h2 id="grade-save-title">另存为自定义模板</h2><p>保存基础规则与当前的手动计入 / 排除。新增课程按基础规则选择。</p><label for="grade-template-name" class="sub">模板名称</label><input id="grade-template-name" maxlength="40" required style="width:100%;margin:8px 0 16px" placeholder="例如：软件学院保研"><div class="row"><button type="button" class="btn ghost" id="grade-save-cancel">取消</button><span class="sp"></span><button class="btn pri" type="submit">保存模板</button></div></form></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
 <script>
 "use strict";
 const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const LEVEL={"优秀":95,"良好":85,"中等":75,"及格":65,"不及格":0,"通过":null,"不通过":0};
 const COLORS=["#3b6fd4","#d4573b","#2e9e6a","#9b51e0","#d48a1e","#1f8fa8","#c2416f","#5b6bd6","#6b8e23","#b8572b"];
-let D=null, week=1, include=new Set(), current="__all__", dirty=false;
-function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2600)}
+let D=null, week=1, include=new Set(), current="__postgraduate__", dirty=false;
+function toast(m,error=false){const t=$("#toast"),el=document.createElement("div");el.className="toast-item"+(error?" bad":"");el.setAttribute("role",error?"alert":"status");el.textContent=m;t.append(el);while(t.children.length>3)t.firstElementChild.remove();setTimeout(()=>el.classList.add("leaving"),3650);setTimeout(()=>el.remove(),4000)}
 function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
 async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});if(D&&((D.courses||[]).length||(D.grades||[]).length)&&!D.offline){D.offline=true;D.cached_at=D.cached_at||D.updated}try{renderSession();renderOffline()}catch(_){}}if(j&&j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j;if(!r.ok||j.ok===false)throw new Error(j.error||(r.status===401?"登录会话已过期":r.status));return j}
 function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
@@ -239,19 +273,33 @@ function renderGrid(){
  g.innerHTML=html;
  if(!D.courses.length)g.insertAdjacentHTML("afterend",'<p class="empty" id="noc">还没有课表数据，点右上角“刷新”或在终端运行 jlu-toolkit fetch</p>');
 }
-function schemeOptions(){const s=$("#scheme");s.innerHTML=`<option value="__all__">全部课程</option>`+Object.keys(D.schemes).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");s.value=current in D.schemes||current==="__all__"?current:"__all__"}
-function applyScheme(name){current=name;include=new Set(name==="__all__"?D.grades.map(g=>g.key):D.schemes[name]);dirty=false;renderGrades()}
+const GRADE_BUILTINS={__postgraduate__:{base:"postgraduate",name:"保研加权（不含限选课程）"},__scholarship__:{base:"scholarship",name:"奖学金加权"},__all__:{base:"comprehensive",name:"所有课程"}};
+let gradeBase="postgraduate",gradeSort={key:"",dir:0};
+// Grade calculation helpers: no DOM, shared by rendering and regression checks.
+function gradeTotals(grades,selected){const rows=grades.filter(g=>selected.has(g.key)&&g.credit>0&&!g.ungraded),credits=rows.reduce((n,g)=>n+g.credit,0);return{count:rows.length,credits,score:credits?rows.reduce((n,g)=>n+(g.numeric_score??0)*g.credit,0)/credits:null,point:credits&&rows.every(g=>g.point!=null)?rows.reduce((n,g)=>n+g.point*g.credit,0)/credits:null,invalid:rows.filter(g=>!g.score_valid).length,estimated:rows.filter(g=>g.point_source==="estimated"&&g.point!=null).length}}
+function gradeMatches(g,f,selected){if(f.q&&!`${g.name} ${g.nature} ${g.term}`.toLocaleLowerCase().includes(f.q))return false;if(f.term&&g.term!==f.term)return false;if(f.terms.length&&!f.terms.includes(g.term))return false;if(f.natures.length&&!f.natures.includes(g.nature))return false;if(f.inclusion&&(selected.has(g.key)!==(f.inclusion==="in")))return false;if(f.status==="unknown"&&g.score_valid)return false;if(f.status==="fail"&&!(g.numeric_score!=null&&g.numeric_score<60))return false;if(f.status==="pass"&&!(g.numeric_score>=60))return false;for(const [key,min,max] of f.ranges){if(min!==""&&(g[key]==null||g[key]<Number(min)))return false;if(max!==""&&(g[key]==null||g[key]>Number(max)))return false}return true}
+function gradeCompare(a,b,sort){if(!sort.dir)return b.term.localeCompare(a.term);const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return-1;return(typeof x==="number"?x-y:String(x).localeCompare(String(y),"zh-CN"))*sort.dir}
+// Grade rendering
+function schemeOptions(){const s=$("#scheme");s.innerHTML='<optgroup label="内置模板">'+Object.entries(GRADE_BUILTINS).map(([id,b])=>`<option value="${id}">${b.name}</option>`).join("")+'</optgroup>'+ (Object.keys(D.schemes).length?'<optgroup label="自定义模板">'+Object.keys(D.schemes).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")+'</optgroup>':"");s.value=current in D.schemes||current in GRADE_BUILTINS?current:"__postgraduate__"}
+function applyScheme(name){current=name;const b=GRADE_BUILTINS[name],rule=(D.scheme_rules||{})[name];gradeBase=b?.base||rule?.base||"comprehensive";const saved=new Set(D.schemes[name]||[]);include=new Set(D.grades.filter(g=>b?g.builtin[b.base]:rule?Object.hasOwn(rule.overrides,g.key)?rule.overrides[g.key]:g.builtin[rule.base]:saved.has(g.key)||saved.has(g.legacy_key)).map(g=>g.key));dirty=false;renderGrades()}
+function gradeFilters(){return{q:$("#grade-search").value.trim().toLocaleLowerCase(),term:$("#termf").value,terms:[...document.querySelectorAll('#grade-terms input:checked')].map(e=>e.value),natures:[...document.querySelectorAll('#grade-natures input:checked')].map(e=>e.value),inclusion:$("#grade-inclusion").value,status:$("#grade-status").value,ranges:[["numeric_score",$("#grade-score-min").value,$("#grade-score-max").value],["point",$("#grade-point-min").value,$("#grade-point-max").value],["credit",$("#grade-credit-min").value,$("#grade-credit-max").value]]}}
+function visibleGrades(){const f=gradeFilters();return D.grades.filter(g=>gradeMatches(g,f,include)).sort((a,b)=>gradeCompare(a,b,gradeSort))}
+function gradeFilterOptions(){for(const [id,key] of [["grade-terms","term"],["grade-natures","nature"]]){const box=$("#"+id),keep=new Set([...box.querySelectorAll('input:checked')].map(e=>e.value));box.innerHTML=[...new Set(D.grades.map(g=>g[key]))].sort().map(v=>`<label><input type="checkbox" value="${esc(v)}" ${keep.has(v)?"checked":""}>${esc(v||"未标注")}</label>`).join("")||'<span class="sub">暂无选项</span>'}}
+function resetGradeFilters(){document.querySelectorAll('#grade-filter input').forEach(e=>e.type==="checkbox"?e.checked=false:e.value="");$("#grade-search").value="";$("#termf").value="";$("#grade-inclusion").value="";$("#grade-status").value="";gradeSort={key:"",dir:0};renderGrades()}
+function gradeReady(){if(D?.grades.length)return true;toast("还没有成绩数据，请先导入成绩单或从教务刷新",true);return false}
 function renderGrades(){
- const tf=$("#termf").value;let tot=0,pts=0,n=0;
- for(const g of D.grades){if(!include.has(g.key))continue;const p=point(g.score);if(p===null)continue;tot+=g.credit;pts+=p*g.credit;n++}
- $("#g-gpa").textContent=tot?(pts/tot).toFixed(3):"-";$("#g-cr").textContent=tot||"-";$("#g-n").textContent=n||"-";
- $("#dirty").textContent=dirty?"● 有未保存的修改":"";
- const rows=D.grades.filter(g=>!tf||g.term===tf).slice().sort((a,b)=>b.term.localeCompare(a.term));
- let html="",last=null;
- for(const g of rows){if(g.term!==last){html+=`<tr class="term"><td colspan="5">${esc(g.term||"未知学期")}</td></tr>`;last=g.term}
-  const on=include.has(g.key),p=point(g.score);
-  html+=`<tr class="${on?"":"off"}"><td><input type="checkbox" data-k="${esc(g.key)}" ${on?"checked":""}></td><td>${esc(g.name)}</td><td class="n">${g.credit}</td><td class="n">${esc(g.score)}</td><td class="n">${p===null?'<span class="chip">不计</span>':p.toFixed(1)}</td></tr>`}
- $("#gt").innerHTML=html||'<tr><td colspan="5" class="empty">还没有成绩数据</td></tr>';
+ const result=gradeTotals(D.grades,include),rows=visibleGrades(),fmt=n=>n==null?"—":String(Math.round(n*1000)/1000);
+ $("#g-score").textContent=result.score==null?"—":result.score.toFixed(3);$("#g-gpa").textContent=result.point==null?"—":result.point.toFixed(3);$("#g-cr").textContent=fmt(result.credits);$("#g-n").textContent=result.count;
+ $("#grade-calc-note").textContent=`成绩与绩点按学分加权 · ${D.grade_source==="import"?"使用成绩单提供的绩点；缺失时显示 —":"优先使用教务单科绩点；标有「估算」的课程按原程序规则换算；通过类不参与加权"}${result.invalid?` · ${result.invalid} 门成绩无法换算，已按 0 分计入，请核对`:""}${result.estimated?` · ${result.estimated} 门使用估算绩点`:""}`;
+ const policy=gradeBase==="postgraduate"?'排除选修、<span style="color:var(--bad)">限选</span>、通用学术英语、体育、军事理论、军事训练。':gradeBase==="scholarship"?"只计必修，排除英语、体育、军事训练；军事理论计入。":"计入所有有学分课程。";
+ $("#grade-policy").innerHTML=policy+' 不同学院政策不同，请核对当年规则，调整后另存为自定义模板。'+(D.grades.some(g=>g.nature==="未标注")?' <strong>部分课程未标注性质，请手动核对计入范围。</strong>':"");
+ $("#grade-source").textContent=D.grade_source==="import"?"文件预览":"当前账号 · 教务成绩";$("#grade-source").title=D.grade_filename||"";$("#grade-use-jwxt").hidden=D.grade_source!=="import";$("#grade-sync").hidden=D.grade_source==="import";$("#grade-view-import").hidden=!D.has_imported_grades||D.grade_source==="import";$("#del").disabled=!!GRADE_BUILTINS[current];
+ if(!gradeSyncing)$("#grade-sync-status").textContent=D.grade_source==="import"?"正在预览文件："+(D.grade_filename||"成绩单")+"。教务成绩已保留，可随时返回。":"默认显示当前登录账号的教务成绩；登录后会自动同步。";
+ $("#dirty").textContent=dirty?"● 有未保存的修改，另存模板后可重复使用":"";$("#grade-visible").textContent=`显示 ${rows.length} / ${D.grades.length} 门`;
+ const f=gradeFilters(),active=f.terms.length+f.natures.length+(f.inclusion?1:0)+(f.status?1:0)+f.ranges.filter(r=>r[1]!==""||r[2]!=="").length;$("#grade-filter-count").textContent=active?`· ${active} 项条件`:"";
+ document.querySelectorAll('[data-grade-sort]').forEach(th=>{const active=th.dataset.gradeSort===gradeSort.key&&gradeSort.dir;th.setAttribute("aria-sort",active?(gradeSort.dir===1?"ascending":"descending"):"none");const b=th.querySelector("button"),label=b.textContent.replace(/ [↕↑↓]$/u,"");b.textContent=label+" "+(active?(gradeSort.dir===1?"↑":"↓"):"↕")});
+ $("#gt").innerHTML=rows.map(g=>{const on=include.has(g.key),failed=g.numeric_score!=null&&g.numeric_score<60;return`<tr class="${on?"":"off"}${failed?" failed":""}"><td><input type="checkbox" data-k="${esc(g.key)}" aria-label="计入 ${esc(g.name)} ${esc(g.term)}" ${on?"checked":""}></td><td><span class="name">${esc(g.name)}</span>${g.ungraded?'<span class="grade-badge">通过类 · 不参与加权</span>':!g.score_valid?'<span class="grade-badge">成绩无法换算 · 计入时按 0 分</span>':""}</td><td><span class="sub">${esc(g.nature)}</span></td><td class="n">${fmt(g.credit)}</td><td class="n">${esc(g.score)}</td><td class="n">${g.point==null?"—":fmt(g.point)}${g.point_source==="estimated"&&g.point!=null?'<span class="grade-badge">估算</span>':""}</td><td><span class="sub">${esc(g.term||"未标注")}</span></td></tr>`}).join("")||`<tr><td colspan="7" class="empty">${D.grades.length?"没有符合筛选条件的课程，请调整或重置筛选":"还没有成绩数据，导入成绩单或从教务刷新后即可计算"}</td></tr>`;
+ const notes=D.grade_notes||[];$("#grade-notes").innerHTML=notes.length?`<details><summary>导入说明 · ${notes.length} 项</summary>${notes.map(n=>`<p class="sub">${esc(n)}</p>`).join("")}</details>`:"";
 }
 function cd(e){if(!e.start)return{cls:"",big:"?",sm:"待定"};const ms=new Date(e.start)-new Date();if(ms<0)return{cls:"past",big:"✓",sm:"已结束"};const d=Math.floor(ms/864e5);if(d>=1)return{cls:d<=3?"soon":"",big:d,sm:"天"};return{cls:"soon",big:Math.ceil(ms/36e5),sm:"小时"}}
 function fmtTime(e){if(!e.start)return"时间待定";const s=e.start.replace("T"," ");return s+(e.end?"–"+e.end.slice(11):"")}
@@ -261,7 +309,7 @@ function renderExams(){
  const nx=D.exams.find(e=>e.start&&new Date(e.end||e.start)>new Date()),box=$("#nextexam");
  if(nx){const c=cd(nx);box.hidden=false;box.innerHTML=`<div class="exam" style="padding:0"><div class="cd ${c.cls}"><b>${c.big}</b><span>${c.sm}</span></div><div class="t"><span class="sub">下一场考试</span><b>${esc(nx.name)}</b><span class="sub">${esc(fmtTime(nx))} · ${esc(nx.location)}</span></div></div>`}else box.hidden=true;
 }
-function renderOfficial(){const o=D.official_gpa,box=$("#ogpa");if(o&&o.available===false){box.hidden=false;box.innerHTML=`<h3>教务官方统计</h3><p class="sub" style="margin:0">吉大教务暂未提供「学分绩点统计」接口；成绩里若含教务单科绩点，会显示其学分加权结果。</p>`;return}if(!o||!o.items||!o.items.length){box.hidden=true;return}box.hidden=false;
+function renderOfficial(){const o=D.official_gpa,box=$("#ogpa");if(D.grade_source==="import"){box.hidden=true;return}if(o&&o.available===false){box.hidden=false;box.innerHTML=`<h3>教务官方统计</h3><p class="sub" style="margin:0">吉大教务暂未提供「学分绩点统计」接口；成绩里若含教务单科绩点，会显示其学分加权结果。</p>`;return}if(!o||!o.items||!o.items.length){box.hidden=true;return}box.hidden=false;
  box.innerHTML=`<h3>教务官方统计 <span class="chip">只读</span></h3><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div><p class="sub" style="margin:8px 0 0">${o.source==="grades_jw_point"?"按教务单科绩点计算":"来自教务「学分绩点统计」"}${o.plan?" · "+esc(o.plan):""}</p>`}
 function num(v){return v==null?"-":(Math.round(v*100)/100)}
 function officialCard(){const o=D.official_gpa;if(!o||o.source!=="official"||!o.items)return"";return`<div class="card"><h2>教务官方 GPA <span class="chip">只读</span></h2><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div></div>`}
@@ -303,29 +351,52 @@ function renderAll(){try{renderOffline()}catch(_){}
  $("#fm").value=D.first_monday||"";
  const terms=[...new Set(D.grades.map(g=>g.term))].sort().reverse();const tf=$("#termf"),keep=tf.value;
  tf.innerHTML='<option value="">全部学期</option>'+terms.map(t=>`<option>${esc(t)}</option>`).join("");tf.value=keep;
- document.getElementById("noc")?.remove();renderGrid();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();renderOfficial();renderProgress();
+ document.getElementById("noc")?.remove();renderGrid();gradeFilterOptions();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();renderOfficial();renderProgress();
  const cal=D.calendar||{};$("#calinfo").innerHTML=D.first_monday?`第 1 周周一：<b>${esc(D.first_monday)}</b>（${D.first_monday_source==="manual"?"手动覆盖":"来自教务校历"}）${cal.term?" · "+esc(cal.term):""}${cal.total_weeks?" · 共 "+cal.total_weeks+" 周":""} · 今天第 ${weekOf(new Date())} 周`:"尚未读取校历：点右上角“刷新”自动获取开学日期。";
 }
-async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll()}
+async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll();api("/api/session").then(s=>{if(s.logged_in===true)refreshGradeData(true);else $("#grade-sync-status").textContent=s.needs_login?"请在「更多 → 账号」中登录，登录后自动同步教务成绩。":"当前显示本机缓存，可点击同步验证登录状态。"}).catch(()=>{})}
+let gradeSyncing=false;
+async function refreshGradeData(automatic=false){if(gradeSyncing)return;gradeSyncing=true;const b=$("#grade-sync");b.disabled=true;b.textContent="⟳ 同步中…";$("#grade-sync-status").textContent="正在使用已保存的登录会话同步教务成绩…";try{const j=await api("/api/grades/refresh",{});if(D.grade_source!=="import"){D=j;renderAll();$("#grade-sync-status").textContent=`已同步当前账号的 ${j.grade_result.count} 门教务课程。`}if(!automatic)toast("教务成绩已同步")}catch(e){if(D.grade_source!=="import")$("#grade-sync-status").textContent="同步失败，保留本机成绩缓存："+e.message;if(!automatic)toast("同步失败："+e.message,true)}finally{gradeSyncing=false;b.disabled=false;b.textContent="⟳ 同步教务成绩";if(D.grade_source==="import")$("#grade-sync-status").textContent="正在预览文件："+(D.grade_filename||"成绩单")+"。教务成绩已保留，可随时返回。"}}
 function sessionInfo(d){const s=d&&d.session;if(!s&&!(d&&d.session_expired))return null;const exp=(d&&d.session_expired===true)||(s&&(s.expired===true||s.valid===false||/^(expired|invalid)$/i.test(String(s.status||s.state||""))));return exp?(s||{}):null}
 function renderSession(){const box=$("#sess"),s=sessionInfo(D);if(!s){box.hidden=true;box.innerHTML="";return}box.hidden=false;
  box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>${D&&D.session_site?esc(SITEN(D.session_site))+" ":""}登录会话已过期，请重新登录</b><p class="sub">${s.message?esc(s.message)+" · ":""}点「重新登录」完成后会自动刷新。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div><button class="btn pri" type="button" onclick="openLogin()">重新登录</button></div>`}
-document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0)});
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0);if(b.dataset.t==="cj"){try{if(!localStorage.getItem("jlu-grade-policy-v1"))openGradeHelp()}catch(_){}}});
 $("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
 $("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
 let tx=null;$("#grid").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
 $("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>60)(dx<0?$("#next"):$("#prev")).click();tx=null});
 $("#gt").onchange=e=>{const k=e.target.dataset.k;if(!k)return;e.target.checked?include.add(k):include.delete(k);dirty=true;renderGrades()};
-$("#scheme").onchange=e=>applyScheme(e.target.value);$("#termf").onchange=renderGrades;
-$("#all").onclick=()=>{D.grades.forEach(g=>include.add(g.key));dirty=true;renderGrades()};
-$("#none").onclick=()=>{include.clear();dirty=true;renderGrades()};
-$("#saveas").onclick=async()=>{const n=prompt("方案名称（如 保研、综测）",current==="__all__"?"":current);if(!n)return;try{D=await api("/api/schemes",{name:n,include:[...include]});current=n.trim();dirty=false;renderAll();toast("已保存方案："+current)}catch(e){toast(e.message)}};
-$("#del").onclick=async()=>{if(current==="__all__")return toast("“全部课程”不能删除");if(!confirm("删除方案 "+current+"？"))return;D=await api("/api/schemes/delete",{name:current});current="__all__";dirty=false;renderAll();toast("已删除")};
+$("#scheme").onchange=e=>{if(dirty&&!confirm("当前选择尚未保存，切换模板会放弃这些修改。继续？")){e.target.value=current;return}applyScheme(e.target.value)};$("#termf").onchange=renderGrades;
+$("#all").onclick=()=>{if(!gradeReady())return;visibleGrades().forEach(g=>include.add(g.key));dirty=true;renderGrades()};
+$("#none").onclick=()=>{if(!gradeReady())return;visibleGrades().forEach(g=>include.delete(g.key));dirty=true;renderGrades()};
+$("#grade-required").onclick=()=>{if(!gradeReady())return;D.grades.filter(g=>g.required&&g.credit>0).forEach(g=>include.add(g.key));dirty=true;renderGrades()};
+$("#saveas").onclick=()=>{if(!gradeReady())return;$("#grade-template-name").value=GRADE_BUILTINS[current]?"":current;$("#grade-save-dialog").showModal();$("#grade-template-name").focus()};
+$("#grade-save-cancel").onclick=()=>$("#grade-save-dialog").close();
+$("#grade-save-form").onsubmit=async e=>{e.preventDefault();const n=$("#grade-template-name").value.trim(),button=e.submitter;if(!n)return;if(GRADE_BUILTINS[n])return toast("请使用其他模板名称",true);if(n in D.schemes&&!confirm("已存在同名模板，覆盖它？"))return;button.disabled=true;try{D=await api("/api/schemes",{name:n,include:[...include],base:gradeBase,grade_source:D.grade_source});current=n;dirty=false;$("#grade-save-dialog").close();renderAll();toast("已保存自定义模板："+current)}catch(err){toast(err.message,true)}finally{button.disabled=false}};
+$("#del").onclick=async()=>{if(GRADE_BUILTINS[current])return;if(!confirm("删除自定义模板「"+current+"」？"))return;try{D=await api("/api/schemes/delete",{name:current,grade_source:D.grade_source});current="__postgraduate__";dirty=false;renderAll();toast("已删除模板")}catch(e){toast(e.message,true)}};
+$("#grade-search").oninput=renderGrades;$("#grade-filter").oninput=renderGrades;$("#grade-reset").onclick=resetGradeFilters;
+document.querySelectorAll('[data-grade-sort]').forEach(th=>th.querySelector('button').onclick=()=>{if(!gradeReady())return;const key=th.dataset.gradeSort;gradeSort=gradeSort.key!==key?{key,dir:-1}:gradeSort.dir===-1?{key,dir:1}:{key:"",dir:0};renderGrades()});
+$("#grade-filter").querySelector('summary').addEventListener('click',e=>{if(!gradeReady())e.preventDefault()});
+async function openGradeHelp(){
+ $("#grade-help-dialog").showModal();
+ const box=$("#grade-college-links");if(box.dataset.loaded)return;
+ try{const j=await api("/api/grades/colleges");box.innerHTML=j.links.map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.name)} ↗</a>`).join("");box.dataset.loaded="1"}
+ catch(_){box.innerHTML='<span class="sub">官网入口暂不可用，请到学院官网查询当年政策。</span>'}
+}
+$("#grade-help").onclick=()=>openGradeHelp();
+$("#grade-help-dialog").querySelectorAll('[data-grade-close]').forEach(b=>b.onclick=()=>$("#grade-help-dialog").close());
+$("#grade-help-dialog").addEventListener('close',()=>{try{localStorage.setItem("jlu-grade-policy-v1","1")}catch(_){}});
+document.querySelectorAll('[data-grade-copy]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.textContent.trim());b.title="已复制到剪贴板";let status=$("#grade-copy-status");if(!status){status=document.createElement("p");status.id="grade-copy-status";status.setAttribute("role","status");$(".grade-keywords").after(status)}status.textContent="已复制到剪贴板："+b.textContent.trim();toast("已复制到剪贴板")}catch(_){toast("复制失败，请手动复制关键词",true)}});
+async function importGradeFile(file){if(!file)return;if(!/\.(xlsx|xls|csv)$/i.test(file.name))return toast("请选择 .xlsx、.xls 或 .csv 成绩单",true);if(file.size>25*1024*1024)return toast("成绩单超过 25 MB",true);if((dirty||D.grade_source==="import")&&!confirm("将切换至新导入的成绩单，当前课程选择请先保存为模板。继续？"))return;const b=$("#grade-import");b.disabled=true;b.textContent="导入中…";try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]);reader.onerror=()=>reject(new Error("无法读取成绩单"));reader.readAsDataURL(file)});D=await api("/api/grades/import",{filename:file.name,data});dirty=false;renderAll();resetGradeFilters();toast(`已导入 ${D.grades.length} 门课程，数据保存在本机`)}catch(e){toast("导入失败："+e.message,true)}finally{b.disabled=false;b.textContent="导入成绩单";$("#grade-file").value=""}}
+$("#grade-import").onclick=()=>$("#grade-file").click();$("#grade-file").onchange=e=>importGradeFile(e.target.files[0]);
+$("#t-cj").ondragover=e=>{if(e.dataTransfer.types.includes("Files")){e.preventDefault();e.dataTransfer.dropEffect="copy"}};$("#t-cj").ondrop=e=>{e.preventDefault();importGradeFile(e.dataTransfer.files[0])};
+async function switchGradeSource(source){if(dirty&&!confirm("当前课程选择尚未保存，切换前请先保存为模板。继续？"))return;try{D=await api("/api/grades/source",{grade_source:source});dirty=false;renderAll();resetGradeFilters();toast(source==="import"?"正在预览导入文件":"已返回当前账号的教务成绩")}catch(e){toast(e.message,true)}}
+$("#grade-use-jwxt").onclick=()=>switchGradeSource("jwxt");$("#grade-view-import").onclick=()=>switchGradeSource("import");$("#grade-sync").onclick=()=>refreshGradeData();
 $("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});await load();toast("已恢复为教务校历")};
 document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTheme(b.dataset.theme));window.__setTheme(localStorage.getItem("jlu-theme")||"system");
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
-$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.innerHTML='⟳<span class="lbl"> 刷新中…</span>';try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.innerHTML='⟳<span class="lbl"> 刷新</span>'}};
+$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.innerHTML='⟳<span class="lbl"> 刷新中…</span>';try{const j=await api("/api/refresh",{});if(D.grade_source!==j.grade_source)dirty=false;D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.innerHTML='⟳<span class="lbl"> 刷新</span>'}};
 (function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);$("#rwd").value=String(new Date().getDay()||7)})();
 let RM="date",RR=[],RS={k:"name",d:1};
 document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>{RM=b.dataset.m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll(".m-date").forEach(e=>e.hidden=RM!=="date");document.querySelectorAll(".m-week").forEach(e=>e.hidden=RM!=="week")});
@@ -407,7 +478,7 @@ function lgSync(){const u=$("#lgu").value.trim();const has=(LG.acc||[]).includes
 $("#lgu").addEventListener("input",lgSync);
 async function openLogin(){LG={step:"pw"};lgErr("");$("#lgp").value="";$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username;lgAcc(j.accounts||(j.saved_username?[j.saved_username]:[]));lgSync()}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
 async function lgPost(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false)throw new Error(j.error||("HTTP "+r.status));return j}
-async function lgDone(){$("#login").close();toast("登录成功，正在刷新…");D=Object.assign(D||{},{session_expired:false,session:null});try{renderSession()}catch(_){}try{const j=await lgPost("/api/refresh",{});D=j;renderAll();toast("已刷新")}catch(e){toast("登录成功，刷新失败："+e.message)}}
+async function lgDone(){$("#login").close();toast("登录成功，正在刷新…");D=Object.assign(D||{},{session_expired:false,session:null});try{renderSession()}catch(_){}try{const j=await lgPost("/api/refresh",{});D=j;dirty=false;renderAll();toast("已刷新教务成绩")}catch(e){toast("登录成功，刷新失败："+e.message)}}
 async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.disabled=true;try{
  if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success")return lgDone();LG.step="cap";LG.retry=false}
  else if(LG.step==="cap"){const j=await lgPost("/api/login/send_code",{});if(j.step==="code_sent"){LG.step="code";toast("微信验证码已发送")}else{LG.retry=true;lgErr(j.error||"发送失败，请重试")}}
