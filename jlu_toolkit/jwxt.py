@@ -1,7 +1,9 @@
 """吉大本科教务（iedu.jlu.edu.cn 金智 jwapp）HTTP 客户端。
 
-登录走统一身份认证 cas.jlu.edu.cn/tpass（Neusoft TPASS）：
-  1) GET 登录页 → lt/execution → rsa=strEnc(邮箱前缀+密码+lt,'1','2','3') → POST
+登录走统一身份认证 cas.jlu.edu.cn/tpass（Neusoft TPASS / login10.js）：
+  1) GET 登录页 → 解析 form#loginForm 的 action/lt/execution
+     → 按浏览器字段提交 rsa=strEnc(trim(账号)+trim(密码)+lt,'1','2','3'),
+       ul/pl/sl=0/lt/execution/_eventId=submit（缺 sl 会 HTTP 500）
   2) 若返回「二次认证」页：下载图形验证码 /tpass/code → 调 /tpass/recheckcode 发微信验证码
      → 再 POST lt/execution/code/WxCode 完成登录 → 跟随 ticket 回跳教务
 
@@ -37,6 +39,8 @@ CAS_LOGIN = f"{CAS_BASE}/login"
 CAS_CODE = f"{CAS_BASE}/code"
 CAS_RECHECKCODE = f"{CAS_BASE}/recheckcode"
 IEDU_HOST = "iedu.jlu.edu.cn"
+# 与当前登录页 form#loginForm action 默认 service 一致（浏览器从教务入口跳转时也是这个）
+CAS_SERVICE = "https://iedu.jlu.edu.cn/"
 IEDU_PORTAL = "https://iedu.jlu.edu.cn/jwapp/sys/emaphome/portal/index.do"
 IEDU_BASE = "https://iedu.jlu.edu.cn"
 
@@ -46,9 +50,10 @@ EP_GRADES = "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do"
 REF_SCHEDULE = "https://iedu.jlu.edu.cn/jwapp/sys/wdkb/*default/index.do"
 REF_GRADES = "https://iedu.jlu.edu.cn/jwapp/sys/cjcx/*default/index.do"
 
+# 与 wzyyyyyyy/iLearn 一致的桌面 Chrome UA（login10.js 无移动端特殊分支）
 UA = (
-    "Mozilla/5.0 (Linux; Android 14; Termux) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
 _LT_RE = re.compile(r'(?:id|name)="lt"[^>]*value="([^"]*)"', re.I)
@@ -56,7 +61,24 @@ _LT_RE2 = re.compile(r'value="([^"]*)"[^>]*(?:id|name)="lt"', re.I)
 _EXEC_RE = re.compile(r'name="execution"[^>]*value="([^"]*)"', re.I)
 _EVENT_RE = re.compile(r'name="_eventId"[^>]*value="([^"]*)"', re.I)
 _ERR_RE = re.compile(r'id="errormsg"[^>]*>([^<]*)', re.I)
+_ERR_HIDE_RE = re.compile(
+    r'id="errormsghide"[^>]*class="[^"]*script_red[^"]*"[^>]*>(.*?)</span>',
+    re.I | re.S,
+)
+_ERR_HIDE_RE2 = re.compile(
+    r'id="errormsghide"[^>]*>(.*?)</span>',
+    re.I | re.S,
+)
+_FORM_ACTION_RE = re.compile(
+    r'<form[^>]*\bid=["\']loginForm["\'][^>]*\baction=["\']([^"\']+)["\']',
+    re.I,
+)
 _WXCODE_RE = re.compile(r'name=["\']WxCode["\']', re.I)
+_JLU_EMAIL_SUFFIXES = (
+    "@mails.jlu.edu.cn",
+    "@jlu.edu.cn",
+    "@mail.jlu.edu.cn",
+)
 
 
 class JwxtError(Exception):
@@ -95,7 +117,7 @@ class PendingSecondFactor:
     lt: str
     execution: str
     event_id: str = "submit"
-    service: str = IEDU_PORTAL
+    service: str = CAS_SERVICE
 
 
 def config_dir() -> Path:
@@ -173,9 +195,49 @@ def _extract_lt(html: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _strip_tags(s: str) -> str:
+    return re.sub(r"<[^>]+>", "", s).replace("&nbsp;", " ").strip()
+
+
+def extract_cas_error(html: str) -> Optional[str]:
+    """从登录页提取服务器错误文案（优先 #errormsghide.script_red）。"""
+    m = _ERR_HIDE_RE.search(html) or _ERR_HIDE_RE2.search(html)
+    if m:
+        msg = _strip_tags(m.group(1))
+        if msg:
+            return msg
+    m = _ERR_RE.search(html)
+    if m:
+        msg = _strip_tags(m.group(1))
+        # 默认隐藏文案「请输入正确信息」在未失败时也会出现，单独不够作失败证据
+        if msg and msg not in ("请输入正确信息",):
+            return msg
+    return None
+
+
+def normalize_username(username: str) -> str:
+    """login10.js 会对账号 trim；若粘贴了完整吉大邮箱则剥成前缀。"""
+    u = (username or "").strip()
+    low = u.lower()
+    for suf in _JLU_EMAIL_SUFFIXES:
+        if low.endswith(suf):
+            return u[: len(u) - len(suf)]
+    return u
+
+
+def _form_action_url(html: str, service: str) -> str:
+    """优先用页面 form#loginForm 的 action（与浏览器提交目标一致）。"""
+    m = _FORM_ACTION_RE.search(html)
+    if m:
+        return urllib.parse.urljoin("https://cas.jlu.edu.cn", m.group(1))
+    return f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
+
+
 def classify_login_html(html: str) -> LoginStep:
-    """根据密码提交后的 HTML 判断下一步（对照 wzyyyyyyy/iLearn 的分类器）。"""
+    """根据密码提交后的 HTML 判断下一步（对照 wzyyyyyyy/iLearn LoginResponseClassifier）。"""
+    # 先查明确的错密文案（含「用户名密码错误」，无「或」）
     wrong_markers = (
+        "用户名密码错误",
         "用户名或密码错误",
         "账号或密码错误",
         "用户名或密码有误",
@@ -185,6 +247,11 @@ def classify_login_html(html: str) -> LoginStep:
     )
     if any(m in html for m in wrong_markers):
         return LoginStep.WRONG_PASSWORD
+    err = extract_cas_error(html)
+    if err and any(m in err for m in ("错误", "有误", "失败")):
+        # errormsghide 标红时几乎总是认证失败
+        if "二次认证" not in html and not _WXCODE_RE.search(html):
+            return LoginStep.WRONG_PASSWORD
     if (
         _WXCODE_RE.search(html)
         or "recheckcode" in html.lower()
@@ -241,19 +308,50 @@ def jar_from_list(items: list[dict]) -> CookieJar:
     return jar
 
 
+def _redact_url(url: str) -> str:
+    """日志用：保留 host/path，抹掉 ticket/jsessionid 等敏感 query。"""
+    parts = urllib.parse.urlsplit(url)
+    q = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    redacted = []
+    for k, v in q:
+        lk = k.lower()
+        if lk in ("ticket", "jsessionid", "tpasssessionid") or "token" in lk:
+            redacted.append((k, "<redacted>"))
+        else:
+            redacted.append((k, v))
+    return urllib.parse.urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(redacted), "")
+    )
+
+
 class JwxtClient:
-    def __init__(self, timeout: float = 25.0):
+    def __init__(self, timeout: float = 25.0, debug: bool = False):
         self.timeout = timeout
+        self.debug = debug
         self.jar = CookieJar()
         self._rebuild_opener()
         self._logged_in = False
         self.pending: Optional[PendingSecondFactor] = None
+        self.last_debug: dict = {}
+        self.last_error_text: Optional[str] = None
+
+    def _dbg(self, **kwargs) -> None:
+        self.last_debug.update(kwargs)
+        if not self.debug:
+            return
+        parts = []
+        for k, v in kwargs.items():
+            parts.append(f"{k}={v}")
+        print("[debug] " + " ".join(parts), flush=True)
 
     def _rebuild_opener(self) -> None:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar),
             urllib.request.HTTPSHandler(context=_ssl_context()),
         )
+
+    def _cookie_names(self) -> list[str]:
+        return sorted({c.name for c in self.jar})
 
     def _request(
         self,
@@ -263,7 +361,11 @@ class JwxtClient:
         method: Optional[str] = None,
         allow_redirects: bool = True,
     ) -> tuple[int, str, str, bytes]:
-        hdrs = {"User-Agent": UA, "Accept": "*/*"}
+        hdrs = {
+            "User-Agent": UA,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
         if headers:
             hdrs.update(headers)
         if allow_redirects:
@@ -334,50 +436,149 @@ class JwxtClient:
         self._logged_in = True
         return True
 
-    def fetch_login_page(self, service: str = IEDU_PORTAL) -> tuple[str, str, str]:
+    def fetch_login_page(self, service: str = CAS_SERVICE) -> tuple[str, str, str, str]:
+        """返回 (html, lt, execution, post_url)。post_url 取自 form action。"""
         url = f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
-        code, html, _, _ = self._request(url)
+        code, html, final, _ = self._request(
+            url,
+            headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Upgrade-Insecure-Requests": "1",
+            },
+        )
         if code != 200:
             raise NetworkError(f"CAS 登录页 HTTP {code}")
         lt = _extract_lt(html)
         if not lt:
             raise JwxtError("登录页未找到 lt，页面结构可能已变更")
         ex_m = _EXEC_RE.search(html)
-        return html, lt, (ex_m.group(1) if ex_m else "e1s1")
+        execution = ex_m.group(1) if ex_m else "e1s1"
+        post_url = _form_action_url(html, service)
+        self._dbg(
+            step="get_login",
+            status=code,
+            final_host=urllib.parse.urlparse(final).hostname,
+            lt_len=len(lt),
+            lt_prefix=lt[:20] + "...",
+            execution=execution,
+            form_action=post_url,
+            cookies=self._cookie_names(),
+        )
+        return html, lt, execution, post_url
 
     @staticmethod
     def encrypt_password_bundle(username: str, password: str, lt: str) -> str:
         return strEnc(username + password + lt, "1", "2", "3")
 
+    def _browser_post_headers(self, referer: str) -> dict:
+        return {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": "https://cas.jlu.edu.cn",
+            "Referer": referer,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Cache-Control": "max-age=0",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-User": "?1",
+        }
+
+    def _follow_redirects(
+        self, url: str, html: str, code: int, limit: int = 8
+    ) -> tuple[int, str, str, list[str]]:
+        """手动跟随 302/303/307，记录链路上的 URL（不含 query 里的 ticket 值）。"""
+        chain: list[str] = []
+        current = url
+        cur_code, cur_html = code, html
+        for _ in range(limit):
+            if cur_code not in (301, 302, 303, 307, 308):
+                break
+            chain.append(_redact_url(current))
+            cur_code, cur_html, current, _ = self._request(
+                current,
+                headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Referer": "https://cas.jlu.edu.cn/",
+                },
+                allow_redirects=False,
+            )
+        if chain and cur_code not in (301, 302, 303, 307, 308):
+            chain.append(_redact_url(current))
+        return cur_code, cur_html, current, chain
+
     def login_password(
-        self, username: str, password: str, service: str = IEDU_PORTAL
+        self, username: str, password: str, service: str = CAS_SERVICE
     ) -> LoginStep:
-        """第一步：提交邮箱前缀+密码。可能直接成功，或需要二次认证。"""
-        _, lt, execution = self.fetch_login_page(service)
+        """第一步：提交邮箱前缀+密码。可能直接成功，或需要二次认证。
+
+        字段与 login10.js / iLearn 对齐：rsa, ul, pl, sl=0, lt, execution, _eventId=submit。
+        账号、密码先 trim（与页面 JS 一致）；完整吉大邮箱会剥成前缀。
+        """
+        username = normalize_username(username)
+        password = (password or "").strip()
+        if not username or not password:
+            self.last_error_text = "账号或密码为空"
+            return LoginStep.WRONG_PASSWORD
+
+        _html, lt, execution, post_url = self.fetch_login_page(service)
+        referer = f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
         rsa = self.encrypt_password_bundle(username, password, lt)
+        # 字段顺序与页面 hidden input 一致；sl 不可省略（省略会 HTTP 500）
         form = urllib.parse.urlencode(
-            {
-                "rsa": rsa,
-                "ul": str(len(username)),
-                "pl": str(len(password)),
-                "sl": "0",
-                "lt": lt,
-                "execution": execution,
-                "_eventId": "submit",
-            }
+            [
+                ("rsa", rsa),
+                ("ul", str(len(username))),
+                ("pl", str(len(password))),
+                ("sl", "0"),
+                ("lt", lt),
+                ("execution", execution),
+                ("_eventId", "submit"),
+            ]
         ).encode("utf-8")
-        post_url = f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
+
+        self._dbg(
+            step="post_password",
+            post_url=post_url,
+            ul=len(username),
+            pl=len(password),
+            sl=0,
+            rsa_len=len(rsa),
+            username=username,
+            cookies_before=self._cookie_names(),
+        )
+
         code, html, final, _ = self._request(
             post_url,
             data=form,
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": post_url,
-                "Origin": "https://cas.jlu.edu.cn",
-            },
+            headers=self._browser_post_headers(referer),
+            allow_redirects=False,
         )
+        redirect_chain: list[str] = []
+        if code in (301, 302, 303, 307, 308):
+            code, html, final, redirect_chain = self._follow_redirects(final, html, code)
+
         step = classify_login_html(html)
+        # 若仍停在 CAS 且是重定向目标页，再分类一次
         host = urllib.parse.urlparse(final).hostname or ""
+        err = extract_cas_error(html)
+        self.last_error_text = err
+        self._dbg(
+            step="post_password_result",
+            status=code,
+            final_url=_redact_url(final),
+            final_host=host,
+            redirect_chain=redirect_chain,
+            classify=step.value,
+            server_error=err,
+            has_loginForm=('id="loginForm"' in html or "id='loginForm'" in html),
+            has_二次认证=("二次认证" in html),
+            has_WxCode=bool(_WXCODE_RE.search(html)),
+            cookies_after=self._cookie_names(),
+            body_len=len(html),
+        )
 
         if step == LoginStep.NEED_SECOND_FACTOR:
             new_lt = _extract_lt(html) or lt
@@ -397,16 +598,29 @@ class JwxtClient:
         if host == IEDU_HOST and code in (200, 302):
             self._logged_in = True
             self.pending = None
+            # 用短 service 登录成功后再访问一次门户，便于后续 API
+            try:
+                self._request(IEDU_PORTAL)
+            except NetworkError:
+                pass
             return LoginStep.SUCCESS
 
-        if host == IEDU_HOST or ("ticket=" in final and "iedu.jlu.edu.cn" in final):
-            # ticket 已发但业务站连不上
+        if "ticket=" in final and IEDU_HOST in final:
             raise NetworkError(
-                "CAS 已放行，但无法完成到教务站点的回跳。"
+                "CAS 已放行（已签发 ticket），但无法完成到教务站点的回跳。"
                 "请确认当前网络能访问 iedu.jlu.edu.cn（校园网或学校 VPN）。"
             )
+        if host == IEDU_HOST:
+            self._logged_in = True
+            self.pending = None
+            return LoginStep.SUCCESS
         if host == "cas.jlu.edu.cn":
             return LoginStep.WRONG_PASSWORD
+        # 其他业务站回跳也视为 CAS 密码步成功
+        if code in (200, 302) and host and host != "cas.jlu.edu.cn":
+            self._logged_in = True
+            self.pending = None
+            return LoginStep.SUCCESS
         return LoginStep.FAILED
 
     def download_captcha(self, path: Optional[Path] = None) -> Path:
@@ -456,7 +670,8 @@ class JwxtClient:
             f"{CAS_RECHECKCODE}?code={urllib.parse.quote(image_captcha.strip())}"
             f"&t={now}"
         )
-        referer = f"{CAS_LOGIN}?service={urllib.parse.quote(IEDU_PORTAL, safe='')}"
+        svc = self.pending.service if self.pending else CAS_SERVICE
+        referer = f"{CAS_LOGIN}?service={urllib.parse.quote(svc, safe='')}"
         code, _, _, _ = self._request(
             url,
             headers={
@@ -538,7 +753,7 @@ class JwxtClient:
             return LoginStep.SUCCESS
         return LoginStep.FAILED
 
-    def login(self, username: str, password: str, service: str = IEDU_PORTAL) -> None:
+    def login(self, username: str, password: str, service: str = CAS_SERVICE) -> None:
         """兼容旧接口：仅密码、无二次认证时可用；需要 2FA 时抛 LoginError。"""
         step = self.login_password(username, password, service)
         if step == LoginStep.SUCCESS:
@@ -744,11 +959,12 @@ def probe_reachability(timeout: float = 12.0) -> dict:
     out = {}
     client = JwxtClient(timeout=timeout)
     try:
-        html, lt, execution = client.fetch_login_page()
+        html, lt, execution, post_url = client.fetch_login_page()
         out["cas"] = {
             "ok": True,
             "lt_prefix": lt[:16] + "...",
             "execution": execution,
+            "form_action": post_url,
             "has_login_form": 'id="loginForm"' in html,
         }
     except Exception as e:  # noqa: BLE001

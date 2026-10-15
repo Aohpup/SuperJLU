@@ -63,9 +63,10 @@ pkg install python git
 termux-setup-storage   # 授权后才能写到系统「下载」目录看验证码
 pip install "git+https://github.com/Runa-Asahi/JLU-Toolkit.git@feat/jwxt-http-fetch"
 jlu-toolkit fetch --probe
-jlu-toolkit fetch --user 你的邮箱前缀
+jlu-toolkit fetch --user 你的邮箱前缀 --force-login --debug
 # 按提示：打开「下载」里的 jlu_cas_captcha.jpg → 输入图形码
 # → 点发送后去「智慧吉大」看验证码 → 粘贴回 Termux
+# 若密码步失败：把 --debug 输出（不含密码）发回来排查
 ```
 
 ## 接入 AI 助手（MCP）

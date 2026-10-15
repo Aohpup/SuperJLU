@@ -69,6 +69,11 @@ def main():
         action="store_true",
         help="只探测 CAS/验证码/教务是否可达，不登录",
     )
+    f.add_argument(
+        "--debug",
+        action="store_true",
+        help="打印登录诊断信息（字段名/长度、HTTP 状态、最终 URL、重定向链、服务器错误文案；不打印密码）",
+    )
 
     x = p.parse_args()
     if x.cmd == "ics":
@@ -139,7 +144,8 @@ def _interactive_second_factor(client: jwxt.JwxtClient) -> None:
 
 
 def _ensure_login(x) -> jwxt.JwxtClient:
-    client = jwxt.JwxtClient()
+    debug = bool(getattr(x, "debug", False))
+    client = jwxt.JwxtClient(debug=debug)
 
     if not x.force_login and client.load_session():
         print("发现本地会话，正在检测是否有效…", file=sys.stderr)
@@ -148,7 +154,7 @@ def _ensure_login(x) -> jwxt.JwxtClient:
             return client
         print("会话已失效，需要重新登录。", file=sys.stderr)
         client.clear_session_file()
-        client = jwxt.JwxtClient()
+        client = jwxt.JwxtClient(debug=debug)
 
     username = x.user
     password = x.password
@@ -168,7 +174,11 @@ def _ensure_login(x) -> jwxt.JwxtClient:
         )
         sys.exit(2)
     if not password:
-        password = getpass.getpass(f"请输入 {username} 的统一身份认证密码：")
+        try:
+            password = getpass.getpass(f"请输入 {username} 的统一身份认证密码：")
+        except Exception:
+            # 部分 Termux 环境 getpass 异常时回退到可见输入
+            password = _prompt(f"请输入 {username} 的统一身份认证密码（可见输入）：")
 
     try:
         print("正在提交账号密码…", file=sys.stderr)
@@ -183,7 +193,16 @@ def _ensure_login(x) -> jwxt.JwxtClient:
         sys.exit(1)
 
     if step == jwxt.LoginStep.WRONG_PASSWORD:
-        print("用户名或密码错误。账号请使用邮箱前缀，不是学号。", file=sys.stderr)
+        err = client.last_error_text
+        if err:
+            print(f"统一登录失败：服务器返回「{err}」。", file=sys.stderr)
+        else:
+            print("统一登录失败：用户名或密码错误。", file=sys.stderr)
+        print(
+            "账号请使用邮箱前缀（不要用学号；完整邮箱也可，会自动剥掉后缀）。"
+            "可加 --debug 查看字段长度与响应详情。",
+            file=sys.stderr,
+        )
         sys.exit(1)
     if step == jwxt.LoginStep.NEED_SECOND_FACTOR:
         try:

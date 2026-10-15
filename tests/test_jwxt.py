@@ -70,8 +70,20 @@ def test_classify_wrong_password():
     assert jwxt.classify_login_html(html) == jwxt.LoginStep.WRONG_PASSWORD
 
 
+def test_classify_username_password_error_no_huo():
+    html = '<span id="errormsghide" class="login_box_title_notice script_red">用户名密码错误<br/></span><form id="loginForm"></form>'
+    assert jwxt.classify_login_html(html) == jwxt.LoginStep.WRONG_PASSWORD
+    assert jwxt.extract_cas_error(html) == "用户名密码错误"
+
+
+def test_normalize_username():
+    assert jwxt.normalize_username("  foo@mails.jlu.edu.cn ") == "foo"
+    assert jwxt.normalize_username("bar@jlu.edu.cn") == "bar"
+    assert jwxt.normalize_username("baz") == "baz"
+
+
 LOGIN_HTML = '''
-<form id="loginForm" action="/tpass/login" method="post">
+<form id="loginForm" action="/tpass/login?service=https%3A%2F%2Fiedu.jlu.edu.cn%2F" method="post">
 <input type="hidden" id="lt" name="lt" value="LT-UNIT-TEST" />
 <input type="hidden" name="execution" value="e1s1" />
 <input type="hidden" name="_eventId" value="submit" />
@@ -109,16 +121,46 @@ def test_login_password_need_2fa_mocked():
 
 def test_login_password_success_mocked():
     client = jwxt.JwxtClient()
+    calls = {"n": 0}
 
     def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
-        if data is None:
+        calls["n"] += 1
+        if data is None and "login" in url and allow_redirects is not False:
+            # GET login page (allow_redirects default True in fetch)
             return 200, LOGIN_HTML, url, LOGIN_HTML.encode()
-        return 200, "<html>portal</html>", jwxt.IEDU_PORTAL, b"<html>portal</html>"
+        if data is None and allow_redirects is False:
+            # following ticket redirect or portal hit
+            return 200, "<html>portal</html>", jwxt.CAS_SERVICE, b"<html>portal</html>"
+        if data is not None:
+            # password POST: 302 to service with ticket
+            assert b"sl=0" in data
+            assert b"ul=10" in data  # mailprefix
+            loc = jwxt.CAS_SERVICE + "?ticket=ST-TEST"
+            return 302, "", loc, b""
+        return 200, LOGIN_HTML, url, LOGIN_HTML.encode()
 
     with mock.patch.object(client, "_request", side_effect=fake_request):
         step = client.login_password("mailprefix", "secret")
     assert step == jwxt.LoginStep.SUCCESS
     assert client._logged_in
+
+
+def test_login_password_trims_and_strips_email():
+    client = jwxt.JwxtClient()
+    seen = {}
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        if data is None:
+            return 200, LOGIN_HTML, url, LOGIN_HTML.encode()
+        seen["data"] = data
+        return 200, RECHECK_HTML, url, RECHECK_HTML.encode()
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        step = client.login_password("  prefix@mails.jlu.edu.cn  ", "  secret  ")
+    assert step == jwxt.LoginStep.NEED_SECOND_FACTOR
+    # ul=len("prefix")==6, pl=len("secret")==6
+    assert b"ul=6" in seen["data"]
+    assert b"pl=6" in seen["data"]
 
 
 def test_request_wechat_code_reads_cookie():
