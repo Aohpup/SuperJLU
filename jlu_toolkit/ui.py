@@ -539,12 +539,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 elif self.path == "/api/login/start":
                     return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
                                                                  body.get("remember", True) is not False)})
-                elif self.path == "/api/login/captcha":
-                    return self._json({"ok": True, **login.captcha()})
                 elif self.path == "/api/login/send_code":
-                    return self._json({"ok": True, **login.send_code(body.get("captcha", ""))})
+                    return self._json({"ok": True, **login.send_code()})
                 elif self.path == "/api/login/verify":
-                    return self._json({"ok": True, **login.verify(body.get("captcha", ""), body.get("wechat_code", ""))})
+                    return self._json({"ok": True, **login.verify(wechat_code=body.get("wechat_code", ""))})
                 elif self.path == "/api/login/cancel":
                     return self._json({"ok": True, **login.cancel()})
                 elif self.path == "/api/oa/refresh":
