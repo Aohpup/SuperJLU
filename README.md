@@ -377,7 +377,7 @@ Web API（仅 127.0.0.1）：
 
 ## Windows 一键版 SuperJLU.exe（PyInstaller，测试中）
 
-双击 `SuperJLU.exe`（单文件、无控制台窗口）：在 127.0.0.1 的空闲端口后台启动界面并打开浏览器，系统托盘显示 SuperJLU 图标，菜单「打开 SuperJLU」「退出」。
+双击 `SuperJLU.exe`（单文件、无控制台窗口）：在 127.0.0.1:8765（被占用时改用空闲端口）后台启动界面并打开浏览器，系统托盘显示 SuperJLU 图标，菜单「打开 SuperJLU」「退出」。
 再次双击时，如果已有实例在运行，只会打开浏览器。日志：`%USERPROFILE%\.config\jlu-toolkit\desktop.log`。
 
 - 入口：`jlu_toolkit/desktop.py`（`python -m jlu_toolkit.desktop` 在 Linux/macOS 也能用；没有 pystray 时不显示托盘）

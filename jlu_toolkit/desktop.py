@@ -98,15 +98,39 @@ def existing_instance() -> Optional[int]:
     st = read_state()
     if st and is_running(st["port"]):
         return st["port"]
+    if (not st or st["port"] != DEFAULT_PORT) and is_running(DEFAULT_PORT, timeout=0.8):
+        return DEFAULT_PORT  # 状态文件丢了，但 8765 上已是 SuperJLU
     return None
 
 
-def start_server(root: Optional[Path] = None, port: int = 0):
-    """后台线程启动 UI 服务，返回 (httpd, url)。"""
+DEFAULT_PORT = 8765  # 文档里写的端口；被占用时才换空闲端口
+
+
+def _bind(port: int, handler):
     from http.server import ThreadingHTTPServer
+
+    class _Server(ThreadingHTTPServer):
+        # Windows 上 SO_REUSEADDR 会允许两个进程绑同一端口，必须关掉才能检测「被占用」
+        allow_reuse_address = os.name != "nt"
+    return _Server(("127.0.0.1", port), handler)
+
+
+def start_server(root: Optional[Path] = None, port: Optional[int] = None):
+    """后台线程启动 UI 服务，返回 (httpd, url)。
+
+    port=None：优先 127.0.0.1:8765，被占用则用空闲端口；port=0：直接用空闲端口。
+    """
     from . import ui
     store = ui.Store(root or ui.data_dir())
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), ui.make_handler(store))
+    handler = ui.make_handler(store)
+    if port is None:
+        try:
+            httpd = _bind(DEFAULT_PORT, handler)
+        except OSError:
+            _setup_logging().info("端口 %s 被占用，改用空闲端口", DEFAULT_PORT)
+            httpd = _bind(0, handler)
+    else:
+        httpd = _bind(port, handler)
     t = threading.Thread(target=httpd.serve_forever, name="superjlu-ui", daemon=True)
     t.start()
     return httpd, url_for(httpd.server_address[1])
