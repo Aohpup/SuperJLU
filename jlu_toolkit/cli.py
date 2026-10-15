@@ -610,7 +610,7 @@ def _cmd_plan(x):
                                   "modules": sorted(v.get("modules") or {})} for k, v in rep["apps"].items()},
                                   "calls_total": len(rep["calls"]), "calls_with_rows": calls}))
                 return
-            grades = jwxt.load_grades(str(store.p("grades.csv"))) if store.p("grades.csv").exists() else []
+            grades = core.load_grades(str(store.p("grades.csv"))) if store.p("grades.csv").exists() else []
             courses_now = core.load_courses(str(store.p("schedule.csv"))) if store.p("schedule.csv").exists() else []
             p = pl.fetch_plan(client, grades, courses_now, use_cache=not x.refresh)
             f.write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
