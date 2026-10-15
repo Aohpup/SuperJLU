@@ -14,7 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -56,6 +56,18 @@ class RoomQuery:
     term: str = ""
     week: int = 0
     weekday: int = 0  # 1-7
+    kind: str = ""          # 教室类型代码
+    seat_min: int = 0       # 上课座位数
+    seat_max: int = 0
+    exam_min: int = 0       # 考试座位数
+    exam_max: int = 0
+    mode: str = "date"      # date=按日期 / week=按周次
+    weeks: str = ""         # 按周次：如 "6" / "6-8" / "6,8"
+    extra: dict = field(default_factory=dict)  # 元数据里其它检索字段 {字段名: 值}
+
+    @property
+    def week_list(self) -> str:
+        return expand_weeks(self.weeks) if self.weeks else (str(self.week) if self.week else "")
 
     @property
     def jc_list(self) -> str:
@@ -69,6 +81,10 @@ class Room:
     campus: str = ""
     seats: str = ""
     kind: str = ""
+    exam_seats: str = ""
+    free_date: str = ""
+    free_periods: str = ""
+    free_time: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -87,6 +103,22 @@ def parse_periods_arg(s: str) -> tuple[int, int]:
     if not 1 <= a <= b <= 14:
         raise ValueError("节次范围应在 1-14 且起始 ≤ 结束")
     return a, b
+
+
+def expand_weeks(s: str) -> str:
+    """"6-8,10" → "6,7,8,10"。"""
+    out: list[int] = []
+    for part in re.split(r"[,，\s]+", (s or "").strip()):
+        if not part:
+            continue
+        m = re.fullmatch(r"(\d{1,2})(?:-(\d{1,2}))?", part)
+        if not m:
+            raise ValueError("周次格式应为 6 / 6-8 / 6,8")
+        a, b = int(m.group(1)), int(m.group(2) or m.group(1))
+        if not 1 <= a <= b <= 30:
+            raise ValueError("周次范围应在 1-30 且起始 ≤ 结束")
+        out += range(a, b + 1)
+    return ",".join(str(i) for i in dict.fromkeys(out))
 
 
 def week_and_weekday(date: str, first_monday: Optional[str]) -> tuple[int, int]:
@@ -129,6 +161,34 @@ def parse_meta(obj) -> dict:
     return {"actions": sorted(actions), "fields": sorted(fields), "dicts": dicts}
 
 
+def parse_search_fields(obj) -> list[dict]:
+    """元数据里的检索字段 → [{name, caption, xtype, dict, builder}]（只有代码/标题，无数据）。"""
+    out: dict = {}
+
+    def walk(x):
+        if isinstance(x, dict):
+            n = x.get("name")
+            if isinstance(n, str) and _CODE.match(n) and (
+                    x.get("search") is True or "searchxtype" in x or "search.xtype" in x
+                    or "search.omitted" in x or x.get("hidden") is False and "xtype" in x and "url" in x):
+                if x.get("search") is not False and x.get("search.omitted") is not True:
+                    cap = x.get("caption") or x.get("title") or x.get("label") or ""
+                    u = x.get("url") or x.get("dict") or ""
+                    out.setdefault(n, {
+                        "name": n, "caption": str(cap)[:30],
+                        "xtype": str(x.get("searchxtype") or x.get("search.xtype") or x.get("xtype") or "")[:30],
+                        "dict": u if isinstance(u, str) and ".do" in u else "",
+                        "builder": str(x.get("search.builder") or x.get("builder") or "")[:20]})
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for i in x:
+                walk(i)
+
+    walk(obj)
+    return list(out.values())
+
+
 def _meta_urls(extra_modules=()) -> list[tuple[str, str, dict]]:
     """(方法, 路径, 表单)：EMAP 元数据常见取法。"""
     out = []
@@ -156,7 +216,7 @@ def _try_json(client, method: str, path: str, form: dict):
 
 
 def fetch_meta(client, extra_modules=(), trace: Optional[list] = None) -> dict:
-    merged = {"modules_ok": [], "actions": [], "fields": [], "dicts": {}}
+    merged = {"modules_ok": [], "actions": [], "fields": [], "dicts": {}, "search": []}
     for method, path, form in _meta_urls(extra_modules):
         code, obj = _try_json(client, method, path, form)
         rec = {"method": method, "path": path, "form_keys": sorted(form), "status": code}
@@ -181,6 +241,12 @@ def fetch_meta(client, extra_modules=(), trace: Optional[list] = None) -> dict:
             merged["actions"] = sorted(set(merged["actions"]) | set(meta["actions"]))
             merged["fields"] = sorted(set(merged["fields"]) | set(meta["fields"]))
             merged["dicts"].update(meta["dicts"])
+            have = {s["name"] for s in merged["search"]}
+            for s in parse_search_fields(obj):
+                if s["name"] not in have:
+                    merged["search"].append(s)
+                    if s["dict"]:
+                        merged["dicts"].setdefault(s["name"], s["dict"])
     return merged
 
 
@@ -217,9 +283,68 @@ def _meta_scheme(fields: list[str]) -> Optional[Callable[[RoomQuery], dict]]:
     return build
 
 
-def _qs(items: list[tuple[str, str]]) -> str:
-    return json.dumps([{"name": k, "value": v, "linkOpt": "AND", "builder": "equal"} for k, v in items],
-                      ensure_ascii=False)
+def _qs(items) -> str:
+    """items: (name, value) 或 (name, value, builder)。"""
+    out = []
+    for it in items:
+        k, v = it[0], it[1]
+        b = it[2] if len(it) > 2 else "equal"
+        out.append({"name": k, "value": v, "linkOpt": "AND", "builder": b})
+    return json.dumps(out, ensure_ascii=False)
+
+
+SEAT_KEYS = ("SKZWS", "ZWS", "RNRS")
+EXAM_KEYS = ("KSZWS", "KSRS")
+KIND_KEYS = ("JASLXDM", "JSLXDM", "JASLX")
+BLD_KEYS = ("JXLDM", "JZWDM", "LH")
+
+
+def _filters(q: RoomQuery, f: set) -> tuple[dict, list]:
+    """新增筛选：直接表单字段 + querySetting 条件（范围用 moreEqual/lessEqual）。"""
+    pick = lambda ks: next((k for k in ks if k in f), ks[0])  # noqa: E731
+    form, cond = {}, []
+    if q.kind:
+        k = pick(KIND_KEYS); form[k] = q.kind; cond.append((k, q.kind, "equal"))
+    for ks, lo, hi in ((SEAT_KEYS, q.seat_min, q.seat_max), (EXAM_KEYS, q.exam_min, q.exam_max)):
+        k = pick(ks)
+        if lo:
+            form[k + "_MIN"] = str(lo); cond.append((k, str(lo), "moreEqual"))
+        if hi:
+            form[k + "_MAX"] = str(hi); cond.append((k, str(hi), "lessEqual"))
+    for k, v in (q.extra or {}).items():
+        if v not in ("", None):
+            form[k] = str(v); cond.append((k, str(v), "equal"))
+    return form, cond
+
+
+def _with_filters(fn: Callable[[RoomQuery], dict], fields) -> Callable[[RoomQuery], dict]:
+    f = set(fields or [])
+
+    def build(q: RoomQuery) -> dict:
+        d = dict(fn(q))
+        if q.mode == "week":
+            d.pop("KXRQ", None); d.pop("RQ", None)
+            wl = q.week_list
+            for k in ("ZC", "SKZC", "KXZC"):
+                if k in d or k in f:
+                    d[k] = wl
+            d.setdefault("ZC", wl)
+        form, cond = _filters(q, f)
+        if "querySetting" in d:
+            base = json.loads(d["querySetting"])
+            if q.mode == "week":
+                base = [c for c in base if c["name"] not in ("KXRQ", "RQ")]
+                base.append({"name": "ZC", "value": q.week_list, "linkOpt": "AND", "builder": "m_value_equal"})
+                base.append({"name": "XQ", "value": str(q.weekday), "linkOpt": "AND", "builder": "equal"})
+            base += json.loads(_qs(cond)) if cond else []
+            d["querySetting"] = json.dumps(base, ensure_ascii=False)
+        else:
+            d.update(form)
+            if cond:
+                d["querySetting"] = _qs(cond)
+        return d
+
+    return build
 
 
 SCHEMES: dict[str, Callable[[RoomQuery], dict]] = {
@@ -257,6 +382,75 @@ def _rows_any(obj) -> Optional[tuple[str, list]]:
     return None
 
 
+def _total(obj) -> Optional[int]:
+    if not isinstance(obj, dict):
+        return None
+    for blk in (obj.get("datas") or {}).values():
+        if isinstance(blk, dict):
+            for k in ("totalSize", "total", "totalCount"):
+                try:
+                    return int(blk[k])
+                except (KeyError, TypeError, ValueError):
+                    pass
+    return None
+
+
+PAGE_SIZE = 200
+MAX_PAGES = 60
+
+
+def fetch_all_pages(client, ep: str, form: dict, first_obj, first_rows: list) -> list:
+    """按 totalSize 翻页拉全；没有 totalSize 时直到某页不足一页为止。"""
+    rows = list(first_rows)
+    total = _total(first_obj)
+    size = int(form.get("pageSize") or 0)
+    if not size or (total is not None and len(rows) >= total) or (total is None and len(first_rows) < size):
+        return rows
+    page = int(form.get("pageNumber") or 1)
+    while page < MAX_PAGES:
+        page += 1
+        code, text, _ = client.post_raw(ep, {**form, "pageNumber": str(page)}, APP)
+        if code != 200:
+            break
+        try:
+            hit = _rows_any(json.loads(text))
+        except (json.JSONDecodeError, ValueError):
+            break
+        if not hit or not hit[1]:
+            break
+        rows += hit[1]
+        if (total is not None and len(rows) >= total) or len(hit[1]) < size:
+            break
+    return rows
+
+
+def _paged(form: dict) -> dict:
+    d = dict(form)
+    if "requestParamStr" not in d:
+        d["pageSize"], d["pageNumber"] = str(PAGE_SIZE), "1"
+    return d
+
+
+def _num(s: str) -> int:
+    try:
+        return int(float(s))
+    except (TypeError, ValueError):
+        return 0
+
+
+def post_filter(rs: list, q: RoomQuery) -> list:
+    """服务端若忽略了某个筛选，本地再筛一遍（座位/类型/教学楼）。"""
+    out = []
+    for r in rs:
+        s, e = _num(r.seats), _num(r.exam_seats)
+        if q.seat_min and r.seats and s < q.seat_min: continue  # noqa: E701
+        if q.seat_max and r.seats and s > q.seat_max: continue  # noqa: E701
+        if q.exam_min and r.exam_seats and e < q.exam_min: continue  # noqa: E701
+        if q.exam_max and r.exam_seats and e > q.exam_max: continue  # noqa: E701
+        out.append(r)
+    return out
+
+
 def row_to_room(r: dict) -> Optional[Room]:
     first = lambda *ks: next((_s(r.get(k)) for k in ks if _s(r.get(k))), "")  # noqa: E731
     name = first("JASMC", "JSMC", "MC", "JASDM")
@@ -266,8 +460,12 @@ def row_to_room(r: dict) -> Optional[Room]:
         name=name,
         building=first("JXLDM_DISPLAY", "JXLMC", "JZWMC", "JXLDM"),
         campus=first("XXXQDM_DISPLAY", "XXXQMC", "XQMC"),
-        seats=first("SKZWS", "ZWS", "KSZWS", "RNRS"),
-        kind=first("JASLXDM_DISPLAY", "JASLXMC", "JSLXMC"),
+        seats=first("SKZWS", "ZWS", "RNRS"),
+        kind=first("JASLXDM_DISPLAY", "JSLXDM_DISPLAY", "JASLXMC", "JSLXMC", "JASLXDM"),
+        exam_seats=first("KSZWS", "KSRS"),
+        free_date=first("KXRQ", "RQ", "CXRQ"),
+        free_periods=first("KXJC_DISPLAY", "KXJC", "JC", "JCS"),
+        free_time=first("KXSJ", "SJ", "KXSJD"),
     )
 
 
@@ -340,10 +538,11 @@ def _attempts(meta: dict, profile: Optional[dict]):
     actions += [_abs(a) for a in meta.get("discovered_do", []) if re.search(r"(kx|cx)", a)
                 and not re.search(r"modules/\w+\.do$", a) and "code" not in a.lower()]
     endpoints = list(dict.fromkeys(actions + list(ENDPOINTS)))
-    schemes = dict(SCHEMES)
-    ms = _meta_scheme(meta.get("fields", []))
+    flds = meta.get("fields", [])
+    schemes = {k: _with_filters(v, flds) for k, v in SCHEMES.items()}
+    ms = _meta_scheme(flds)
     if ms:
-        schemes = {"meta": ms, **schemes}
+        schemes = {"meta": _with_filters(ms, flds), **schemes}
     if profile and profile.get("endpoint") in endpoints and profile.get("scheme") in schemes:
         yield profile["endpoint"], profile["scheme"], schemes[profile["scheme"]]
     for ep in endpoints:
@@ -367,7 +566,8 @@ def query_rooms(client, q: RoomQuery, profile_path: Optional[Path] = None,
     for i, (ep, sname, fn) in enumerate(_attempts(meta, profile)):
         if i >= max_tries:
             break
-        code, text, _ = client.post_raw(ep, fn(q), APP)
+        form = _paged(fn(q))
+        code, text, _ = client.post_raw(ep, form, APP)
         if code != 200:
             errs.append(f"{ep.rsplit('/', 1)[-1]}/{sname}:HTTP{code}")
             continue
@@ -384,7 +584,10 @@ def query_rooms(client, q: RoomQuery, profile_path: Optional[Path] = None,
         prof = {"endpoint": ep, "scheme": sname, "datas_key": hit[0]}
         if profile_path:
             profile_path.write_text(json.dumps(prof, ensure_ascii=False), encoding="utf-8")
-        return [r for r in (row_to_room(x) for x in hit[1] if isinstance(x, dict)) if r], prof
+        raw = fetch_all_pages(client, ep, form, obj, hit[1])
+        prof["total"] = _total(obj)
+        rs = [r for r in (row_to_room(x) for x in raw if isinstance(x, dict)) if r]
+        return post_filter(rs, q), prof
     raise jwxt.JwxtError("空教室查询未成功；尝试：" + "；".join(errs[:12]))
 
 
@@ -444,12 +647,40 @@ def list_campuses(client, meta: Optional[dict] = None) -> list[dict]:
     return [{"code": c, "name": c} for c in campus_codes_from_jc(client)]
 
 
+def list_codes(client, keys, parent: Optional[dict] = None, meta: Optional[dict] = None) -> list[dict]:
+    client.enter_emap_app(APP)
+    meta = meta if meta is not None else full_meta(client)
+    for k in keys:
+        if k in meta.get("dicts", {}):
+            got = fetch_code_list(client, meta["dicts"][k], parent)
+            if got:
+                return got
+    return []
+
+
+def list_room_types(client, meta: Optional[dict] = None) -> list[dict]:
+    return list_codes(client, KIND_KEYS, None, meta)
+
+
+def extra_search_fields(meta: dict) -> list[dict]:
+    """元数据里除已支持外的检索字段（「更多条件」）。"""
+    known = {"XXXQDM", "XQDM", "KXRQ", "RQ", "KSJC", "JSJC", "JC", "KXJC", "ZC", "XQ", "XQJ", "XNXQDM",
+             *SEAT_KEYS, *EXAM_KEYS, *KIND_KEYS, *BLD_KEYS}
+    return [s for s in meta.get("search", []) if s["name"] not in known]
+
+
 def list_buildings(client, campus: str = "", meta: Optional[dict] = None) -> list[dict]:
     client.enter_emap_app(APP)
     meta = meta if meta is not None else full_meta(client)
     for k in ("JXLDM", "JZWDM"):
         if k in meta.get("dicts", {}):
-            return fetch_code_list(client, meta["dicts"][k], {"XXXQDM": campus} if campus else None)
+            got = []
+            if campus:
+                for pk in ("XXXQDM", "XQDM", "pId", "XXXQ"):
+                    got = fetch_code_list(client, meta["dicts"][k], {pk: campus})
+                    if got:
+                        break
+            return got or fetch_code_list(client, meta["dicts"][k])
     return []
 
 
@@ -472,7 +703,12 @@ def probe(client, first_monday: Optional[str], term: str, campuses: Optional[lis
     meta = full_meta(client, trace, disc)
     rep["meta_trace"] = trace
     rep["meta"] = {"modules_ok": meta["modules_ok"], "actions": meta["actions"], "fields": meta["fields"],
-                   "dict_fields": sorted(meta["dicts"]), "dict_urls": sorted(set(meta["dicts"].values()))}
+                   "dict_fields": sorted(meta["dicts"]), "dict_urls": sorted(set(meta["dicts"].values())),
+                   "search_fields": [{k: s[k] for k in ("name", "caption", "xtype", "builder")} | {"has_dict": bool(s["dict"])}
+                                     for s in meta.get("search", [])]}
+    for s in rep["meta"]["search_fields"]:
+        tag = "\t(字典)" if s["has_dict"] else ""
+        log(f"[检索字段] {s['name']}\t{s['caption']}\t{s['xtype']}{tag}")
     log(f"[发现] 文件 {len(disc.get('fetched', []))} 个，.do {len(disc.get('do_paths', []))} 个，"
         f"模块 {disc.get('modules_seen')}")
     log(f"[元数据] 模块={meta['modules_ok']} 动作={len(meta['actions'])} 字段={len(meta['fields'])}")

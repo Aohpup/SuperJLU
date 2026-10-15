@@ -69,6 +69,10 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
 .cd.soon{background:#fdecec;color:var(--bad)}.cd.past{background:var(--bg);color:var(--sub)}
 .exam .t{flex:1}.exam .t b{display:block}
 #toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#222c;color:#fff;padding:9px 16px;border-radius:99px;font-size:14px;display:none;z-index:9;max-width:90vw}
+.seg{display:flex;gap:4px;margin-bottom:10px}.seg button{flex:1;padding:8px;border:1px solid var(--line,#ddd);background:transparent;border-radius:8px;color:inherit}.seg button.on{background:var(--acc,#2563eb);color:#fff;border-color:transparent}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:3px;opacity:.9}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
+.rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:8px}
+table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:6px;border-bottom:1px solid var(--line,#eee);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none}
 </style></head>
 <body>
 <header><h1>JLU Toolkit <small id="upd"></small></h1>
@@ -93,9 +97,21 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
- <div class="row"><select id="rc" style="flex:1"><option value="">校区（点“加载校区”）</option></select><button class="btn ghost" id="rcl">加载校区</button></div>
- <div class="row" style="margin-top:8px"><input type="date" id="rd" style="flex:1"><select id="rp"></select><button class="btn pri" id="rq">查询</button></div>
- <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务。</p></div>
+ <div class="seg" id="rmode"><button class="on" data-m="date">按日期查询</button><button data-m="week">按周次查询</button></div>
+ <div class="rgrid">
+  <label>学校校区<select id="rc"><option value="">（点“加载”）</option></select></label>
+  <label>教学楼<select id="rb"><option value="">全部</option></select></label>
+  <label>教室类型<select id="rt"><option value="">全部</option></select></label>
+  <label class="m-date">空闲日期<input type="date" id="rd"></label>
+  <label class="m-week" hidden>周次<input id="rw" placeholder="如 6 或 6-8"></label>
+  <label class="m-week" hidden>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+  <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
+  <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
+  <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
+ </div>
+ <details id="rmore"><summary>更多条件</summary><div class="rgrid" id="rextra"><p class="sub">加载中…</p></div></details>
+ <div class="row" style="margin-top:8px"><button class="btn ghost" id="rcl">加载</button><span style="flex:1"></span><button class="btn pri" id="rq">查询</button></div>
+ <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
  <div class="card" id="rres" hidden></div></section>
 <section class="tab" id="t-ks"><div class="card"><h2>考试倒计时</h2><div id="exams"></div></div></section>
 <section class="tab" id="t-sz">
@@ -190,10 +206,20 @@ $("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});awa
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.textContent="刷新中…";try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.textContent="⟳ 刷新"}};
-(function(){const s=$("#rp");const o=[["1-2","1-2 节"],["3-4","3-4 节"],["5-6","5-6 节"],["7-8","7-8 节"],["9-10","9-10 节"],["1-4","上午"],["5-8","下午"],["9-11","晚上"],["1-11","全天"]];s.innerHTML=o.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10)})();
-$("#rcl").onclick=async()=>{try{const j=await api("/api/rooms/campuses",{});$("#rc").innerHTML=j.campuses.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("")||'<option value="">未取到校区</option>';toast("已加载 "+j.campuses.length+" 个校区")}catch(e){toast(e.message)}};
-$("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const j=await api("/api/rooms",{campus:$("#rc").value,date:$("#rd").value,periods:$("#rp").value});const box=$("#rres");box.hidden=false;
- box.innerHTML=`<h2>${esc(j.date)} 第${j.periods[0]}-${j.periods[1]}节 <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]} · ${j.rooms.length} 间</span></h2>`+(j.rooms.map(r=>`<div class="exam"><div class="t"><b>${esc(r.name)}</b><span class="sub">${esc([r.building,r.kind,r.seats&&r.seats+" 座"].filter(Boolean).join(" · "))}</span></div></div>`).join("")||'<p class="empty">没有符合条件的空教室</p>')}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
+(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);$("#rwd").value=String(new Date().getDay()||7)})();
+let RM="date",RR=[],RS={k:"name",d:1};
+document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>{RM=b.dataset.m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll(".m-date").forEach(e=>e.hidden=RM!=="date");document.querySelectorAll(".m-week").forEach(e=>e.hidden=RM!=="week")});
+const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
+async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
+$("#rc").onchange=loadBuildings;
+$("#rcl").onclick=async()=>{try{const j=await api("/api/rooms/campuses",{});$("#rc").innerHTML=opts(j.campuses)||'<option value="">未取到校区</option>';await loadBuildings();const t=await api("/api/rooms/types",{});$("#rt").innerHTML=opts(t.types,"全部");const f=await api("/api/rooms/fields",{});$("#rextra").innerHTML=f.fields.map(x=>`<label>${esc(x.caption||x.name)}<input data-f="${esc(x.name)}" placeholder="${esc(x.name)}"></label>`).join("")||'<p class="sub">元数据中没有其它检索字段</p>';toast(`已加载 ${j.campuses.length} 校区 · ${t.types.length} 类型`)}catch(e){toast(e.message)}};
+const RCOLS=[["campus","学校校区"],["building","教学楼"],["kind","教室类型"],["name","教室名称"],["free_date","空闲日期"],["free_periods","空闲节次"],["free_time","空闲时间"],["seats","上课座位数"],["exam_seats","考试座位数"]];
+function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats","exam_seats"].includes(k);const rs=[...RR].sort((a,b)=>{const x=a[RS.k],y=b[RS.k];return RS.d*(n(RS.k)?(+x||0)-(+y||0):String(x).localeCompare(String(y),"zh"))});
+ const head=j.mode==="week"?`第${esc(j.weeks)}周 周${"一二三四五六日"[j.weekday-1]}`:`${esc(j.date)} <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]}</span>`;
+ box.innerHTML=`<h2>${head} 第${j.periods[0]}-${j.periods[1]}节 <span class="sub">· ${rs.length} 间</span></h2>`+(rs.length?`<div style="overflow-x:auto"><table class="rt"><thead><tr>${RCOLS.map(([k,l])=>`<th data-k="${k}">${l}${RS.k===k?(RS.d>0?" ▲":" ▼"):""}</th>`).join("")}</tr></thead><tbody>${rs.map(r=>`<tr>${RCOLS.map(([k])=>`<td>${esc(r[k]||"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`:'<p class="empty">没有符合条件的空教室</p>');
+ box.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;RS=RS.k===k?{k,d:-RS.d}:{k,d:1};renderRooms(j)})}
+$("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
+ const j=await api("/api/rooms",{mode:RM,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 load().then(fromHash).catch(e=>toast("加载失败："+e.message));
 </script></body></html>

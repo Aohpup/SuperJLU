@@ -102,3 +102,43 @@ def test_app_is_kxjas():
     assert rooms._abs("./modules/kxjscx/cxkxjs.do") == "/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do"
     assert rooms._abs("kxjscx/cxkxjs.do") == "/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do"
     assert rooms._abs("modules/kxjscx.do?*json=1") == "/jwapp/sys/kxjas/modules/kxjscx.do"
+
+
+def test_expand_weeks_and_search_fields():
+    assert rooms.expand_weeks("6-8,10") == "6,7,8,10"
+    meta = {"models": [{"controls": [
+        {"name": "XXXQDM", "caption": "学校校区", "search": True, "url": "code/xq.do"},
+        {"name": "JASLXDM", "caption": "教室类型", "search": True, "url": "code/jaslx.do"},
+        {"name": "SKZWS", "caption": "上课座位数", "search": True, "xtype": "number-range"},
+        {"name": "SFYKT", "caption": "是否有空调", "search": True},
+        {"name": "BZ", "caption": "备注", "search": False}]}]}
+    sf = rooms.parse_search_fields(meta)
+    assert [s["name"] for s in sf] == ["XXXQDM", "JASLXDM", "SKZWS", "SFYKT"]
+    assert [s["name"] for s in rooms.extra_search_fields({"search": sf})] == ["SFYKT"]
+
+
+def test_filters_week_mode_and_pagination():
+    q = rooms.RoomQuery("01", "", 1, 2, term="t", weekday=3, mode="week", weeks="6-7",
+                        seat_min=100, kind="K1", extra={"SFYKT": "1"})
+    fn = rooms._with_filters(rooms.SCHEMES["querySetting"], ["SKZWS", "JASLXDM"])
+    import json as _j
+    qs = _j.loads(fn(q)["querySetting"])
+    names = {(c["name"], c["builder"]) for c in qs}
+    assert ("SKZWS", "moreEqual") in names and ("JASLXDM", "equal") in names and ("SFYKT", "equal") in names
+    assert not any(c["name"] == "KXRQ" for c in qs)
+    assert any(c["name"] == "ZC" and c["value"] == "6,7" for c in qs)
+
+    pages = {1: [{"JASMC": f"A{i}", "SKZWS": 120} for i in range(200)],
+             2: [{"JASMC": "B1", "SKZWS": 150}, {"JASMC": "B2", "SKZWS": 50}]}
+
+    class C:
+        calls = []
+        def enter_emap_app(self, *_): pass
+        def post_raw(self, ep, form, ref):
+            self.calls.append(form.get("pageNumber"))
+            n = int(form.get("pageNumber") or 1)
+            return 200, _j.dumps({"code": "0", "datas": {"cxkxjs": {"totalSize": 202, "rows": pages.get(n, [])}}}), ""
+    c = C()
+    meta = {"actions": ["kxjscx/cxkxjs.do"], "fields": [], "dicts": {}}
+    found, prof = rooms.query_rooms(c, rooms.RoomQuery("01", "2026-10-15", 1, 2, seat_min=100), None, meta=meta)
+    assert len(found) == 201 and prof["total"] == 202 and c.calls[:2] == ["1", "2"]

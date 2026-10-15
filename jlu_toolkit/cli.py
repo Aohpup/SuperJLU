@@ -119,6 +119,16 @@ def main():
     rm.add_argument("--date", help="空闲日期 YYYY-MM-DD（默认今天）")
     rm.add_argument("--periods", default="1-2", help="空闲节次，如 3 或 3-4（默认 1-2）")
     rm.add_argument("--building", default="", help="教学楼代码（可选，--list-buildings 查看）")
+    rm.add_argument("--type", dest="kind", default="", help="教室类型代码（--list-types 查看）")
+    rm.add_argument("--seats", default="", help="上课座位数范围，如 100- / 50-120 / -80")
+    rm.add_argument("--exam-seats", default="", help="考试座位数范围，同上")
+    rm.add_argument("--weeks", default="", help="按周次查询：周次，如 6 / 6-8 / 6,8（与 --weekday 配合，忽略 --date）")
+    rm.add_argument("--weekday", type=int, default=0, help="按周次查询：星期 1-7")
+    rm.add_argument("--field", action="append", default=[], metavar="名=值",
+                    help="其它检索字段（--list-fields 查看），可重复")
+    rm.add_argument("--list-types", action="store_true", help="列出教室类型代码")
+    rm.add_argument("--list-fields", action="store_true", help="列出元数据中的其它检索字段")
+    rm.add_argument("--sort", default="", help="排序：name/building/seats/exam_seats，前缀 - 为降序")
     rm.add_argument("--list-campuses", action="store_true", help="列出校区代码")
     rm.add_argument("--list-buildings", action="store_true", help="列出教学楼代码（可配合 --campus）")
     rm.add_argument("--probe", action="store_true", help="只读探测接口/参数组合，只打印结构，不打印数据")
@@ -525,6 +535,30 @@ def _cmd_gpa_probe(x):
     }, ensure_ascii=False, indent=1))
 
 
+def _range(s: str) -> tuple[int, int]:
+    import re as _re
+    s = (s or "").strip()
+    if not s:
+        return 0, 0
+    m = _re.fullmatch(r"(\d*)\s*(-?)\s*(\d*)", s)
+    if not m or not (m.group(1) or m.group(3)):
+        raise ValueError("座位数范围格式：100- / 50-120 / -80 / 100")
+    lo, hi = int(m.group(1) or 0), int(m.group(3) or 0)
+    if not m.group(2):
+        hi = lo
+    return lo, hi
+
+
+def sort_rooms(rs, key: str):
+    if not key:
+        return rs
+    desc = key.startswith("-")
+    k = key.lstrip("-")
+    num = k in ("seats", "exam_seats")
+    f = (lambda r: float(getattr(r, k) or 0)) if num else (lambda r: str(getattr(r, k, "")))
+    return sorted(rs, key=f, reverse=desc)
+
+
 def _cmd_rooms(x):
     import datetime as _dt
     import tempfile
@@ -567,15 +601,33 @@ def _cmd_rooms(x):
             print(json.dumps(rows, ensure_ascii=False) if x.json else
                   "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到教学楼列表）")
             return
+        if x.list_types:
+            rows = rooms.list_room_types(client)
+            print(json.dumps(rows, ensure_ascii=False) if x.json else
+                  "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到教室类型）")
+            return
+        if x.list_fields:
+            rows = rooms.extra_search_fields(rooms.full_meta(client))
+            print(json.dumps(rows, ensure_ascii=False) if x.json else
+                  "\n".join(f"{r['name']}\t{r['caption']}\t{r['xtype']}" for r in rows) or "（无其它检索字段）")
+            return
         if not x.campus:
             err("请用 --campus 指定校区代码（jlu-toolkit rooms --list-campuses 查看）")
             sys.exit(2)
-        date = x.date or _dt.date.today().isoformat()
-        start, end = rooms.parse_periods_arg(x.periods)
-        week, weekday = rooms.week_and_weekday(date, store.first_monday())
-        q = rooms.RoomQuery(x.campus, date, start, end, x.building,
-                            cal.get("term") or client.current_semester() or "", week, weekday)
+        lo, hi = _range(x.seats)
+        elo, ehi = _range(x.exam_seats)
+        extra = {}
+        for kv in x.field:
+            k, _, v = kv.partition("=")
+            if not k or not _:
+                raise ValueError("--field 格式为 名=值")
+            extra[k.strip()] = v.strip()
+        body = {"campus": x.campus, "date": x.date, "periods": x.periods, "building": x.building,
+                "kind": x.kind, "seat_min": lo, "seat_max": hi, "exam_min": elo, "exam_max": ehi,
+                "mode": "week" if x.weeks else "date", "weeks": x.weeks, "weekday": x.weekday, "extra": extra}
+        q = ui.build_room_query(store, body, cal.get("term") or client.current_semester() or "")
         found, prof = rooms.query_rooms(client, q, store.p("rooms_profile.json"))
+        found = sort_rooms(found, x.sort)
         client.save_session()
     except ValueError as e:
         err(str(e)); sys.exit(2)
@@ -587,9 +639,12 @@ def _cmd_rooms(x):
         print(json.dumps({"query": q.__dict__, "profile": prof, "rooms": [r.to_dict() for r in found]},
                          ensure_ascii=False, indent=1))
     else:
-        print(f"{date} 第{start}-{end}节（第{week}周 周{weekday}）空教室 {len(found)} 间：")
+        when = (f"第{q.weeks}周 周{q.weekday}" if q.mode == "week" else f"{q.date}（第{q.week}周 周{q.weekday}）")
+        print(f"{when} 第{q.start}-{q.end}节 空教室 {len(found)} 间：")
         for r in found:
-            print(f"  {r.name}\t{r.building}\t{r.seats and r.seats + '座'}")
+            print("  " + "\t".join(v for v in (r.campus, r.building, r.kind, r.name, r.free_date, r.free_periods,
+                                                r.free_time, r.seats and r.seats + "座",
+                                                r.exam_seats and "考" + r.exam_seats) if v))
 
 
 def _cmd_ui(x):

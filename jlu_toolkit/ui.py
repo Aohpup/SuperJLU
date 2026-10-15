@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import shutil
 import threading
 from http import HTTPStatus
@@ -159,22 +160,79 @@ def campuses_api(store: Store) -> dict:
     return {"campuses": lst}
 
 
-def rooms_api(store: Store, body: dict) -> dict:
+def build_room_query(store: Store, body: dict, term: str = ""):
+    """UI / CLI / MCP 共用：body 字段 campus,date,periods,building,kind,seat_min,seat_max,
+    exam_min,exam_max,mode(date|week),weeks,weekday,extra{}。"""
     from . import rooms
-    date = body.get("date") or dt.date.today().isoformat()
-    dt.date.fromisoformat(date)
+    mode = str(body.get("mode") or "date")
     start, end = rooms.parse_periods_arg(str(body.get("periods") or "1-2"))
     campus = str(body.get("campus") or "")
     if not campus:
         raise ValueError("请选择校区")
-    week, weekday = rooms.week_and_weekday(date, store.first_monday())
+    i = lambda k: int(body.get(k) or 0)  # noqa: E731
+    if mode == "week":
+        weeks = rooms.expand_weeks(str(body.get("weeks") or ""))
+        if not weeks:
+            raise ValueError("按周次查询需要周次，如 6 或 6-8")
+        weekday = i("weekday")
+        if not 1 <= weekday <= 7:
+            raise ValueError("按周次查询需要星期 1-7")
+        date, week = "", int(weeks.split(",")[0])
+    else:
+        date = str(body.get("date") or dt.date.today().isoformat())
+        dt.date.fromisoformat(date)
+        week, weekday = rooms.week_and_weekday(date, store.first_monday())
+        weeks = ""
+    extra = body.get("extra") or {}
+    if not isinstance(extra, dict):
+        raise ValueError("extra 应为 {字段: 值}")
+    return rooms.RoomQuery(campus, date, start, end, str(body.get("building") or ""),
+                           term or store.calendar().get("term", ""), week, weekday,
+                           kind=str(body.get("kind") or ""), seat_min=i("seat_min"), seat_max=i("seat_max"),
+                           exam_min=i("exam_min"), exam_max=i("exam_max"), mode=mode, weeks=weeks,
+                           extra={str(k): str(v) for k, v in extra.items()})
+
+
+def rooms_api(store: Store, body: dict) -> dict:
+    from . import rooms
+    q = build_room_query(store, body)
     c = _client()
-    q = rooms.RoomQuery(campus, date, start, end, str(body.get("building") or ""),
-                        store.calendar().get("term", ""), week, weekday)
     found, prof = rooms.query_rooms(c, q, store.p("rooms_profile.json"))
     c.save_session()
-    return {"date": date, "week": week, "weekday": weekday, "periods": [start, end],
-            "rooms": [r.to_dict() for r in found]}
+    return {"mode": q.mode, "date": q.date, "week": q.week, "weeks": q.weeks, "weekday": q.weekday,
+            "periods": [q.start, q.end], "total": prof.get("total"), "rooms": [r.to_dict() for r in found]}
+
+
+def _cached(store: Store, name: str, fn):
+    f = store.p(name)
+    if f.exists():
+        return json.loads(f.read_text(encoding="utf-8"))
+    c = _client()
+    v = fn(c)
+    if v:
+        f.write_text(json.dumps(v, ensure_ascii=False), encoding="utf-8")
+    c.save_session()
+    return v
+
+
+def buildings_api(store: Store, body: dict) -> dict:
+    from . import rooms
+    campus = str(body.get("campus") or "")
+    safe = re.sub(r"\W", "_", campus)
+    return {"buildings": _cached(store, f"buildings_{safe}.json", lambda c: rooms.list_buildings(c, campus))}
+
+
+def room_types_api(store: Store) -> dict:
+    from . import rooms
+    return {"types": _cached(store, "room_types.json", lambda c: rooms.list_room_types(c))}
+
+
+def room_fields_api(store: Store) -> dict:
+    """「更多条件」：元数据里额外的检索字段（名称+标题）。"""
+    from . import rooms
+    return {"fields": _cached(store, "room_fields.json",
+                              lambda c: [{k: s[k] for k in ("name", "caption", "xtype")}
+                                         for s in rooms.extra_search_fields(rooms.full_meta(c))])}
 
 
 def make_handler(store: Store):
@@ -239,6 +297,12 @@ def make_handler(store: Store):
                     store.save_settings(body)
                 elif self.path == "/api/rooms":
                     return self._json({"ok": True, **rooms_api(store, body)})
+                elif self.path == "/api/rooms/buildings":
+                    return self._json({"ok": True, **buildings_api(store, body)})
+                elif self.path == "/api/rooms/types":
+                    return self._json({"ok": True, **room_types_api(store)})
+                elif self.path == "/api/rooms/fields":
+                    return self._json({"ok": True, **room_fields_api(store)})
                 elif self.path == "/api/rooms/campuses":
                     return self._json({"ok": True, **campuses_api(store)})
                 elif self.path == "/api/refresh":

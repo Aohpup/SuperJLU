@@ -23,12 +23,30 @@ def main():
         return [g.__dict__ for g in core.load_grades(os.environ["JLU_GRADES_CSV"]) if not term or g.term == term]
 
     @mcp.tool()
-    def free_rooms(campus: str, date: str = "", periods: str = "1-2", building: str = "") -> dict:
-        """查询空教室（需已用 jlu-toolkit fetch 保存会话）。campus 为校区代码（list_campuses 查看），
-        date 为 YYYY-MM-DD（默认今天），periods 如 "3-4"。"""
+    def free_rooms(campus: str, date: str = "", periods: str = "1-2", building: str = "", room_type: str = "",
+                   seat_min: int = 0, seat_max: int = 0, exam_seat_min: int = 0, exam_seat_max: int = 0,
+                   weeks: str = "", weekday: int = 0, extra: dict | None = None) -> dict:
+        """查询空教室（需已用 jlu-toolkit fetch 保存会话）。campus 校区代码（list_campuses），
+        building 教学楼代码（list_buildings），room_type 教室类型代码（list_room_types）；
+        按日期：date=YYYY-MM-DD；按周次：weeks="6-8" + weekday=1-7；periods 如 "3-4"；
+        座位数范围 0 表示不限；extra 为其它检索字段 {字段名: 值}。自动翻页取全。"""
         from . import ui
-        return ui.rooms_api(ui.Store(ui.data_dir()), {"campus": campus, "date": date,
-                                                       "periods": periods, "building": building})
+        return ui.rooms_api(ui.Store(ui.data_dir()), {
+            "campus": campus, "date": date, "periods": periods, "building": building, "kind": room_type,
+            "seat_min": seat_min, "seat_max": seat_max, "exam_min": exam_seat_min, "exam_max": exam_seat_max,
+            "mode": "week" if weeks else "date", "weeks": weeks, "weekday": weekday, "extra": extra or {}})
+
+    @mcp.tool()
+    def list_buildings(campus: str) -> list:
+        """列出某校区的教学楼代码。"""
+        from . import ui
+        return ui.buildings_api(ui.Store(ui.data_dir()), {"campus": campus})["buildings"]
+
+    @mcp.tool()
+    def list_room_types() -> list:
+        """列出教室类型代码。"""
+        from . import ui
+        return ui.room_types_api(ui.Store(ui.data_dir()))["types"]
 
     @mcp.tool()
     def list_campuses() -> list:

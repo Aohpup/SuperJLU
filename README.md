@@ -4,6 +4,19 @@
 
 > 🔒 **隐私**：课表/成绩默认只在你自己的电脑上读取和计算。可选的「教务拉取」会用你的统一身份认证账号直接向学校服务器发 HTTPS 请求，**凭据与会话只存在本机**（chmod 600），不经过任何第三方。
 
+#### 空教室筛选（0.3.11）
+
+```bash
+jlu-toolkit rooms --list-campuses | --list-buildings --campus 01 | --list-types | --list-fields
+# 按日期：校区 + 教学楼 + 类型 + 节次 + 座位数范围
+jlu-toolkit rooms --campus 01 --building XXX --type XX --date 2026-10-20 --periods 3-4 --seats 100- --exam-seats 50-120 --sort -seats
+# 按周次：第 6-8 周 周三
+jlu-toolkit rooms --campus 01 --weeks 6-8 --weekday 3 --periods 1-2
+# 元数据里的其它检索字段（「更多条件」）
+jlu-toolkit rooms --campus 01 --field 字段名=值
+```
+结果自动翻页取全；网页「教室」页支持两种模式、校区→教学楼联动、范围筛选、点表头排序。
+
 ## 快速开始
 ```bash
 pip install git+https://github.com/Runa-Asahi/JLU-Toolkit
