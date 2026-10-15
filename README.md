@@ -1,4 +1,6 @@
-# JLU Toolkit
+# SuperJLU —— 吉大人的一站式服务
+
+> 原名 JLU Toolkit。为兼容，Python 包名仍为 `jlu_toolkit`，命令行仍是 `jlu-toolkit`（新增等价别名 `superjlu`），配置目录不变。
 
 吉大课表和成绩的本地小工具：导入文件后可以计算绩点、导出 iCal 日历（手机和电脑日历都能订阅，课前 15 分钟提醒），还提供 **MCP 接口**，让 Claude、Cursor 等 AI 助手直接回答"我明天有什么课""这学期绩点多少"。
 

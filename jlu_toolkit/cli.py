@@ -44,7 +44,7 @@ def _cmd_status(x):
 def _main(argv=None):
     _utf8_stdio()
     from . import __version__
-    p = argparse.ArgumentParser(prog="jlu-toolkit", description="吉大课表/成绩本地工具")
+    p = argparse.ArgumentParser(prog="jlu-toolkit", description="SuperJLU —— 吉大人的一站式服务（课表/成绩/教务/OA/校园服务）。命令 jlu-toolkit 与 superjlu 等价。")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 

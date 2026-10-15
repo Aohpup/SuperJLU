@@ -124,7 +124,7 @@ def _post(url, body):
 def test_ui_page_and_data(server):
     base, _ = server
     code, body, _ = _get(base + "/")
-    assert code == 200 and b"JLU Toolkit" in body
+    assert code == 200 and b"SuperJLU" in body
     assert b"http://" not in body and b"https://" not in body  # 无外部资源
     _, raw, _ = _get(base + "/api/data")
     d = json.loads(raw)

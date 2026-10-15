@@ -173,7 +173,7 @@ def notify(title: str, msg: str, runner: Callable = subprocess.run) -> str:
     try:
         try:
             from plyer import notification  # type: ignore
-            notification.notify(title=title, message=msg, app_name="JLU Toolkit", timeout=10)
+            notification.notify(title=title, message=msg, app_name="SuperJLU", timeout=10)
             return "plyer"
         except Exception:  # noqa: BLE001
             pass
@@ -186,12 +186,12 @@ def notify(title: str, msg: str, runner: Callable = subprocess.run) -> str:
                   "$x=$t.GetElementsByTagName('text');"
                   f"$x.Item(0).AppendChild($t.CreateTextNode('{_ps_quote(title)}'))>$null;"
                   f"$x.Item(1).AppendChild($t.CreateTextNode('{_ps_quote(msg)}'))>$null;"
-                  "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('JLU Toolkit')"
+                  "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('SuperJLU')"
                   ".Show([Windows.UI.Notifications.ToastNotification]::new($t))")
             runner(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], timeout=15, check=False)
             return "powershell"
         if shutil.which("notify-send"):
-            runner(["notify-send", "-a", "JLU Toolkit", title, msg], timeout=15, check=False)
+            runner(["notify-send", "-a", "SuperJLU", title, msg], timeout=15, check=False)
             return "notify-send"
     except Exception:  # noqa: BLE001
         pass

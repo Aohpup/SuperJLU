@@ -28,6 +28,7 @@ ocr = ["pillow>=9.0", "ddddocr"]
 notify = ["plyer>=2.0"]
 [project.scripts]
 jlu-toolkit = "jlu_toolkit.cli:main"
+superjlu = "jlu_toolkit.cli:main"
 jlu-toolkit-mcp = "jlu_toolkit.mcp_server:main"
 [build-system]
 requires = ["setuptools>=64"]

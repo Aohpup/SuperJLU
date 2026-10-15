@@ -6,7 +6,7 @@ from . import core
 
 def main():
     from mcp.server.fastmcp import FastMCP
-    mcp = FastMCP("jlu-toolkit")
+    mcp = FastMCP("SuperJLU")
 
     @mcp.tool()
     def courses_on_day(week: int, weekday: int) -> list:

@@ -69,7 +69,7 @@ def to_ics(courses, first_monday, periods=None):
         P.update({int(k): tuple(v) for k, v in periods.items()})
     d0 = dt.date.fromisoformat(first_monday)
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//JLU Toolkit//CN","X-WR-CALNAME:吉大课表",
+    lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//SuperJLU//CN","X-WR-CALNAME:吉大课表",
              "X-WR-TIMEZONE:Asia/Shanghai"]
     for c in courses:
         for w in c.weeks:
