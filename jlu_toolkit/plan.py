@@ -342,18 +342,21 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
         if not best:
             raise jwxt.JwxtError("未找到培养方案课程接口（运行 jlu-toolkit plan --probe 查看）")
         # 缓存里不保存 XH 等个人参数值：只存参数名，调用时重新取
-        strip = lambda v: {**v, "form": {f: ("" if f in ("XH", "PYFADM", "BYNJDM", "SCLBDM") else val)  # noqa: E731
+        strip = lambda v: {**v, "form": {f: ("" if f in ("XH", "PYFADM", "BYNJDM", "SCLBDM", "querySetting") else val)  # noqa: E731
                                          for f, val in v["form"].items()}}
         cache = {k: ({p: strip(x) for p, x in v.items()} if k == "trees" else strip(v)) for k, v in best.items()}
         cp.parent.mkdir(parents=True, exist_ok=True)
         cp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
     allb = [b for k, b in best.items() if k != "trees"] + list((best.get("trees") or {}).values())
-    if any(True for b in allb for k, v in b["form"].items() if k in ("XH", "PYFADM") and not v):
+    if any(True for b in allb for k, v in b["form"].items() if k in ("XH", "PYFADM", "querySetting") and not v):
         ctx = _context(client)
         for b in allb:
             for k in list(b["form"]):
                 if k in ctx and not b["form"][k]:
                     b["form"][k] = ctx[k]
+            if "querySetting" in b["form"] and not b["form"]["querySetting"] and ctx.get("PYFADM"):
+                b["form"]["querySetting"] = json.dumps(
+                    [{"name": "PYFADM", "value": ctx["PYFADM"], "linkOpt": "AND", "builder": "equal"}])
     plan = normalize(fetch_all(client, best["plan"]), best["plan"].get("captions") or {}) if "plan" in best else []
     done = []
     if "done" in best and best["done"]["path"] != best["plan"]["path"]:
@@ -378,6 +381,9 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
     if tree:
         res["tree_nodes"] = tree[1]
         res["source"]["tree"] = {"action": tree_src}
+        bt = build_tree(tree[1], [dict(c) for c in courses])
+        res["tree_stats"] = bt["stats"]
+        res["tree_summary"] = tree_summary(bt["roots"])
     return res
 
 
@@ -416,6 +422,26 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
     for n in idx.values():
         par = idx.get(n["parent"]) if n["parent"] and n["parent"] != n["code"] else None
         (par["children"] if par else roots).append(n)
+    # 父子环（A→B→A）会让整段不可达：提升为根，保证每个课组（及其课程）都能显示
+    reach: set = set()
+
+    def mark(n, depth=0):
+        if n["code"] in reach or depth > 50:
+            return
+        reach.add(n["code"])
+        for ch in n["children"]:
+            mark(ch, depth + 1)
+    for r in roots:
+        mark(r)
+    promoted = 0
+    for n in idx.values():
+        if n["code"] not in reach:
+            par = idx.get(n["parent"])
+            if par and n in par["children"]:
+                par["children"].remove(n)
+            roots.append(n)
+            mark(n)
+            promoted += 1
     unmatched, reasons = [], {}
     for c in courses:
         n = idx.get(c.get("group_code") or "")
@@ -428,10 +454,14 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
         reasons[why] = reasons.get(why, 0) + 1
         unmatched.append(c)
 
-    def roll(n, depth=0):
+    def roll(n, depth=0, seen=None):
+        seen = set() if seen is None else seen
+        if n["code"] in seen:
+            return 0.0
+        seen.add(n["code"])
         tot = sum((x["credit"] or 0) for x in n["courses"] if x["status"] == "已修")
         if depth < 12:
-            tot += sum(roll(ch, depth + 1) for ch in n["children"])
+            tot += sum(roll(ch, depth + 1, seen) for ch in n["children"])
         n["earned_courses"] = round(tot, 2)
         if n["earned"] is None:
             n["earned"] = n["earned_courses"]
@@ -444,10 +474,42 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
     for r in roots:
         roll(r)
     kzh = {c.get("group_code") for c in courses if c.get("group_code")}
+    placed = sum(len(walk_courses(r)) for r in roots)
     return {"roots": roots, "unmatched": unmatched,
             "stats": {"groups": len(idx), "roots": len(roots), "courses": len(courses),
                       "matched": len(courses) - len(unmatched), "unmatched": len(unmatched),
-                      "unmatched_kzh": len(kzh - set(idx)), "reasons": reasons}}
+                      "unmatched_kzh": len(kzh - set(idx)), "reasons": reasons,
+                      "placed_in_tree": placed, "promoted_cycle_nodes": promoted}}
+
+
+def walk_courses(n, seen=None) -> list:
+    seen = set() if seen is None else seen
+    if n["code"] in seen:
+        return []
+    seen.add(n["code"])
+    out = list(n.get("courses") or [])
+    for ch in n.get("children") or []:
+        out += walk_courses(ch, seen)
+    return out
+
+
+def tree_summary(roots: list) -> list[dict]:
+    """扁平化：每个课组的直属课程数/子组数/课程号（课程号是公开代码，非个人数据）。"""
+    out: list = []
+
+    def go(n, d, seen):
+        if n["code"] in seen:
+            return
+        seen.add(n["code"])
+        out.append({"code": n["code"], "depth": d, "direct_courses": len(n.get("courses") or []),
+                    "children": len(n.get("children") or []), "total_courses": len(walk_courses(n)),
+                    "course_codes": [c.get("code") for c in n.get("courses") or []]})
+        for ch in n.get("children") or []:
+            go(ch, d + 1, seen)
+    seen: set = set()
+    for r in roots:
+        go(r, 0, seen)
+    return out
 
 
 def diagnose(client, best: dict, comp_groups=None) -> dict:

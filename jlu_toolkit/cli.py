@@ -634,7 +634,8 @@ def _cmd_plan(x):
         err(f"培养方案获取失败：{e}"); _json_err(x, e); sys.exit(1)
     cs = filter_plan(p.get("courses", []), x.status, x.term, x.nature)
     if x.json:
-        print(json.dumps({"source": p.get("source"), "count": len(cs), "courses": cs}))
+        print(json.dumps({"source": p.get("source"), "count": len(cs), "courses": cs,
+                          "tree_stats": p.get("tree_stats"), "tree_summary": p.get("tree_summary")}))
         return
     groups: dict = {}
     for c in cs:

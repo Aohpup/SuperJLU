@@ -103,5 +103,49 @@ def test_build_tree_nested_and_unmatched():
     assert len(t["roots"]) == 1 and [c["code"] for c in t["roots"][0]["children"]] == ["A", "B"]
     a, b = t["roots"][0]["children"]
     assert a["earned"] == 5 and a["missing"] == 3 and b["earned"] == 2.0 and b["earned_source"] == "jw"
-    assert t["stats"] == {"groups": 3, "roots": 1, "courses": 4, "matched": 2, "unmatched": 2,
-                          "unmatched_kzh": 1, "reasons": {"kzh_not_in_tree": 1, "substitute": 1}}
+    want = {"groups": 3, "roots": 1, "courses": 4, "matched": 2, "unmatched": 2,
+            "unmatched_kzh": 1, "reasons": {"kzh_not_in_tree": 1, "substitute": 1}, "placed_in_tree": 2}
+    assert {k: t["stats"][k] for k in want} == want
+
+
+def _shape(nodes, courses):
+    t = plan.build_tree(plan.tree_nodes(nodes), courses)
+    return t, {s["code"]: s for s in plan.tree_summary(t["roots"])}
+
+
+def test_single_course_group_and_mixed():
+    nodes = [{"KZH": "R", "KZM": "根"}, {"KZH": "S", "KZM": "单课组", "FKZH": "R"},
+             {"KZH": "E", "KZM": "空父", "FKZH": "R"}, {"KZH": "E1", "KZM": "子1", "FKZH": "E"},
+             {"KZH": "E2", "KZM": "子2", "FKZH": "E"}, {"KZH": "M", "KZM": "混合", "FKZH": "R"},
+             {"KZH": "M1", "KZM": "混合子", "FKZH": "M"}]
+    c = lambda code, g: {"code": code, "name": code, "credit": 1, "status": "已修", "group_code": g}  # noqa: E731
+    cs = [c("k1", "S"), c("k2", "E1"), c("k3", "E2"), c("k4", "E2"), c("k5", "M"), c("k6", "M1")]
+    t, s = _shape(nodes, cs)
+    assert s["S"]["direct_courses"] == 1 and s["S"]["course_codes"] == ["k1"]
+    assert s["E"]["direct_courses"] == 0 and s["E"]["total_courses"] == 3
+    assert s["M"]["direct_courses"] == 1 and s["M"]["total_courses"] == 2
+    assert t["stats"]["placed_in_tree"] == 6 == t["stats"]["matched"]
+
+
+def test_cycle_nodes_are_promoted_not_lost():
+    nodes = [{"KZH": "A", "KZM": "a", "FKZH": "B"}, {"KZH": "B", "KZM": "b", "FKZH": "A"}]
+    t, s = _shape(nodes, [{"code": "k", "name": "k", "credit": 1, "status": "已修", "group_code": "A"}])
+    assert t["stats"]["placed_in_tree"] == 1 and t["stats"]["promoted_cycle_nodes"] >= 1
+
+
+def test_tree_js_renders_single_and_nested(tmp_path):
+    import re, shutil, subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node not available")
+    from jlu_toolkit.ui_page import PAGE
+    js = re.search(r"<script>(.*)</script>", PAGE, re.S).group(1)
+    (tmp_path / "p.js").write_text(js, encoding="utf-8")
+    test = (Path(__file__).parent / "js_tree_test.js").read_text(encoding="utf-8")
+    (tmp_path / "t.js").write_text(test, encoding="utf-8")
+    out = subprocess.run([node, str(tmp_path / "t.js"), str(tmp_path / "p.js")], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    r = json.loads(out.stdout.strip().splitlines()[-1])
+    assert r == {"ok": True, "soloOpen": True}
