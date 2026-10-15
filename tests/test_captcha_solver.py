@@ -17,7 +17,7 @@ def test_templates_load():
 
 def test_solve_fixture_samples():
     pytest.importorskip("PIL")
-    labels = json.loads((FIX / "labels.json").read_text())
+    labels = json.loads((FIX / "labels.json").read_text(encoding="utf-8"))
     assert labels
     ok = 0
     for name, lab in labels.items():
