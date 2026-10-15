@@ -168,10 +168,11 @@ def parse_search_fields(obj) -> list[dict]:
     def walk(x):
         if isinstance(x, dict):
             n = x.get("name")
+            skeys = [k for k in x if isinstance(k, str) and (k.startswith("search") or k.startswith("search."))]
             if isinstance(n, str) and _CODE.match(n) and (
-                    x.get("search") is True or "searchxtype" in x or "search.xtype" in x
-                    or "search.omitted" in x or x.get("hidden") is False and "xtype" in x and "url" in x):
-                if x.get("search") is not False and x.get("search.omitted") is not True:
+                    x.get("search") is True or skeys or x.get("searchable") is True):
+                if (x.get("search") is not False and x.get("search.omitted") is not True
+                        and x.get("search.hidden") is not True):
                     cap = x.get("caption") or x.get("title") or x.get("label") or ""
                     u = x.get("url") or x.get("dict") or ""
                     out.setdefault(n, {
@@ -187,6 +188,32 @@ def parse_search_fields(obj) -> list[dict]:
 
     walk(obj)
     return list(out.values())
+
+
+def query_model_controls(obj, action_hint: str = "cxkxjs") -> list[dict]:
+    """兜底：查询动作所在模型的全部 controls（名称/标题/类型/字典）。"""
+    res: list[dict] = []
+
+    def walk(x):
+        if isinstance(x, dict):
+            u = x.get("url")
+            ctrls = x.get("controls") or x.get("fields") or x.get("items")
+            if isinstance(u, str) and action_hint in u and isinstance(ctrls, list) and not res:
+                for cdef in ctrls:
+                    if isinstance(cdef, dict) and isinstance(cdef.get("name"), str) and _CODE.match(cdef["name"]):
+                        d = cdef.get("url") or cdef.get("dict") or ""
+                        res.append({"name": cdef["name"], "caption": str(cdef.get("caption") or "")[:30],
+                                    "xtype": str(cdef.get("xtype") or "")[:30],
+                                    "dict": d if isinstance(d, str) and ".do" in d else "",
+                                    "builder": str(cdef.get("builder") or "")[:20]})
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for i in x:
+                walk(i)
+
+    walk(obj)
+    return res
 
 
 def _meta_urls(extra_modules=()) -> list[tuple[str, str, dict]]:
@@ -242,7 +269,8 @@ def fetch_meta(client, extra_modules=(), trace: Optional[list] = None) -> dict:
             merged["fields"] = sorted(set(merged["fields"]) | set(meta["fields"]))
             merged["dicts"].update(meta["dicts"])
             have = {s["name"] for s in merged["search"]}
-            for s in parse_search_fields(obj):
+            found_s = parse_search_fields(obj) or query_model_controls(obj)
+            for s in found_s:
                 if s["name"] not in have:
                     merged["search"].append(s)
                     if s["dict"]:
@@ -591,6 +619,40 @@ def query_rooms(client, q: RoomQuery, profile_path: Optional[Path] = None,
     raise jwxt.JwxtError("空教室查询未成功；尝试：" + "；".join(errs[:12]))
 
 
+def week_dates(weeks: str, weekday: int, first_monday: str) -> list[str]:
+    fm = dt.date.fromisoformat(first_monday)
+    return [(fm + dt.timedelta(days=(int(w) - 1) * 7 + weekday - 1)).isoformat()
+            for w in weeks.split(",") if w]
+
+
+def query_rooms_any(client, q: RoomQuery, profile_path: Optional[Path] = None,
+                    first_monday: Optional[str] = None, meta: Optional[dict] = None):
+    """按周次：先试服务端周次参数；失败或 0 间时按 校历首周一 换算成日期逐日查询取交集。"""
+    if q.mode != "week":
+        return query_rooms(client, q, profile_path, meta)
+    try:
+        found, prof = query_rooms(client, q, profile_path, meta)
+        if found:
+            prof = {**prof, "week_via": "server"}
+            return found, prof
+    except jwxt.JwxtError:
+        pass
+    if not first_monday:
+        raise jwxt.JwxtError("按周次查询需要校历首周一（先运行 jlu-toolkit sync）")
+    keep: Optional[dict] = None
+    prof = {}
+    for d in week_dates(q.week_list, q.weekday, first_monday):
+        sub = RoomQuery(**{**q.__dict__, "mode": "date", "date": d, "weeks": ""})
+        sub.week, sub.weekday = week_and_weekday(d, first_monday)
+        rs, prof = query_rooms(client, sub, profile_path, meta)
+        cur = {(r.building, r.name): r for r in rs}
+        keep = cur if keep is None else {k: v for k, v in keep.items() if k in cur}
+    out = list((keep or {}).values())
+    for r in out:
+        r.free_date = f"第{q.week_list}周 周{q.weekday}"
+    return out, {**prof, "week_via": "per-date", "total": len(out)}
+
+
 def full_meta(client, trace: Optional[list] = None, disc: Optional[dict] = None) -> dict:
     disc = disc if disc is not None else discover(client)
     meta = fetch_meta(client, disc.get("modules_seen", []), trace)
@@ -674,14 +736,34 @@ def list_buildings(client, campus: str = "", meta: Optional[dict] = None) -> lis
     meta = meta if meta is not None else full_meta(client)
     for k in ("JXLDM", "JZWDM"):
         if k in meta.get("dicts", {}):
-            got = []
-            if campus:
-                for pk in ("XXXQDM", "XQDM", "pId", "XXXQ"):
-                    got = fetch_code_list(client, meta["dicts"][k], {pk: campus})
-                    if got:
-                        break
-            return got or fetch_code_list(client, meta["dicts"][k])
+            allb = fetch_code_list(client, meta["dicts"][k])
+            if not campus:
+                return allb
+            for pk in ("XXXQDM", "XQDM", "pId", "XXXQ"):
+                got = fetch_code_list(client, meta["dicts"][k], {pk: campus})
+                if got and len(got) < len(allb):
+                    return got
+            return filter_buildings(allb, campus_name(client, campus, meta))
     return []
+
+
+def campus_name(client, code: str, meta: Optional[dict] = None) -> str:
+    try:
+        for c in list_campuses(client, meta):
+            if c["code"] == code:
+                return c["name"]
+    except jwxt.JwxtError:
+        pass
+    return ""
+
+
+def filter_buildings(blds: list[dict], cname: str) -> list[dict]:
+    """教学楼代码表不认校区参数时：按名称前缀「前卫-」等本地过滤；匹配不到则返回全部。"""
+    short = re.sub(r"(校区|校园)$", "", (cname or "").strip())
+    if not short:
+        return blds
+    got = [b for b in blds if b["name"].startswith(short) or b["name"].startswith(short[:2] + "-")]
+    return got or blds
 
 
 # ───────────────────────── 探测（只打印结构） ─────────────────────────

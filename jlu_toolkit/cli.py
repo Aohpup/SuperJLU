@@ -8,7 +8,16 @@ from . import exams as exmod
 from . import jwxt
 
 
+def _utf8_stdio() -> None:
+    for st in (sys.stdout, sys.stderr):
+        try:
+            st.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main():
+    _utf8_stdio()
     p = argparse.ArgumentParser(prog="jlu-toolkit", description="吉大课表/成绩本地工具")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -559,6 +568,12 @@ def sort_rooms(rs, key: str):
     return sorted(rs, key=f, reverse=desc)
 
 
+def _json_err(x, e) -> None:
+    """--json 模式下错误也以 JSON 输出到 stdout，方便脚本解析。"""
+    if getattr(x, "json", False):
+        print(json.dumps({"error": f"{type(e).__name__}: {e}" if isinstance(e, Exception) else str(e)}))
+
+
 def _cmd_rooms(x):
     import datetime as _dt
     import tempfile
@@ -593,26 +608,27 @@ def _cmd_rooms(x):
             return
         if x.list_campuses:
             rows = rooms.list_campuses(client)
-            print(json.dumps(rows, ensure_ascii=False) if x.json else
+            print(json.dumps(rows) if x.json else
                   "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到校区列表）")
             return
         if x.list_buildings:
             rows = rooms.list_buildings(client, x.campus or "")
-            print(json.dumps(rows, ensure_ascii=False) if x.json else
+            print(json.dumps(rows) if x.json else
                   "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到教学楼列表）")
             return
         if x.list_types:
             rows = rooms.list_room_types(client)
-            print(json.dumps(rows, ensure_ascii=False) if x.json else
+            print(json.dumps(rows) if x.json else
                   "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到教室类型）")
             return
         if x.list_fields:
             rows = rooms.extra_search_fields(rooms.full_meta(client))
-            print(json.dumps(rows, ensure_ascii=False) if x.json else
+            print(json.dumps(rows) if x.json else
                   "\n".join(f"{r['name']}\t{r['caption']}\t{r['xtype']}" for r in rows) or "（无其它检索字段）")
             return
         if not x.campus:
             err("请用 --campus 指定校区代码（jlu-toolkit rooms --list-campuses 查看）")
+            _json_err(x, "missing --campus")
             sys.exit(2)
         lo, hi = _range(x.seats)
         elo, ehi = _range(x.exam_seats)
@@ -626,18 +642,18 @@ def _cmd_rooms(x):
                 "kind": x.kind, "seat_min": lo, "seat_max": hi, "exam_min": elo, "exam_max": ehi,
                 "mode": "week" if x.weeks else "date", "weeks": x.weeks, "weekday": x.weekday, "extra": extra}
         q = ui.build_room_query(store, body, cal.get("term") or client.current_semester() or "")
-        found, prof = rooms.query_rooms(client, q, store.p("rooms_profile.json"))
+        found, prof = rooms.query_rooms_any(client, q, store.p("rooms_profile.json"), store.first_monday())
         found = sort_rooms(found, x.sort)
         client.save_session()
     except ValueError as e:
-        err(str(e)); sys.exit(2)
+        err(str(e)); _json_err(x, e); sys.exit(2)
     except jwxt.LoginError as e:
-        err(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login"); sys.exit(1)
+        err(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login"); _json_err(x, e); sys.exit(1)
     except jwxt.JwxtError as e:
-        err(f"空教室查询失败：{e}"); sys.exit(1)
+        err(f"空教室查询失败：{e}"); _json_err(x, e); sys.exit(1)
     if x.json:
-        print(json.dumps({"query": q.__dict__, "profile": prof, "rooms": [r.to_dict() for r in found]},
-                         ensure_ascii=False, indent=1))
+        print(json.dumps({"query": q.__dict__, "profile": prof, "count": len(found),
+                          "rooms": [r.to_dict() for r in found]}))
     else:
         when = (f"第{q.weeks}周 周{q.weekday}" if q.mode == "week" else f"{q.date}（第{q.week}周 周{q.weekday}）")
         print(f"{when} 第{q.start}-{q.end}节 空教室 {len(found)} 间：")

@@ -197,7 +197,7 @@ def rooms_api(store: Store, body: dict) -> dict:
     from . import rooms
     q = build_room_query(store, body)
     c = _client()
-    found, prof = rooms.query_rooms(c, q, store.p("rooms_profile.json"))
+    found, prof = rooms.query_rooms_any(c, q, store.p("rooms_profile.json"), store.first_monday())
     c.save_session()
     return {"mode": q.mode, "date": q.date, "week": q.week, "weeks": q.weeks, "weekday": q.weekday,
             "periods": [q.start, q.end], "total": prof.get("total"), "rooms": [r.to_dict() for r in found]}
@@ -219,7 +219,7 @@ def buildings_api(store: Store, body: dict) -> dict:
     from . import rooms
     campus = str(body.get("campus") or "")
     safe = re.sub(r"\W", "_", campus)
-    return {"buildings": _cached(store, f"buildings_{safe}.json", lambda c: rooms.list_buildings(c, campus))}
+    return {"buildings": _cached(store, f"buildings2_{safe}.json", lambda c: rooms.list_buildings(c, campus))}
 
 
 def room_types_api(store: Store) -> dict:
@@ -230,7 +230,7 @@ def room_types_api(store: Store) -> dict:
 def room_fields_api(store: Store) -> dict:
     """「更多条件」：元数据里额外的检索字段（名称+标题）。"""
     from . import rooms
-    return {"fields": _cached(store, "room_fields.json",
+    return {"fields": _cached(store, "room_fields2.json",
                               lambda c: [{k: s[k] for k in ("name", "caption", "xtype")}
                                          for s in rooms.extra_search_fields(rooms.full_meta(c))])}
 

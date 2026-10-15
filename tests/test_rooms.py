@@ -142,3 +142,26 @@ def test_filters_week_mode_and_pagination():
     meta = {"actions": ["kxjscx/cxkxjs.do"], "fields": [], "dicts": {}}
     found, prof = rooms.query_rooms(c, rooms.RoomQuery("01", "2026-10-15", 1, 2, seat_min=100), None, meta=meta)
     assert len(found) == 201 and prof["total"] == 202 and c.calls[:2] == ["1", "2"]
+
+
+def test_filter_buildings_and_week_dates_and_model_controls():
+    b = [{"code": "1", "name": "前卫-逸夫楼"}, {"code": "2", "name": "南岭-交通馆"}]
+    assert rooms.filter_buildings(b, "前卫校区") == b[:1]
+    assert rooms.filter_buildings(b, "未知校区") == b
+    assert rooms.week_dates("6,7", 3, "2026-09-07") == ["2026-10-14", "2026-10-21"]
+    meta = {"models": [{"url": "kxjscx/cxkxjs.do", "controls": [{"name": "XXXQDM", "caption": "学校校区"}]}]}
+    assert rooms.parse_search_fields(meta) == []
+    assert rooms.query_model_controls(meta)[0]["caption"] == "学校校区"
+
+
+def test_cli_rooms_json_is_ascii(monkeypatch, capsys):
+    from jlu_toolkit import cli
+    import sys as _s
+    monkeypatch.setattr(_s, "argv", ["jlu-toolkit", "rooms", "--json"])
+    monkeypatch.setattr(jwxt.JwxtClient, "load_session", lambda self: True)
+    import pytest as _p
+    with _p.raises(SystemExit):
+        cli.main()
+    out = capsys.readouterr().out.strip()
+    import json as _j
+    assert out.isascii() and "error" in _j.loads(out)
