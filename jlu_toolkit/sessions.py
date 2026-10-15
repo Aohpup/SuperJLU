@@ -208,6 +208,9 @@ def check(site_id: str) -> dict:
     try:
         r = fn(client(site_id)) or {}
         li, reason = r.get("logged_in"), str(r.get("reason", ""))
+    except SiteSessionExpired:
+        # campus.check_* 已 mark_expired
+        return status(site_id)
     except jwxt.NetworkError as e:
         li, reason = None, f"网络不可达：{e}"
     except Exception as e:  # noqa: BLE001
@@ -226,8 +229,7 @@ def register_vpn_url(fn: Callable[[str], str]) -> None:
 def vpn_url(url: str) -> str:
     """把校内 URL 换成经 vpn.jlu.edu.cn 访问的 URL。
 
-    TODO(露娜 feat/campus-probe)：WebVPN 的 URL 格式尚未探明，这里不猜。
-    实现放在 jlu_toolkit.campus.vpn_url，或调用 register_vpn_url()。
+    实现默认取 jlu_toolkit.campus.vpn_url；也可 register_vpn_url() 覆盖。
     """
     fn = _vpn_impl or getattr(_campus(), "vpn_url", None)
     if not callable(fn):
