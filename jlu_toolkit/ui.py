@@ -140,6 +140,43 @@ def refresh_from_jwxt(store: Store) -> dict:
     return sync_all(client, store.root)
 
 
+def _client() -> "jwxt.JwxtClient":
+    c = jwxt.JwxtClient()
+    if not c.load_session():
+        raise jwxt.LoginError("没有已保存的会话，请先在终端运行 jlu-toolkit fetch 登录一次")
+    return c
+
+
+def campuses_api(store: Store) -> dict:
+    from . import rooms
+    cache = store.p("campuses.json")
+    if cache.exists():
+        return {"campuses": json.loads(cache.read_text(encoding="utf-8"))}
+    c = _client()
+    lst = rooms.list_campuses(c)
+    cache.write_text(json.dumps(lst, ensure_ascii=False), encoding="utf-8")
+    c.save_session()
+    return {"campuses": lst}
+
+
+def rooms_api(store: Store, body: dict) -> dict:
+    from . import rooms
+    date = body.get("date") or dt.date.today().isoformat()
+    dt.date.fromisoformat(date)
+    start, end = rooms.parse_periods_arg(str(body.get("periods") or "1-2"))
+    campus = str(body.get("campus") or "")
+    if not campus:
+        raise ValueError("请选择校区")
+    week, weekday = rooms.week_and_weekday(date, store.first_monday())
+    c = _client()
+    q = rooms.RoomQuery(campus, date, start, end, str(body.get("building") or ""),
+                        store.calendar().get("term", ""), week, weekday)
+    found, prof = rooms.query_rooms(c, q, store.p("rooms_profile.json"))
+    c.save_session()
+    return {"date": date, "week": week, "weekday": weekday, "periods": [start, end],
+            "rooms": [r.to_dict() for r in found]}
+
+
 def make_handler(store: Store):
     class H(BaseHTTPRequestHandler):
         server_version = "JLUToolkitUI"
@@ -200,6 +237,10 @@ def make_handler(store: Store):
                     store.delete_scheme(body.get("name", ""))
                 elif self.path == "/api/settings":
                     store.save_settings(body)
+                elif self.path == "/api/rooms":
+                    return self._json({"ok": True, **rooms_api(store, body)})
+                elif self.path == "/api/rooms/campuses":
+                    return self._json({"ok": True, **campuses_api(store)})
                 elif self.path == "/api/refresh":
                     return self._json({"ok": True, "result": refresh_from_jwxt(store), **store.snapshot()})
                 else:

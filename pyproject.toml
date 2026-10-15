@@ -1,6 +1,6 @@
 [project]
 name = "jlu-toolkit"
-version = "0.3.1"
+version = "0.3.2"
 description = "吉大课表/成绩本地工具：导入文件或从教务 HTTP 拉取、计算绩点、导出 iCal，并提供 MCP 接口"
 requires-python = ">=3.9"
 dependencies = []

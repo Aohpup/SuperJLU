@@ -92,6 +92,11 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
  <div class="card" style="padding:4px 8px"><table><thead><tr><th style="width:30px"></th><th>课程</th><th class="n" style="text-align:right">学分</th><th class="n" style="text-align:right">成绩</th><th class="n" style="text-align:right">绩点</th></tr></thead><tbody id="gt"></tbody></table></div>
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
+<section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
+ <div class="row"><select id="rc" style="flex:1"><option value="">校区（点“加载校区”）</option></select><button class="btn ghost" id="rcl">加载校区</button></div>
+ <div class="row" style="margin-top:8px"><input type="date" id="rd" style="flex:1"><select id="rp"></select><button class="btn pri" id="rq">查询</button></div>
+ <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务。</p></div>
+ <div class="card" id="rres" hidden></div></section>
 <section class="tab" id="t-ks"><div class="card"><h2>考试倒计时</h2><div id="exams"></div></div></section>
 <section class="tab" id="t-sz">
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
@@ -100,7 +105,7 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用终端登录时保存的会话；会话失效时请在终端运行 <code>jlu-toolkit fetch --force-login</code>。</p></div>
 </section>
 </main>
-<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="sz"><b>⚙</b>设置</button></nav>
+<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="sz"><b>⚙</b>设置</button></nav>
 <div id="toast"></div>
 <script>
 "use strict";
@@ -184,6 +189,10 @@ $("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});awa
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.textContent="刷新中…";try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.textContent="⟳ 刷新"}};
+(function(){const s=$("#rp");const o=[["1-2","1-2 节"],["3-4","3-4 节"],["5-6","5-6 节"],["7-8","7-8 节"],["9-10","9-10 节"],["1-4","上午"],["5-8","下午"],["9-11","晚上"],["1-11","全天"]];s.innerHTML=o.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10)})();
+$("#rcl").onclick=async()=>{try{const j=await api("/api/rooms/campuses",{});$("#rc").innerHTML=j.campuses.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("")||'<option value="">未取到校区</option>';toast("已加载 "+j.campuses.length+" 个校区")}catch(e){toast(e.message)}};
+$("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const j=await api("/api/rooms",{campus:$("#rc").value,date:$("#rd").value,periods:$("#rp").value});const box=$("#rres");box.hidden=false;
+ box.innerHTML=`<h2>${esc(j.date)} 第${j.periods[0]}-${j.periods[1]}节 <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]} · ${j.rooms.length} 间</span></h2>`+(j.rooms.map(r=>`<div class="exam"><div class="t"><b>${esc(r.name)}</b><span class="sub">${esc([r.building,r.kind,r.seats&&r.seats+" 座"].filter(Boolean).join(" · "))}</span></div></div>`).join("")||'<p class="empty">没有符合条件的空教室</p>')}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 load().then(fromHash).catch(e=>toast("加载失败："+e.message));
 </script></body></html>

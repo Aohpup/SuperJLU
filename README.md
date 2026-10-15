@@ -100,6 +100,22 @@ jlu-toolkit sync    # 课表/成绩/考试/校历/节次时间/官方绩点/学�
 ```
 终端只打印条数、成功/失败等摘要，**不打印绩点、学分等个人数值**；任何一项失败时退出码为 2。
 
+## 空教室（`jlu-toolkit rooms`）
+
+教务的「空闲教室查询」必须带**校区、空闲日期、空闲节次**，不带会直接返回错误。
+
+```bash
+jlu-toolkit rooms --list-campuses                     # 校区代码
+jlu-toolkit rooms --list-buildings --campus 校区代码    # 教学楼代码（可选）
+jlu-toolkit rooms --campus 校区代码 --date 2026-10-16 --periods 3-4
+jlu-toolkit rooms --probe                             # 只读探测接口/参数组合，只打印结构
+```
+
+- 先进入 `kxjscx` 应用（EMAP 需要先换取 `_WEU`），再读取模块元数据（动作 URL、查询字段、校区/教学楼字典），按元数据推断参数，并尝试几种常见的金智参数格式
+- 第一次查询成功后，接口和参数格式会保存到 `rooms_profile.json`，以后直接复用
+- 周次、星期按教务校历自动推算
+- 网页「教室」页和 MCP 工具 `free_rooms` / `list_campuses` 用的是同一套逻辑
+
 ## 绩点说明
 
 `jlu-toolkit gpa`、`fetch` 输出的绩点目前是**全部课程的简单学分加权平均**：百分制 60 分记 1.0、每多 1 分 +0.1、90 分及以上 4.0；等级制按 优秀95/良好85/中等75/及格65 换算；「通过」类不计入。
@@ -136,7 +152,7 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 - [x] 考试安排拉取与倒计时（接口按金智通用 `studentWdksapApp` 实现，待吉大实测确认）
 - [x] `explore` 只读探测 + 脱敏报告
 - [x] 教务校历自动识别开学日期/当前周、真实节次时间、官方学分绩点、学业完成（课组）进度
-- [ ] 空教室：**暂不可用**。吉大 `kxjas` 查询返回 403，`kxjscx` 的候选接口只返回错误包（code/msg），公开代码中也没有吉大的接口路径；`explore` 会继续从前端配置里寻找
+- [~] 空教室：已实现 `jlu-toolkit rooms`、网页「教室」页和 MCP `free_rooms`；吉大的接口名/参数正通过 `rooms --probe` 实测确认
 - [ ] 官方「学分绩点统计」：吉大 `cxzxfaxfjd.do` 返回 code 404。目前改用教务单科绩点（若成绩接口提供）做学分加权；其他候选由 `explore` 继续探测
 - [ ] 官方绩点口径（保研/综测）预设方案、不同学院规则可配置
 - [ ] MCP 接入考试与绩点方案；桌面托盘挂件

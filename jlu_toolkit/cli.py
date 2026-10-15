@@ -111,6 +111,18 @@ def main():
     sy.add_argument("--data-dir", help="数据目录（默认 ~/.config/jlu-toolkit/data）")
     sy.add_argument("--debug", action="store_true")
 
+    rm = sub.add_parser("rooms", help="查询空教室（需已保存会话；必须指定校区/日期/节次）")
+    rm.add_argument("--campus", help="校区代码（先用 --list-campuses 查看）")
+    rm.add_argument("--date", help="空闲日期 YYYY-MM-DD（默认今天）")
+    rm.add_argument("--periods", default="1-2", help="空闲节次，如 3 或 3-4（默认 1-2）")
+    rm.add_argument("--building", default="", help="教学楼代码（可选，--list-buildings 查看）")
+    rm.add_argument("--list-campuses", action="store_true", help="列出校区代码")
+    rm.add_argument("--list-buildings", action="store_true", help="列出教学楼代码（可配合 --campus）")
+    rm.add_argument("--probe", action="store_true", help="只读探测接口/参数组合，只打印结构，不打印数据")
+    rm.add_argument("--json", action="store_true", help="以 JSON 输出结果")
+    rm.add_argument("-o", "--out", help="--probe 报告路径（默认临时目录 jlu_rooms_probe.json）")
+    rm.add_argument("--debug", action="store_true")
+
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
@@ -138,6 +150,8 @@ def main():
         _cmd_ui(x)
     elif x.cmd == "sync":
         _cmd_sync(x)
+    elif x.cmd == "rooms":
+        _cmd_rooms(x)
 
 
 def _prompt(msg: str) -> str:
@@ -461,6 +475,69 @@ def _cmd_sync(x):
     print(json.dumps({"data_dir": str(root), **summary}, ensure_ascii=False, indent=1))
     bad = [k for k, v in summary.items() if isinstance(v, dict) and not v.get("ok")]
     sys.exit(2 if bad else 0)
+
+
+def _cmd_rooms(x):
+    import datetime as _dt
+    import tempfile
+    from pathlib import Path
+
+    from . import rooms, ui
+
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    if not client.load_session():
+        print("没有已保存的会话。请先运行 jlu-toolkit fetch --user 你的邮箱前缀 登录一次。", file=sys.stderr)
+        sys.exit(1)
+    store = ui.Store(ui.data_dir())
+    cal = store.calendar()
+    err = lambda m: print(m, file=sys.stderr)  # noqa: E731
+    try:
+        if x.probe:
+            start, end = rooms.parse_periods_arg(x.periods)
+            rep = rooms.probe(client, store.first_monday(), cal.get("term") or client.current_semester() or "",
+                              [x.campus] if x.campus else None, x.date, (start, end), log=err)
+            path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_rooms_probe.json"
+            path.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
+            err(f"探测报告：{path}")
+            print(json.dumps({"hit": rep["hit"], "meta": rep["meta"], "campus_count": rep["campus_count"],
+                              "campus_source": rep.get("campus_source"),
+                              "tries": [{k: t.get(k) for k in ("endpoint", "scheme", "status", "code", "msg", "rows")}
+                                        for t in rep["tries"][:30]]}, ensure_ascii=False, indent=1))
+            client.save_session()
+            return
+        if x.list_campuses:
+            rows = rooms.list_campuses(client)
+            print(json.dumps(rows, ensure_ascii=False) if x.json else
+                  "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到校区列表）")
+            return
+        if x.list_buildings:
+            rows = rooms.list_buildings(client, x.campus or "")
+            print(json.dumps(rows, ensure_ascii=False) if x.json else
+                  "\n".join(f"{r['code']}\t{r['name']}" for r in rows) or "（未取到教学楼列表）")
+            return
+        if not x.campus:
+            err("请用 --campus 指定校区代码（jlu-toolkit rooms --list-campuses 查看）")
+            sys.exit(2)
+        date = x.date or _dt.date.today().isoformat()
+        start, end = rooms.parse_periods_arg(x.periods)
+        week, weekday = rooms.week_and_weekday(date, store.first_monday())
+        q = rooms.RoomQuery(x.campus, date, start, end, x.building,
+                            cal.get("term") or client.current_semester() or "", week, weekday)
+        found, prof = rooms.query_rooms(client, q, store.p("rooms_profile.json"))
+        client.save_session()
+    except ValueError as e:
+        err(str(e)); sys.exit(2)
+    except jwxt.LoginError as e:
+        err(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login"); sys.exit(1)
+    except jwxt.JwxtError as e:
+        err(f"空教室查询失败：{e}"); sys.exit(1)
+    if x.json:
+        print(json.dumps({"query": q.__dict__, "profile": prof, "rooms": [r.to_dict() for r in found]},
+                         ensure_ascii=False, indent=1))
+    else:
+        print(f"{date} 第{start}-{end}节（第{week}周 周{weekday}）空教室 {len(found)} 间：")
+        for r in found:
+            print(f"  {r.name}\t{r.building}\t{r.seats and r.seats + '座'}")
 
 
 def _cmd_ui(x):

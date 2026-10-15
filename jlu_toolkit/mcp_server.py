@@ -22,6 +22,20 @@ def main():
         """列出成绩。"""
         return [g.__dict__ for g in core.load_grades(os.environ["JLU_GRADES_CSV"]) if not term or g.term == term]
 
+    @mcp.tool()
+    def free_rooms(campus: str, date: str = "", periods: str = "1-2", building: str = "") -> dict:
+        """查询空教室（需已用 jlu-toolkit fetch 保存会话）。campus 为校区代码（list_campuses 查看），
+        date 为 YYYY-MM-DD（默认今天），periods 如 "3-4"。"""
+        from . import ui
+        return ui.rooms_api(ui.Store(ui.data_dir()), {"campus": campus, "date": date,
+                                                       "periods": periods, "building": building})
+
+    @mcp.tool()
+    def list_campuses() -> list:
+        """列出空教室查询可用的校区代码。"""
+        from . import ui
+        return ui.campuses_api(ui.Store(ui.data_dir()))["campuses"]
+
     mcp.run()
 
 if __name__ == "__main__": main()

@@ -241,6 +241,16 @@ def run_explore(client: "jwxt.JwxtClient", term: Optional[str] = None,
                 rows += f" {name}={b['rows']}行"
         log(f"[查询] {pr.label}: HTTP {item.get('status', item.get('error'))}{rows}")
     report["context_found"] = sorted(ctx.keys())  # 只列键名
+    try:
+        from . import rooms, ui as _ui
+        rp = rooms.probe(client, _ui.Store(_ui.data_dir()).first_monday(), term, None, None, (1, 2), log=log)
+        report["rooms_probe"] = {k: rp.get(k) for k in ("entered", "week", "weekday", "meta", "campus_count",
+                                                         "campus_source", "hit")}
+        report["rooms_probe"]["tries"] = [{k: t.get(k) for k in ("endpoint", "scheme", "param_names", "status",
+                                                                 "code", "msg", "rows", "fields")}
+                                          for t in rp["tries"]]
+    except Exception as e:  # noqa: BLE001
+        report["rooms_probe"] = {"error": type(e).__name__}
     report["discover"] = {app: discover_app(client, app) for app in DISCOVER_APPS}
     for app, d in report["discover"].items():
         log(f"[发现] {app}: {len(d.get('do_paths', []))} 个 .do 路径")
