@@ -4,13 +4,18 @@ PAGE = r"""<!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" id="tc-l" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" id="tc-d" content="#0e0f12" media="(prefers-color-scheme: dark)">
+<script>/* 首帧前应用主题，避免闪烁 */(function(){var t;try{t=localStorage.getItem("jlu-theme")}catch(e){}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))})};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)})();</script>
 <title>JLU Toolkit</title>
 <style>
 /* ===== 设计变量：柔和中性底色 + 单一沉稳强调色 ===== */
 :root{--pri:#3b5bdb;--pri-h:#3249c0;--pri2:#edf1ff;--bg:#f6f7f9;--card:#fff;--card2:#fafbfc;--txt:#16181d;--sub:#6b7280;--line:#e8eaee;--ok:#16a34a;--ok2:#e9f7ee;--warn:#c2710c;--warn2:#fff4e5;--bad:#dc2626;--bad2:#fdeeee;--r:18px;--r-sm:12px;--sh:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--pri:#8ea2ff;--pri-h:#a5b4ff;--pri2:#1e2336;--bg:#0e0f12;--card:#17191e;--card2:#1c1f25;--txt:#eceef2;--sub:#9198a5;--line:#262a32;--ok:#4ade80;--ok2:#14261b;--warn:#fbbf24;--warn2:#2a2213;--bad:#f87171;--bad2:#2c1717;--sh:0 0 0 1px rgba(255,255,255,.03);color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){--pri:#8ea2ff;--pri-h:#a5b4ff;--pri2:#1e2336;--bg:#0e0f12;--card:#17191e;--card2:#1c1f25;--txt:#eceef2;--sub:#9198a5;--line:#262a32;--ok:#4ade80;--ok2:#14261b;--warn:#fbbf24;--warn2:#2a2213;--bad:#f87171;--bad2:#2c1717;--sh:0 0 0 1px rgba(255,255,255,.03);color-scheme:dark}}
+:root[data-theme=dark]{--pri:#8ea2ff;--pri-h:#a5b4ff;--pri2:#1e2336;--bg:#0e0f12;--card:#17191e;--card2:#1c1f25;--txt:#eceef2;--sub:#9198a5;--line:#262a32;--ok:#4ade80;--ok2:#14261b;--warn:#fbbf24;--warn2:#2a2213;--bad:#f87171;--bad2:#2c1717;--sh:0 0 0 1px rgba(255,255,255,.03);color-scheme:dark}
+:root[data-theme=light]{color-scheme:light}
+.thm{display:inline-flex;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:2px;gap:2px}.thm button{border:0;background:none;color:var(--sub);font:inherit;font-size:13px;padding:4px 10px;border-radius:999px;cursor:pointer}.thm button[aria-pressed=true]{background:var(--pri2);color:var(--pri);font-weight:600}
+header .thm button{padding:4px 8px}
 *{box-sizing:border-box}html,body{margin:0}
 body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 code{font:12.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--pri2);color:var(--pri);padding:1px 6px;border-radius:6px}
@@ -107,6 +112,7 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 </style></head>
 <body>
 <header><span class="logo" aria-hidden="true">J</span><h1>JLU Toolkit <small id="upd"></small></h1>
+<div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">◐</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">☀</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">☾</button></div>
 <button class="btn" id="refresh" title="用已保存会话从教务刷新">⟳ 刷新</button></header>
 <main>
 <div id="sess" hidden></div>
@@ -150,6 +156,7 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 <section class="tab" id="t-sz">
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
   <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
+ <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
  <div class="card"><h2>导出</h2><p class="sub">导出 iCal 后可导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用终端登录时保存的会话；会话失效时请在终端运行 <code>jlu-toolkit fetch --force-login</code>。</p></div>
 </section>
@@ -260,6 +267,7 @@ $("#none").onclick=()=>{include.clear();dirty=true;renderGrades()};
 $("#saveas").onclick=async()=>{const n=prompt("方案名称（如 保研、综测）",current==="__all__"?"":current);if(!n)return;try{D=await api("/api/schemes",{name:n,include:[...include]});current=n.trim();dirty=false;renderAll();toast("已保存方案："+current)}catch(e){toast(e.message)}};
 $("#del").onclick=async()=>{if(current==="__all__")return toast("“全部课程”不能删除");if(!confirm("删除方案 "+current+"？"))return;D=await api("/api/schemes/delete",{name:current});current="__all__";dirty=false;renderAll();toast("已删除")};
 $("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});await load();toast("已恢复为教务校历")};
+document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTheme(b.dataset.theme));window.__setTheme(localStorage.getItem("jlu-theme")||"system");
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.textContent="刷新中…";try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.textContent="⟳ 刷新"}};
