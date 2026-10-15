@@ -72,7 +72,7 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
 .seg{display:flex;gap:4px;margin-bottom:10px}.seg button{flex:1;padding:8px;border:1px solid var(--line,#ddd);background:transparent;border-radius:8px;color:inherit}.seg button.on{background:var(--acc,#2563eb);color:#fff;border-color:transparent}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:3px;opacity:.9}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
 .rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:8px}
-table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:6px;border-bottom:1px solid var(--line,#eee);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none}
+table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:6px;border-bottom:1px solid var(--line,#eee);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none;position:static;top:auto}
 details.gc{margin-top:6px}details.gc summary{cursor:pointer;font-size:12px;opacity:.8}
 details.tn{border-left:2px solid var(--line,#e5e7eb);padding:4px 0 4px 8px;margin-top:6px}details.tn>summary{cursor:pointer}
 </style></head>

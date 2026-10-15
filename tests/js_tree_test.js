@@ -17,4 +17,10 @@ const root={code:"R",name:"根",courses:[],children:[solo,emp,mix]};
 const h=treeNode(root,0);
 const ok=["Nk1","Nk2","Nk5","Nk6"].every(x=>h.includes(x));
 const soloOpen=/<details class="tn" open[^>]*><summary><b>单/.test(treeNode(solo,2));
-console.log(JSON.stringify({ok,soloOpen}));`);
+function tableOrder(n){const h=treeNode(n,1);const tb=h.indexOf("<table");const th=h.indexOf("<thead>"),the=h.indexOf("</thead>"),tbo=h.indexOf("<tbody>");
+ const firstRow=h.indexOf("<tr>",the);const rows=(h.slice(tbo,h.indexOf("</tbody>")).match(/<tr>/g)||[]).length;
+ const headRows=(h.slice(th,the).match(/<tr>/g)||[]).length;
+ return tb>=0&&tb<th&&th<the&&the<tbo&&tbo<firstRow&&headRows===1&&h.slice(tb,th).indexOf("<tr")<0?rows:-1}
+const g1={code:"G1",name:"劳动教育",required:2,earned:0,courses:[C("a")],children:[]};
+const g3={code:"G3",name:"思政",required:18,earned:6,courses:[C("a"),C("b"),C("c")],children:[]};
+console.log(JSON.stringify({ok,soloOpen,rows1:tableOrder(g1),rows3:tableOrder(g3)}));`);

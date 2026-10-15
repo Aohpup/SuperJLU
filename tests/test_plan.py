@@ -148,4 +148,20 @@ def test_tree_js_renders_single_and_nested(tmp_path):
     out = subprocess.run([node, str(tmp_path / "t.js"), str(tmp_path / "p.js")], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     r = json.loads(out.stdout.strip().splitlines()[-1])
-    assert r == {"ok": True, "soloOpen": True}
+    assert r == {"ok": True, "soloOpen": True, "rows1": 1, "rows3": 3}
+    css = re.search(r"<style>(.*)</style>", PAGE, re.S).group(1)
+    # 全局 th 是 sticky(top:58px)：课组表必须取消，否则表头盖住第一行
+    assert re.search(r"\.rt th\{[^}]*position:static", css)
+
+
+def test_earned_prefers_completion_then_courses_over_zero_tree():
+    nodes = plan.tree_nodes([{"KZH": "R", "KZM": "思政", "YQXF": 18, "WCXF": 0},
+                             {"KZH": "C", "KZM": "子", "FKZH": "R", "YQXF": 4, "WCXF": "0"},
+                             {"KZH": "J", "KZM": "有服务器值", "YQXF": 2}])
+    c = lambda code, g, cr, st: {"code": code, "name": code, "credit": cr, "status": st, "group_code": g}  # noqa: E731
+    cs = [c("a", "R", 3, "已修"), c("b", "R", 2, "未修"), c("d", "C", 1.5, "已修"), c("e", "J", 2, "已修")]
+    t = plan.build_tree(nodes, cs, [{"code": "J", "earned": 1.0}])
+    by = {n["code"]: n for n in t["roots"]}
+    assert by["R"]["earned"] == 4.5 and by["R"]["earned_source"] == "plan_courses" and by["R"]["missing"] == 13.5
+    assert by["R"]["children"][0]["earned"] == 1.5
+    assert by["J"]["earned"] == 1.0 and by["J"]["earned_source"] == "jw"

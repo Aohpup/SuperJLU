@@ -412,10 +412,16 @@ def tree_nodes(rows: list) -> list[dict]:
 def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict:
     """嵌套课组树；课程按 KZH 挂载；返回 {roots, unmatched, stats}。"""
     idx = {n["code"]: {**n, "children": [], "courses": []} for n in nodes}
-    for g in comp_groups or []:  # 学业完成里的已获学分补齐
+    # 树行自带的完成学分常为 0/空（方案接口不算完成情况）：只把 >0 的当作服务器值
+    for n in idx.values():
+        n["earned_tree"] = n.pop("earned", None)
+        n["earned"] = None
+        if n["earned_tree"]:
+            n["earned"], n["earned_source"] = n["earned_tree"], "jw_tree"
+    for g in comp_groups or []:  # 学业完成（cxscfakz）的 WCXF 按 KZH 优先
         n = idx.get(g.get("code"))
-        if n and n["earned"] is None and g.get("earned") is not None:
-            n["earned"] = g["earned"]
+        if n and g.get("earned") is not None and g.get("earned_source", "jw") == "jw":
+            n["earned"], n["earned_source"] = g["earned"], "jw"
         if n and n["required"] is None and g.get("required") is not None:
             n["required"] = g["required"]
     roots = []
@@ -463,11 +469,9 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
         if depth < 12:
             tot += sum(roll(ch, depth + 1, seen) for ch in n["children"])
         n["earned_courses"] = round(tot, 2)
-        if n["earned"] is None:
+        if n["earned"] is None or (n["earned"] == 0 and tot > 0):
             n["earned"] = n["earned_courses"]
             n["earned_source"] = "plan_courses"
-        else:
-            n.setdefault("earned_source", "jw")
         n["missing"] = round(max(0.0, n["required"] - n["earned"]), 2) if n["required"] is not None else None
         return tot
 
