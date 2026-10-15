@@ -9,8 +9,9 @@ from jlu_toolkit import desktop
 @pytest.fixture(autouse=True)
 def cfg(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(desktop, "DEFAULT_PORT", desktop.free_port())  # 测试不碰真实 8765
     monkeypatch.setattr(desktop, "start_server",
-                        lambda root=None, port=0: desktop.__dict__["_real_start"](tmp_path / "data", port))
+                        lambda root=None, port=None: desktop.__dict__["_real_start"](tmp_path / "data", port))
     return tmp_path / "jlu-toolkit"
 
 
@@ -101,3 +102,40 @@ def test_icon_uses_brand_ico_only(tmp_path, monkeypatch):
     Image.new("RGBA", (256, 256), (255, 0, 0, 255)).save(ico, sizes=[(16, 16), (64, 64), (256, 256)])
     img = desktop.make_icon(64)
     assert img.size == (64, 64) and img.mode == "RGBA" and img.getpixel((32, 32))[0] == 255
+
+
+def test_prefers_default_port(cfg):
+    httpd, url = desktop._real_start(cfg / "data")
+    try:
+        assert httpd.server_address[1] == desktop.DEFAULT_PORT and url == desktop.url_for(desktop.DEFAULT_PORT)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_falls_back_when_default_busy(cfg):
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", desktop.DEFAULT_PORT))
+    s.listen(1)
+    try:
+        httpd, url = desktop._real_start(cfg / "data")
+        try:
+            assert httpd.server_address[1] != desktop.DEFAULT_PORT
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+    finally:
+        s.close()
+
+
+def test_running_on_default_port_without_state(cfg):
+    httpd, url = desktop._real_start(cfg / "data")  # 占 DEFAULT_PORT，但不写 desktop.json
+    opened = []
+    try:
+        assert desktop.read_state() is None
+        assert desktop.main(opener=opened.append, tray=lambda *a: pytest.fail("不应再启动")) == 0
+        assert opened == [desktop.url_for(desktop.DEFAULT_PORT)]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

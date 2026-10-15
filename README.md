@@ -17,7 +17,7 @@
 | 平台 | 文件 | 用法 |
 | --- | --- | --- |
 | Windows | `SuperJLU.exe` | 双击即可：后台启动服务并自动打开浏览器界面，托盘图标可重新打开或退出；已在运行时再双击只会打开现有界面。 |
-| Android | `jlu-toolkit.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
+| Android | `SuperJLU-<版本>.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
 | 命令行 / 开发者 | pip | 见下方。 |
 
 每个文件都附带 `.sha256` 校验值（PowerShell：`Get-FileHash 文件名`）。
@@ -377,7 +377,7 @@ Web API（仅 127.0.0.1）：
 
 ## Windows 一键版 SuperJLU.exe（PyInstaller，测试中）
 
-双击 `SuperJLU.exe`（单文件、无控制台窗口）：在 127.0.0.1 的空闲端口后台启动界面并打开浏览器，系统托盘显示 SuperJLU 图标，菜单「打开 SuperJLU」「退出」。
+双击 `SuperJLU.exe`（单文件、无控制台窗口）：在 127.0.0.1:8765（被占用时改用空闲端口）后台启动界面并打开浏览器，系统托盘显示 SuperJLU 图标，菜单「打开 SuperJLU」「退出」。
 再次双击时，如果已有实例在运行，只会打开浏览器。日志：`%USERPROFILE%\.config\jlu-toolkit\desktop.log`。
 
 - 入口：`jlu_toolkit/desktop.py`（`python -m jlu_toolkit.desktop` 在 Linux/macOS 也能用；没有 pystray 时不显示托盘）

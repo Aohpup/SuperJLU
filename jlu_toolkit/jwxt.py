@@ -152,10 +152,20 @@ def default_session_path() -> Path:
 
 
 def captcha_save_path(filename: str = "jlu_cas_captcha.jpg") -> Path:
-    """优先 Termux ~/storage/downloads，其次 Pictures/dcim，否则当前目录。"""
+    """优先 Termux ~/storage/downloads，其次 Pictures/dcim、当前目录、系统临时目录。
+
+    只返回真正可写的目录：Android App 里 cwd 是只读的 "/"，
+    直接写会 OSError [Errno 30]。
+    """
     for p in captcha_util.captcha_candidate_paths(filename):
-        return p
-    return Path.cwd() / filename
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if os.access(p.parent, os.W_OK):
+                return p
+        except OSError:
+            continue
+    import tempfile
+    return Path(tempfile.mkdtemp(prefix="superjlu-")) / filename
 
 
 def _chmod600(path: Path) -> None:
@@ -867,8 +877,13 @@ class JwxtClient:
 
         self.last_captcha_bytes = raw
         if path is not None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(raw)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            except OSError:
+                # 目标不可写（如 Android 只读根目录）：退回多路径写入
+                path = None
+        if path is not None:
             if path.stat().st_size < 50:
                 raise SecondFactorError(f"写入验证码失败（文件过小）：{path}")
             paths = [path]

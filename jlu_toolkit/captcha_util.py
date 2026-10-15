@@ -206,6 +206,9 @@ def termux_storage_dirs() -> list[Path]:
 def captcha_candidate_paths(filename: str = "jlu_cas_captcha.jpg") -> list[Path]:
     paths = [d / filename for d in termux_storage_dirs()]
     paths.append(Path.cwd() / filename)
+    # Android/打包环境下 cwd 可能是只读的 "/"，兜底到系统临时目录
+    import tempfile
+    paths.append(Path(tempfile.gettempdir()) / filename)
     # 去重保序
     seen = set()
     uniq = []
@@ -237,8 +240,9 @@ def write_captcha_files(data: bytes, filename: str = "jlu_cas_captcha.jpg") -> l
         except OSError:
             continue
     if not saved:
-        # 最后手段：当前目录
-        fallback = Path.cwd() / filename
+        # 最后手段：私有临时目录（总是可写）
+        import tempfile
+        fallback = Path(tempfile.mkdtemp(prefix="superjlu-")) / filename
         fallback.write_bytes(data)
         saved.append(fallback)
     return saved
