@@ -1,7 +1,7 @@
 """本地凭据 / 会话的加密存储。
 
 方案：随机 32 字节主密钥存进系统钥匙串（keyring：Windows 凭据管理器 / macOS 钥匙串 /
-Linux Secret Service），数据用 AES-256-GCM 加密后写到 ``<config>/<name>.enc``。
+Linux Secret Service；Android/Chaquopy 下改为用 Android Keystore 包裹后存文件），数据用 AES-256-GCM 加密后写到 ``<config>/<name>.enc``。
 会话 cookie 往往超过 Windows 凭据管理器的单条大小上限，所以钥匙串里只放密钥。
 
 钥匙串或 cryptography 不可用（如 Termux、无桌面的 Linux）时退回明文 JSON 文件，
@@ -73,7 +73,118 @@ def _aesgcm():
     return AESGCM
 
 
+# ───────── Android（Chaquopy）：主密钥由 Android Keystore 的 AES 密钥包裹 ─────────
+
+ANDROID_ALIAS = "jlu-toolkit-storage"
+WRAPPED_FILE = "storage-key.wrapped"
+_WRAP_MAGIC = b"JLUK1"
+
+
+def _config_dir() -> Path:
+    # 与 jwxt.config_dir() 一致（避免循环导入）；Chaquopy 下 HOME 是应用私有目录
+    base = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(base) if base else Path.home() / ".config") / "jlu-toolkit"
+
+
+def _jbytes(arr) -> bytes:
+    try:
+        return bytes(arr)
+    except (TypeError, ValueError):
+        return bytes((b + 256) % 256 for b in arr)  # Java byte 是有符号的
+
+
+class AndroidKeystore:
+    """用 Chaquopy 的 Java 桥调用 AndroidKeyStore（AES-256/GCM/NoPadding，别名 jlu-toolkit-storage）。"""
+
+    def __init__(self, jclass):
+        self.jclass = jclass
+
+    def _secret_key(self, create: bool):
+        J = self.jclass
+        ks = J("java.security.KeyStore").getInstance("AndroidKeyStore")
+        ks.load(None)
+        if ks.containsAlias(ANDROID_ALIAS):
+            return ks.getKey(ANDROID_ALIAS, None)
+        if not create:
+            return None
+        KP = J("android.security.keystore.KeyProperties")
+        spec = (J("android.security.keystore.KeyGenParameterSpec$Builder")(
+            ANDROID_ALIAS, KP.PURPOSE_ENCRYPT | KP.PURPOSE_DECRYPT)
+            .setBlockModes([KP.BLOCK_MODE_GCM]).setEncryptionPaddings([KP.ENCRYPTION_PADDING_NONE])
+            .setKeySize(256).build())
+        kg = J("javax.crypto.KeyGenerator").getInstance(KP.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        kg.init(spec)
+        return kg.generateKey()
+
+    def wrap(self, key: bytes) -> bytes:
+        Cipher = self.jclass("javax.crypto.Cipher")
+        c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, self._secret_key(create=True))
+        iv = _jbytes(c.getIV())
+        return _WRAP_MAGIC + bytes([len(iv)]) + iv + _jbytes(c.doFinal(key))
+
+    def unwrap(self, blob: bytes) -> Optional[bytes]:
+        if not blob.startswith(_WRAP_MAGIC):
+            raise ValueError("包裹密钥文件格式不对")
+        sk = self._secret_key(create=False)
+        if sk is None:
+            return None
+        n = len(_WRAP_MAGIC)
+        ivl = blob[n]
+        iv, ct = blob[n + 1:n + 1 + ivl], blob[n + 1 + ivl:]
+        Cipher = self.jclass("javax.crypto.Cipher")
+        c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.DECRYPT_MODE, sk, self.jclass("javax.crypto.spec.GCMParameterSpec")(128, iv))
+        return _jbytes(c.doFinal(ct))
+
+
+def _android() -> Optional[AndroidKeystore]:
+    if os.environ.get("JLU_TOOLKIT_NO_KEYRING"):
+        return None
+    if not (os.environ.get("ANDROID_ROOT") or os.environ.get("ANDROID_DATA") or "chaquopy" in sys.modules):
+        return None
+    try:
+        from java import jclass  # type: ignore  # Chaquopy
+    except Exception:  # noqa: BLE001
+        return None
+    return AndroidKeystore(jclass)
+
+
+def _android_key(ak: AndroidKeystore, create: bool) -> Optional[bytes]:
+    global last_error
+    f = _config_dir() / WRAPPED_FILE
+    try:
+        if f.is_file():
+            key = ak.unwrap(f.read_bytes())
+            if key is not None and len(key) == 32:
+                return key
+            last_error = "Android Keystore 中的包裹密钥不可用"
+            return None
+        if not create:
+            return None
+        key = secrets.token_bytes(32)
+        blob = ak.wrap(key)
+        if ak.unwrap(blob) != key:
+            last_error = "Android Keystore 包裹后回读不一致"
+            return None
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_bytes(blob)
+        _chmod600(tmp)
+        os.replace(tmp, f)
+        return key
+    except Exception as e:  # noqa: BLE001
+        last_error = f"Android Keystore 读写失败：{type(e).__name__}: {e}"
+        return None
+
+
+def _has_backend() -> bool:
+    return _android() is not None or _keyring() is not None
+
+
 def backend_name() -> str:
+    if _android() is not None and _aesgcm() is not None:
+        return "android-keystore"
     kr = _keyring()
     if kr is None or _aesgcm() is None:
         return "file"
@@ -82,6 +193,9 @@ def backend_name() -> str:
 
 def _get_key(create: bool) -> Optional[bytes]:
     global last_error
+    ak = _android()
+    if ak is not None:
+        return _android_key(ak, create)
     kr = _keyring()
     if kr is None:
         return None
@@ -149,7 +263,7 @@ class SecretFile:
             if self.plain_path.is_file():
                 self.plain_path.unlink()
             return self.enc_path
-        if AESGCM is not None and _keyring() is not None:
+        if AESGCM is not None and _has_backend():
             _warn(f"钥匙串后端可用但取不到密钥（{last_error or '原因未知'}），本次以明文保存到 {self.plain_path}")
         else:
             _warn_plain(self.plain_path)

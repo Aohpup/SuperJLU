@@ -240,3 +240,8 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 
 `POST /api/*` 遇到会话过期时返回 HTTP 401 和 `{"ok": false, "error": "...请重新登录...", "session_expired": true}`；
 其它接口的返回结构不变。
+
+## Android
+
+Android 版（`android/`，Chaquopy + WebView）的构建与签名发布约定见 [docs/android-release.md](docs/android-release.md)。
+Android 下凭据用 Android Keystore 包裹的主密钥加密（`backend_name()` = `android-keystore`），需要 Chaquopy 提供的 `cryptography==42.0.8`。
