@@ -258,6 +258,20 @@ def _col(row: dict, caps: dict, col: str) -> str:
     return ""
 
 
+STATUS_CODE = {"已修": "done", "在修": "inprog", "未修": "todo", "未通过": "failed"}
+
+
+def is_done(c: dict) -> bool:
+    return (c.get("status_code") or STATUS_CODE.get(c.get("status") or "", "")) == "done"
+
+
+def credit_of(c: dict) -> float:
+    try:
+        return float(c.get("credit") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _status(raw: str, score: str) -> str:
     r = raw.strip()
     if r in ("在修", "修读中", "正在修读") or "在修" in r:
@@ -314,6 +328,7 @@ def merge(plan: list, done: list, grades=None, courses_now=None) -> list:
         if st == "未修" and c["name"] in now:
             st = "在修"
         c["status"] = st
+        c["status_code"] = STATUS_CODE.get(st, "todo")
         c.pop("status_raw", None)
         res.append(c)
     return res
@@ -465,13 +480,15 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
         if n["code"] in seen:
             return 0.0
         seen.add(n["code"])
-        tot = sum((x["credit"] or 0) for x in n["courses"] if x["status"] == "已修")
+        tot = sum(credit_of(x) for x in n["courses"] if is_done(x))
         if depth < 12:
             tot += sum(roll(ch, depth + 1, seen) for ch in n["children"])
         n["earned_courses"] = round(tot, 2)
-        if n["earned"] is None or (n["earned"] == 0 and tot > 0):
+        srv = n["earned"] if isinstance(n["earned"], (int, float)) and n["earned"] > 0 else None
+        if srv is None or n["earned_courses"] > srv:
             n["earned"] = n["earned_courses"]
             n["earned_source"] = "plan_courses"
+        n["earned_server"] = srv
         n["missing"] = round(max(0.0, n["required"] - n["earned"]), 2) if n["required"] is not None else None
         return tot
 
@@ -507,6 +524,8 @@ def tree_summary(roots: list) -> list[dict]:
         seen.add(n["code"])
         out.append({"code": n["code"], "depth": d, "direct_courses": len(n.get("courses") or []),
                     "children": len(n.get("children") or []), "total_courses": len(walk_courses(n)),
+                    "earned": n.get("earned"), "required": n.get("required"),
+                    "earned_courses": n.get("earned_courses"), "earned_source": n.get("earned_source"),
                     "course_codes": [c.get("code") for c in n.get("courses") or []]})
         for ch in n.get("children") or []:
             go(ch, d + 1, seen)
@@ -561,6 +580,24 @@ def attach_to_completion(comp: dict, plan: dict) -> dict:
         comp["unmatched"] = t["unmatched"]
         comp["tree_stats"] = t["stats"]
         comp["tree_source"] = (plan.get("source") or {}).get("tree", {}).get("action") or "completion"
+        flat: dict = {}
+
+        def go(n, seen):
+            if n["code"] in seen:
+                return
+            seen.add(n["code"])
+            flat[n["code"]] = n
+            for ch in n["children"]:
+                go(ch, seen)
+        for r in t["roots"]:
+            go(r, set())
+        for g in groups:  # 扁平课组同步为 max(服务器>0, 课程汇总)
+            n = flat.get(g.get("code"))
+            if n and (g.get("earned") or 0) < (n["earned"] or 0):
+                g["earned"], g["earned_source"] = n["earned"], n.get("earned_source")
+                if g.get("required") is not None:
+                    g["missing"] = round(max(0.0, g["required"] - g["earned"]), 2)
+                    g["passed"] = g["missing"] == 0
     idx = {g.get("code"): g for g in groups if g.get("code")}
     by_name = {g.get("name"): g for g in groups}
     for c in plan.get("courses", []):
@@ -569,6 +606,6 @@ def attach_to_completion(comp: dict, plan: dict) -> dict:
             g.setdefault("courses", []).append(c)
     for g in groups:
         if g.get("earned") is None and g.get("courses"):
-            g["earned"] = round(sum(c["credit"] or 0 for c in g["courses"] if c["status"] == "已修"), 2)
+            g["earned"] = round(sum(credit_of(c) for c in g["courses"] if is_done(c)), 2)
             g["earned_source"] = "plan_courses"
     return comp

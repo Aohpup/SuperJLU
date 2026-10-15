@@ -641,7 +641,7 @@ def _cmd_plan(x):
     for c in cs:
         groups.setdefault(c.get("group") or c.get("category") or c.get("nature") or "未分组", []).append(c)
     for g, items in groups.items():
-        done = sum(c["credit"] or 0 for c in items if c["status"] == "已修")
+        done = sum(pl.credit_of(c) for c in items if pl.is_done(c))
         tot = sum(c["credit"] or 0 for c in items)
         print(f"■ {g}  已修 {done:g}/{tot:g} 学分")
         for c in items:

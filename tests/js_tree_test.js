@@ -5,7 +5,7 @@ const pick = n => { const i = src.findIndex(l => l.startsWith(n)); if (i < 0) th
   let j = i + 1; while (j < src.length && /^[ \t]/.test(src[j])) j++; return src.slice(i, j).join("\n"); };
 const code = ["const esc=s=>String(s??'');", pick("function num"), pick("let PF"), pick("function planCourses"),
   pick("function pfOk"), pick("let PDEPT"), pick("function courseRows"), pick("function pch"),
-  pick("function nodeCount"), pick("function treeNode")].join("\n");
+  pick("const isDone"), pick("function doneCredits"), pick("function fixEarned"), pick("function nodeCount"), pick("function treeNode")].join("\n");
 let D = {plan_courses: {courses: []}};
 eval(code + `
 const C=(c)=>({code:c,name:"N"+c,credit:1,status:"未修"});
@@ -23,4 +23,5 @@ function tableOrder(n){const h=treeNode(n,1);const tb=h.indexOf("<table");const 
  return tb>=0&&tb<th&&th<the&&the<tbo&&tbo<firstRow&&headRows===1&&h.slice(tb,th).indexOf("<tr")<0?rows:-1}
 const g1={code:"G1",name:"劳动教育",required:2,earned:0,courses:[C("a")],children:[]};
 const g3={code:"G3",name:"思政",required:18,earned:6,courses:[C("a"),C("b"),C("c")],children:[]};
-console.log(JSON.stringify({ok,soloOpen,rows1:tableOrder(g1),rows3:tableOrder(g3)}));`);
+const sz=fixEarned({code:"SZ",name:"思政",required:18,earned:0,courses:[{...C("x"),credit:"2.5",status:"已修"},{...C("y"),credit:2.5,status_code:"done",status:"已修"},C("z")],children:[{code:"S1",name:"子",earned:null,courses:[{...C("w"),credit:1,status:"已修"}],children:[]}]});
+console.log(JSON.stringify({ok,soloOpen,rows1:tableOrder(g1),rows3:tableOrder(g3),sz:sz.earned,szMissing:sz.missing}));`);

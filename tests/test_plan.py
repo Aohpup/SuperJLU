@@ -28,7 +28,7 @@ def test_attach_prefers_server_earned():
     p = {"courses": [{"group_code": "G1", "credit": 5, "status": "已修"},
                      {"group_code": "G2", "credit": 1, "status": "已修"}]}
     c = plan.attach_to_completion(comp, p)
-    assert c["groups"][0]["earned"] == 4.0 and c["groups"][1]["earned"] == 1
+    assert c["groups"][0]["earned"] == 5.0 and c["groups"][1]["earned"] == 1
     assert c["groups"][1]["earned_source"] == "plan_courses"
 
 
@@ -148,7 +148,7 @@ def test_tree_js_renders_single_and_nested(tmp_path):
     out = subprocess.run([node, str(tmp_path / "t.js"), str(tmp_path / "p.js")], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     r = json.loads(out.stdout.strip().splitlines()[-1])
-    assert r == {"ok": True, "soloOpen": True, "rows1": 1, "rows3": 3}
+    assert r == {"ok": True, "soloOpen": True, "rows1": 1, "rows3": 3, "sz": 6, "szMissing": 12}
     css = re.search(r"<style>(.*)</style>", PAGE, re.S).group(1)
     # 全局 th 是 sticky(top:58px)：课组表必须取消，否则表头盖住第一行
     assert re.search(r"\.rt th\{[^}]*position:static", css)
@@ -164,4 +164,31 @@ def test_earned_prefers_completion_then_courses_over_zero_tree():
     by = {n["code"]: n for n in t["roots"]}
     assert by["R"]["earned"] == 4.5 and by["R"]["earned_source"] == "plan_courses" and by["R"]["missing"] == 13.5
     assert by["R"]["children"][0]["earned"] == 1.5
-    assert by["J"]["earned"] == 1.0 and by["J"]["earned_source"] == "jw"
+    assert by["J"]["earned"] == 2.0 and by["J"]["earned_server"] == 1.0  # max(服务器, 课程汇总)
+
+
+def test_realistic_wcxf_zero_or_missing_with_done_courses():
+    """PC 实况：kzcx 树 WCXF=0、学业完成 WCXF=0 或缺失、课程已修 2.5 学分（字符串）。"""
+    nodes = plan.tree_nodes([{"KZH": "SZ", "KZM": "思政类课程", "YQXF": "18", "WCXF": 0},
+                             {"KZH": "SZ1", "KZM": "子", "FKZH": "SZ", "YQXF": 2},
+                             {"KZH": "LD", "KZM": "劳动教育", "YQXF": 2}])
+    raw = [{"KCH": "a", "KCM": "原理", "XF": "2.5", "KZH": "SZ", "SFTG_DISPLAY": "是", "ZSCJ": "85"},
+           {"KCH": "b", "KCM": "纲要", "XF": 2.5, "KZH": "SZ", "CJ": "90"},
+           {"KCH": "c", "KCM": "形策", "XF": 2, "KZH": "SZ"},
+           {"KCH": "d", "KCM": "子课", "XF": 1, "KZH": "SZ1", "CJ": "合格"},
+           {"KCH": "e", "KCM": "劳动", "XF": 2, "KZH": "LD", "SFXK": "1"}]
+    courses = plan.merge(plan.normalize(raw, {}), [])
+    assert [c["status_code"] for c in courses] == ["done", "done", "todo", "done", "inprog"]
+    comp = {"groups": [{"code": "SZ", "name": "思政类课程", "required": 18.0, "earned": 0.0, "earned_source": "jw"},
+                       {"code": "LD", "name": "劳动教育", "required": 2.0, "earned": None}]}
+    c = plan.attach_to_completion(comp, {"courses": courses, "tree_nodes": nodes})
+    sz = next(n for n in c["tree"] if n["code"] == "SZ")
+    ld = next(n for n in c["tree"] if n["code"] == "LD")
+    assert sz["earned"] == 6.0 and sz["missing"] == 12.0 and sz["earned_source"] == "plan_courses"
+    assert ld["earned"] == 0 and ld["missing"] == 2
+    assert c["groups"][0]["earned"] == 6.0
+    summ = {s["code"]: s for s in plan.tree_summary(c["tree"])}
+    assert summ["SZ"]["earned"] == 6.0 and summ["SZ"]["required"] == 18.0
+    # 服务器值 > 课程汇总时取服务器
+    c2 = plan.build_tree(nodes, [dict(x) for x in courses], [{"code": "SZ", "earned": 10.0}])
+    assert next(n for n in c2["roots"] if n["code"] == "SZ")["earned"] == 10.0
