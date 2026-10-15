@@ -77,3 +77,16 @@ def test_rejects_unfiltered_and_prefers_student_plan(monkeypatch):
     with pytest.raises(jwxt.JwxtError):
         plan.fetch_all(FC(), {"app": "xsfacx", "route": "xsfacx", "path": "/jwapp/sys/xsfacx/modules/pyfacxepg/kzkccx.do",
                               "form": {"PYFADM": "P1"}})
+
+
+def test_cxscfakzkc_fields():
+    rows = [{"KCH": "A1", "KCM": "高数", "XF": 5, "XNXQDM": "2024-2025-1", "XNXQDM_DISPLAY": "2024-2025学年第一学期",
+             "KSLXDM_DISPLAY": "考试", "ZSCJ": "88", "XH": "S1", "PYFADM": "P1", "WID": "w", "SFXK": "0"},
+            {"KCH": "B2", "KCM": "物理", "XF": 3, "SFXK": "1"},
+            {"KCH": "C3", "KCM": "化学", "XF": 2, "SFXK": "0"}]
+    cs = {c["code"]: c for c in plan.merge(plan.normalize(rows, {}), [], [], [])}
+    a = cs["A1"]
+    assert a["term"] == "2024-2025学年第一学期" and a["exam_type"] == "考试" and a["score"] == "88"
+    assert a["status"] == "已修" and cs["B2"]["status"] == "在修" and cs["C3"]["status"] == "未修"
+    s = json.dumps(list(cs.values()), ensure_ascii=False)
+    assert "S1" not in s and "P1" not in s and '"w"' not in s

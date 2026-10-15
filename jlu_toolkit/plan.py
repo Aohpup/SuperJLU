@@ -34,11 +34,13 @@ COLS = {
     "hours": (("XS", "ZXS", "KCZXS"), ("学时",)),
     "nature": (("KCXZDM", "KCXZ"), ("课程性质",)),
     "category": (("KCLBDM", "KCLB"), ("课程类别",)),
-    "term": (("JYXDXQ", "XDXQ", "JYXDXNXQ", "KKXQ", "XNXQDM", "XQ"), ("建议修读", "修读学期", "开课学期")),
+    "term": (("XNXQDM", "XNXQ", "JYXDXQ", "XDXQ", "JYXDXNXQ", "KKXQ"), ("学年学期", "建议修读", "修读学期", "开课学期")),
+    "exam_type": (("KSLXDM", "KSLX"), ("考试类型",)),
     "dept": (("KKDWDM", "KKYXDM", "KKDW"), ("开课单位", "开课院系", "开课学院")),
     "group": (("KZM", "KZMC"), ("课组", "所属课组")),
     "group_code": (("KZH", "KZDM"), ()),
-    "score": (("ZCJ", "CJ", "XSZCJMC", "ZZCJ"), ("成绩",)),
+    "score": (("ZCJ", "CJ", "XSZCJMC", "ZZCJ", "ZSCJ"), ("成绩",)),
+    "selected": (("SFXK",), ("是否选课",)),
     "status_raw": (("XDZTDM", "XDZT", "WCZT", "TGZT", "SFTG", "SFWC", "SFXD"), ("修读状态", "完成", "是否通过", "是否已修")),
 }
 
@@ -276,7 +278,7 @@ def merge(plan: list, done: list, grades=None, courses_now=None) -> list:
     by_name = {d["name"]: d for d in done if d["name"]}
     gmap: dict = {}
     for g in grades or []:
-        gmap.setdefault(g.name.strip(), g.score)
+        gmap.setdefault(g.name.strip(), (g.score, g.term))
     now = {c.name.strip() for c in (courses_now or [])}
     res = []
     for c in plan or done:
@@ -285,8 +287,13 @@ def merge(plan: list, done: list, grades=None, courses_now=None) -> list:
             if not c.get(k) and d.get(k):
                 c[k] = d[k]
         if not c["score"] and c["name"] in gmap:
-            c["score"] = gmap[c["name"]]
+            c["score"] = gmap[c["name"]][0]
+        if not c.get("term") and c["name"] in gmap:
+            c["term"] = gmap[c["name"]][1]
         st = _status(c.get("status_raw", ""), c.get("score", ""))
+        sel = (c.pop("selected", "") or "").strip()
+        if sel in ("1", "是", "true") and st in ("", "未修") and not c.get("score"):
+            st = "在修"
         if not st:
             st = "在修" if c["name"] in now else "未修"
         if st == "未修" and c["name"] in now:
