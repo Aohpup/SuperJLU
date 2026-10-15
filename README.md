@@ -8,7 +8,7 @@
 ```bash
 pip install git+https://github.com/Runa-Asahi/JLU-Toolkit
 jlu-toolkit ics examples/schedule.csv --first-monday 2026-09-07 -o 课表.ics
-jlu-toolkit gpa examples/grades.csv --term 2025-2026-1
+jlu-toolkit gpa examples/grades.csv --term 2025-2026-1   # 简单学分加权，见下方「绩点说明」
 jlu-toolkit today examples/schedule.csv --week 3 --weekday 1
 ```
 CSV 格式参考 `examples/`。周次支持 `1-16`、`1-15单`、`2-16双`、`1,3,5`。
@@ -49,8 +49,10 @@ jlu-toolkit fetch --user 你的邮箱前缀 --force-login
 # 登录成功后会自动打开课表/成绩应用入口（避免接口 403）
 # 若仍 403：加 --debug 查看是否有 CASTGC / _WEU
 
-# 只拉课表 / 成绩 / 指定学期
+# 只拉课表 / 成绩 / 考试 / 指定学期
 jlu-toolkit fetch --user 你的邮箱前缀 --what schedule --term 2025-2026-2
+jlu-toolkit fetch --what exams          # 考试安排 → exams.csv，并打印倒计时
+jlu-toolkit exams exams.csv             # 离线查看考试倒计时
 ```
 
 图形验证码图片：
@@ -68,10 +70,43 @@ jlu-toolkit fetch --probe
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login
 # 登录成功后会自动打开课表/成绩应用入口（避免接口 403）
 # 若仍 403：加 --debug 查看是否有 CASTGC / _WEU
+jlu-toolkit explore            # 只读探测，报告在 ~/storage/downloads/
+jlu-toolkit ui                 # 手机浏览器打开 http://127.0.0.1:8765/
 # 图形验证码默认自动识别（纯 Pillow，无需 ddddocr）
 # 识别错了会自动刷新最多 5 次，再不行才让你手输
 # 需要看图时加：--show-captcha
 ```
+
+## 网页界面（`jlu-toolkit ui`）
+
+```bash
+jlu-toolkit ui            # 浏览器打开 http://127.0.0.1:8765/
+jlu-toolkit ui --demo     # 用示例数据先看看效果
+```
+
+- **课表**：周视图，左右滑动或按钮切换周次，今日高亮；首页顶部显示下一场考试倒计时
+- **成绩**：每门课一个勾选框，实时计算所选课程的绩点；可把勾选结果另存为命名方案（如「保研」「综测」）
+- **考试**：倒计时列表（3 天内标红）
+- **设置**：第 1 周周一日期、导出 iCal
+- 右上角「刷新」使用终端登录时保存的会话从教务重新拉取，不会弹出登录；会话失效时在终端执行 `jlu-toolkit fetch --force-login`
+
+仅监听 `127.0.0.1`，页面无任何 CDN/外部资源，数据保存在 `~/.config/jlu-toolkit/data/`。
+
+## 绩点说明
+
+`jlu-toolkit gpa`、`fetch` 输出的绩点目前是**全部课程的简单学分加权平均**：百分制 60 分记 1.0、每多 1 分 +0.1、90 分及以上 4.0；等级制按 优秀95/良好85/中等75/及格65 换算；「通过」类不计入。
+
+它**不等于**教务或学院的官方口径（保研、综测等会剔除体育、公选、重修等不同课程）。请在网页界面里勾选需要计入的课程，并保存为自己的方案。
+
+## 探测更多教务功能（`jlu-toolkit explore`）
+
+```bash
+jlu-toolkit explore
+```
+
+用已保存会话**只读**探测考试安排、空教室、培养方案/学业完成、学期校历、个人信息等候选接口，生成 `jlu_explore_report.json`（Termux 下在「下载」目录）。
+报告**只含状态码、JSON 键名、行数、字段名，不含任何值**（不含姓名、学号、成绩），可以直接贴给开发者用于适配。
+绝不调用选课、退课、报名、评教提交等写接口。
 
 ## 接入 AI 助手（MCP）
 ```bash
@@ -84,8 +119,12 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 
 ## 路线图
 - [x] 课表/成绩文件导入、绩点计算、iCal 导出、MCP 接口
-- [x] 教务 HTTP 自动导出（CAS 3DES + 二次认证；会话本地复用）
-- [ ] 考试倒计时、Windows 托盘挂件
-- [ ] 绩点规则可配置（不同学院）
+- [x] 教务 HTTP 自动导出（CAS 3DES + 二次认证 + 验证码自动识别；会话本地复用）
+- [x] 本地网页界面：课表周视图、成绩勾选、命名绩点方案、考试倒计时、iCal 导出
+- [x] 考试安排拉取与倒计时（接口按金智通用 `studentWdksapApp` 实现，待吉大实测确认）
+- [x] `explore` 只读探测 + 脱敏报告
+- [ ] 根据探测结果接入：空教室、培养方案/学业完成进度、学期校历（自动识别第 1 周）
+- [ ] 官方绩点口径（保研/综测）预设方案、不同学院规则可配置
+- [ ] MCP 接入考试与绩点方案；桌面托盘挂件
 
 欢迎 PR 和 ⭐！

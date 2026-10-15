@@ -52,6 +52,10 @@ EP_COURSES = "/jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do"
 EP_GRADES = "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do"
 REF_SCHEDULE = "https://iedu.jlu.edu.cn/jwapp/sys/wdkb/*default/index.do"
 REF_GRADES = "https://iedu.jlu.edu.cn/jwapp/sys/cjcx/*default/index.do"
+# 考试安排（金智通用 studentWdksapApp；参考 XJTU/BIT 公开脚本）
+REF_EXAMS = "https://iedu.jlu.edu.cn/jwapp/sys/studentWdksapApp/*default/index.do"
+EP_EXAMS = "/jwapp/sys/studentWdksapApp/modules/wdksap/wdksap.do"
+EP_EXAMS_ALT = "/jwapp/sys/studentWdksapApp/WdksapController/cxxsksap.do"
 
 # 与 wzyyyyyyy/iLearn 一致的桌面 Chrome UA（login10.js 无移动端特殊分支）
 UA = (
@@ -1039,6 +1043,58 @@ class JwxtClient:
             )
             rows = (data.get("datas", {}).get("xscjcx", {}) or {}).get("rows") or []
         return [g for g in (row_to_grade(r) for r in rows) if g is not None]
+
+
+    def post_raw(self, path: str, fields: dict, referer: str) -> tuple[int, str, str]:
+        """只读查询用：不抛 HTTP 状态异常，返回 (status, text, final_url)。"""
+        data = urllib.parse.urlencode(fields).encode("utf-8") if fields else b""
+        code, text, final, _ = self._request(
+            IEDU_BASE + path,
+            data=data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": referer,
+                "Origin": IEDU_BASE,
+            },
+        )
+        self._dbg(step="emap_post_raw", path=path, status=code, final_url=_redact_url(final))
+        return code, text, final
+
+    def fetch_exams(self, xnxqdm: Optional[str] = None) -> list:
+        """我的考试安排（只读）。先 cxxsksap.do（ysu-sdk 同款），再试 wdksap.do。"""
+        from . import exams as _ex
+
+        if not xnxqdm:
+            xnxqdm = self.current_semester()
+        self.enter_emap_app(REF_EXAMS)
+        attempts = [
+            (
+                EP_EXAMS_ALT,
+                {"requestParamStr": json.dumps({"XNXQDM": xnxqdm or "", "*order": "-KSRQ,-KSSJMS"})},
+                "cxxsksap",
+            ),
+            (EP_EXAMS, {"XNXQDM": xnxqdm or "", "*order": "-KSRQ,-KSSJMS"}, "wdksap"),
+        ]
+        last_err = "无响应"
+        for path, fields, key in attempts:
+            code, text, _ = self.post_raw(path, fields, REF_EXAMS)
+            if code != 200:
+                last_err = f"{path} HTTP {code}"
+                continue
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                last_err = f"{path} 返回非 JSON"
+                continue
+            block = (data.get("datas") or {}).get(key) or {}
+            rows = block.get("rows") if isinstance(block, dict) else None
+            if rows is None:
+                last_err = f"{path} 缺少 datas.{key}.rows"
+                continue
+            return [e for e in (_ex.row_to_exam(r, _emap_str) for r in rows) if e]
+        raise JwxtError(f"考试安排获取失败：{last_err}（可运行 jlu-toolkit explore 帮助定位）")
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):

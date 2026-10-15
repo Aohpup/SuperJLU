@@ -4,6 +4,7 @@ import json
 import sys
 
 from . import core
+from . import exams as exmod
 from . import jwxt
 
 
@@ -59,8 +60,13 @@ def main():
     )
     f.add_argument("--term", help="学期代码，如 2025-2026-2；默认当前学期")
     f.add_argument(
+        "--exams-out",
+        default="exams.csv",
+        help="考试安排 CSV 输出路径（默认 exams.csv）",
+    )
+    f.add_argument(
         "--what",
-        choices=("all", "schedule", "grades"),
+        choices=("all", "schedule", "grades", "exams"),
         default="all",
         help="拉取内容（默认 all）",
     )
@@ -85,6 +91,24 @@ def main():
         help="禁用图形验证码自动识别，始终手动输入",
     )
 
+    e = sub.add_parser("exams", help="查看考试倒计时（读取 exams.csv）")
+    e.add_argument("csv", nargs="?", default="exams.csv")
+    e.add_argument("--all", action="store_true", help="包含已结束的考试")
+
+    ex_p = sub.add_parser(
+        "explore",
+        help="只读探测教务各应用接口，生成脱敏报告（需已保存会话；不做任何写操作）",
+    )
+    ex_p.add_argument("--term", help="学期代码；默认自动取当前学期")
+    ex_p.add_argument("-o", "--out", help="报告路径（默认 Termux 下载目录或当前目录 jlu_explore_report.json）")
+    ex_p.add_argument("--debug", action="store_true")
+
+    u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
+    u.add_argument("--port", type=int, default=8765)
+    u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
+    u.add_argument("--data-dir", help="自定义数据目录")
+    u.add_argument("--open", action="store_true", help="启动后尝试打开浏览器")
+
     x = p.parse_args()
     if x.cmd == "ics":
         open(x.o, "w", encoding="utf-8").write(
@@ -98,6 +122,12 @@ def main():
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
     elif x.cmd == "fetch":
         _cmd_fetch(x)
+    elif x.cmd == "exams":
+        _cmd_exams(x)
+    elif x.cmd == "explore":
+        _cmd_explore(x)
+    elif x.cmd == "ui":
+        _cmd_ui(x)
 
 
 def _prompt(msg: str) -> str:
@@ -337,6 +367,17 @@ def _cmd_fetch(x):
             jwxt.export_grades_csv(grades, x.grades_out)
             print(f"成绩 {len(grades)} 条 → {x.grades_out}")
             print(json.dumps(core.gpa(grades), ensure_ascii=False))
+            print("（注：此为全部课程的简单学分加权；保研/综测口径请在 jlu-toolkit ui 里勾选课程）", file=sys.stderr)
+        if x.what in ("all", "exams"):
+            try:
+                exs = client.fetch_exams(x.term)
+                exmod.export_exams_csv(exs, x.exams_out)
+                print(f"考试 {len(exs)} 场 → {x.exams_out}")
+                _print_countdown(exs)
+            except jwxt.JwxtError as e:
+                if x.what == "exams":
+                    raise
+                print(f"（考试安排暂未获取：{e}）", file=sys.stderr)
     except jwxt.LoginError as e:
         print(f"{e}；可加 --force-login 重登。", file=sys.stderr)
         sys.exit(1)
@@ -346,6 +387,62 @@ def _cmd_fetch(x):
     except jwxt.JwxtError as e:
         print(f"教务错误：{e}", file=sys.stderr)
         sys.exit(1)
+
+
+def _print_countdown(exs, show_all: bool = False) -> None:
+    items = exs if show_all else exmod.upcoming(exs)
+    if not items:
+        print("暂无未结束的考试。")
+        return
+    for e in items:
+        when = e.start.replace("T", " ") if e.start else "时间待定"
+        cd = exmod.format_countdown(exmod.countdown(e))
+        print(f"⏱ {cd:<14} {e.name}  {when}  {e.location}" + (f"  座位{e.seat}" if e.seat else ""))
+
+
+def _cmd_exams(x):
+    try:
+        exs = exmod.load_exams(x.csv)
+    except FileNotFoundError:
+        print(f"找不到 {x.csv}；先运行 jlu-toolkit fetch --what exams", file=sys.stderr)
+        sys.exit(1)
+    _print_countdown(exs, show_all=x.all)
+
+
+def _cmd_explore(x):
+    from . import explore
+
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    if not client.load_session():
+        print("没有已保存的会话。请先运行 jlu-toolkit fetch --user 你的邮箱前缀 登录一次。", file=sys.stderr)
+        sys.exit(1)
+    print("开始只读探测（不会进行任何选课/退课/提交操作）…", file=sys.stderr)
+    try:
+        report = explore.run_explore(client, x.term, log=lambda m: print(m, file=sys.stderr))
+    except jwxt.NetworkError as e:
+        print(f"网络错误：{e}", file=sys.stderr)
+        sys.exit(1)
+    client.save_session()
+    from pathlib import Path
+
+    path = explore.write_report(report, Path(x.out) if x.out else None)
+    print(f"脱敏报告已写入：{path}\n（只含状态码/键名/行数/字段名，可以直接粘贴给开发者）")
+
+
+def _cmd_ui(x):
+    from pathlib import Path
+    import tempfile
+
+    from . import ui
+
+    root = None
+    if x.demo:
+        root = Path(tempfile.mkdtemp(prefix="jlu-ui-demo-"))
+        ui.seed_demo(root)
+    elif x.data_dir:
+        root = Path(x.data_dir).expanduser()
+        root.mkdir(parents=True, exist_ok=True)
+    ui.serve(port=x.port, root=root, open_browser=x.open)
 
 
 if __name__ == "__main__":
