@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _mark_path():
-    return re.search(r'<path d="([^"]+)"', (ROOT / "assets/brand/superjlu-mark.svg").read_text()).group(1)
+    return re.search(r'<path d="([^"]+)"', (ROOT / "assets/brand/superjlu-mark.svg").read_text(encoding="utf-8")).group(1)
 
 
 def test_brand_assets_exist():
@@ -46,9 +46,9 @@ def test_favicon_routes(tmp_path):
 
 def test_android_icon_uses_mark():
     res = ROOT / "android/app/src/main/res"
-    fg = (res / "drawable/ic_launcher_foreground.xml").read_text()
+    fg = (res / "drawable/ic_launcher_foreground.xml").read_text(encoding="utf-8")
     assert _mark_path() in fg
-    assert "#FFFFFF" in (res / "drawable/ic_launcher_background.xml").read_text()
+    assert "#FFFFFF" in (res / "drawable/ic_launcher_background.xml").read_text(encoding="utf-8")
     for q in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
         assert (res / f"mipmap-{q}/ic_launcher.png").exists()
         assert (res / f"mipmap-{q}/ic_launcher_round.png").exists()
