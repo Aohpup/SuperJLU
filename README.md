@@ -17,7 +17,7 @@
 | 平台 | 文件 | 用法 |
 | --- | --- | --- |
 | Windows | `SuperJLU.exe` | 双击即可：后台启动服务并自动打开浏览器界面，托盘图标可重新打开或退出；已在运行时再双击只会打开现有界面。 |
-| Android | `jlu-toolkit.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
+| Android | `SuperJLU-<版本>.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
 | 命令行 / 开发者 | pip | 见下方。 |
 
 每个文件都附带 `.sha256` 校验值（PowerShell：`Get-FileHash 文件名`）。
