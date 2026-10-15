@@ -264,27 +264,33 @@ _ocr_engine = None
 
 
 def ocr_digits(data: bytes) -> Optional[str]:
-    """尝试识别 4 位数字验证码。成功返回纯数字字符串，否则 None。"""
+    """尝试识别 4 位数字验证码。优先内置 Pillow kNN 求解器，再尝试 ddddocr。"""
+    try:
+        from . import captcha_solver
+
+        pred = captcha_solver.solve_captcha(data)
+        if pred:
+            return pred
+    except Exception:
+        pass
+
     global _ocr_engine
     try:
         import ddddocr
     except ImportError:
-        return _ocr_digits_pillow_simple(data)
+        return None
 
     try:
         if _ocr_engine is None:
             _ocr_engine = ddddocr.DdddOcr(show_ad=False)
         text = _ocr_engine.classification(data)
     except Exception:
-        return _ocr_digits_pillow_simple(data)
+        return None
 
     digits = re.sub(r"\D", "", text or "")
     if len(digits) == 4:
         return digits
-    if 3 <= len(digits) <= 5:
-        # 偶发多识别/少识别，仍交给用户确认
-        return digits
-    return _ocr_digits_pillow_simple(data)
+    return None
 
 
 def _ocr_digits_pillow_simple(data: bytes) -> Optional[str]:

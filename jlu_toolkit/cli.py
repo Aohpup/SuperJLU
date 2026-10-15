@@ -74,6 +74,16 @@ def main():
         action="store_true",
         help="打印登录诊断信息（字段名/长度、HTTP 状态、最终 URL、重定向链、服务器错误文案；不打印密码）",
     )
+    f.add_argument(
+        "--show-captcha",
+        action="store_true",
+        help="在终端用 ASCII 显示图形验证码（默认关闭；自动识别失败时仍会提示手动输入）",
+    )
+    f.add_argument(
+        "--no-auto-captcha",
+        action="store_true",
+        help="禁用图形验证码自动识别，始终手动输入",
+    )
 
     x = p.parse_args()
     if x.cmd == "ics":
@@ -98,54 +108,63 @@ def _prompt(msg: str) -> str:
         sys.exit(130)
 
 
-def _interactive_second_factor(client: jwxt.JwxtClient) -> None:
-    """图形验证码 + 微信验证码交互（终端 ASCII / 可选 OCR / 多路径保存）。"""
+def _interactive_second_factor(client: jwxt.JwxtClient, show_captcha: bool = False, auto_captcha: bool = True) -> None:
+    """图形验证码（默认自动识别）+ 微信验证码交互。"""
     from . import captcha_util
+    from . import captcha_solver
 
     print(
-        "需要二次认证：图形验证码会画在终端里；同时保存到 Downloads/Pictures/DCIM。"
-        "微信验证码请到「智慧吉大」查看。",
+        "需要二次认证：图形验证码默认自动识别；微信验证码请到「智慧吉大」查看。",
         file=sys.stderr,
     )
-    if not captcha_util.has_pillow():
-        print(
-            "提示：未检测到 Pillow，终端无法绘制验证码。"
-            "Termux 请执行：pkg install python-pillow",
-            file=sys.stderr,
-        )
-    auto_ocr = captcha_util.has_ddddocr()
-    if auto_ocr:
-        print("已启用 ddddocr 自动识别（可直接回车采纳，或改输入）。", file=sys.stderr)
+    if auto_captcha:
+        try:
+            captcha_solver.load_templates()
+        except Exception as e:
+            print(f"自动识别不可用（{e}），改为手动输入。", file=sys.stderr)
+            auto_captcha = False
 
+    max_auto_tries = 5
+    auto_try = 0
     while True:
         path = client.download_captcha()
         raw = client.last_captcha_bytes or path.read_bytes()
-        paths = client.last_captcha_paths or [path]
-        print(f"图形验证码已保存（含放大版 *_large.jpg）：", file=sys.stderr)
-        for p in paths:
+        if show_captcha:
+            print(captcha_util.render_ascii(raw), file=sys.stderr)
+            for p in client.last_captcha_paths or [path]:
+                try:
+                    print(f"  已保存 {p} ({p.stat().st_size} bytes)", file=sys.stderr)
+                except OSError:
+                    pass
+
+        captcha = None
+        if auto_captcha and auto_try < max_auto_tries:
+            auto_try += 1
             try:
-                print(f"  - {p}  ({p.stat().st_size} bytes)", file=sys.stderr)
-            except OSError:
-                print(f"  - {p}", file=sys.stderr)
-        print(captcha_util.render_ascii(raw), file=sys.stderr)
+                captcha = captcha_solver.solve_captcha(raw)
+            except RuntimeError as e:
+                print(f"自动识别需要 Pillow：{e}", file=sys.stderr)
+                auto_captcha = False
+                captcha = None
+            if captcha:
+                print(f"图形验证码自动识别：{captcha}（第 {auto_try}/{max_auto_tries} 次）", file=sys.stderr)
+            else:
+                print(f"自动识别失败（第 {auto_try}/{max_auto_tries} 次），刷新重试…", file=sys.stderr)
+                continue
 
-        suggestion = captcha_util.ocr_digits(raw) if auto_ocr else None
-        if suggestion:
-            print(f"OCR 识别结果：{suggestion}", file=sys.stderr)
-            captcha = _prompt(
-                f"请输入图形验证码 [直接回车用 {suggestion}，输入 refresh 刷新]："
-            )
+        if not captcha:
+            captcha = _prompt("请输入图形验证码（直接回车刷新图片）：")
             if not captcha:
-                captcha = suggestion
-        else:
-            captcha = _prompt("请输入图形验证码（直接回车 / refresh 刷新图片）：")
-
-        if not captcha or captcha.lower() in ("refresh", "r", "刷新"):
-            continue
+                continue
 
         result = client.request_wechat_code(captcha)
         if result == jwxt.WechatCodeResult.CAPTCHA_ERROR:
-            print("图形验证码错误，已刷新，请重试。", file=sys.stderr)
+            print("图形验证码错误。", file=sys.stderr)
+            if auto_captcha and auto_try < max_auto_tries:
+                print("自动刷新并重试…", file=sys.stderr)
+                continue
+            print("请手动输入。", file=sys.stderr)
+            auto_captcha = False
             continue
         if result == jwxt.WechatCodeResult.TOO_FREQUENT:
             print("发送太频繁，请稍后再试。", file=sys.stderr)
@@ -172,6 +191,8 @@ def _interactive_second_factor(client: jwxt.JwxtClient) -> None:
         again = _prompt("再试一次？[Y/n] ").lower()
         if again in ("n", "no", "q"):
             sys.exit(1)
+        auto_try = 0  # allow auto again on full retry
+
 
 
 def _ensure_login(x) -> jwxt.JwxtClient:
@@ -237,7 +258,11 @@ def _ensure_login(x) -> jwxt.JwxtClient:
         sys.exit(1)
     if step == jwxt.LoginStep.NEED_SECOND_FACTOR:
         try:
-            _interactive_second_factor(client)
+            _interactive_second_factor(
+                client,
+                show_captcha=bool(getattr(x, "show_captcha", False)),
+                auto_captcha=not bool(getattr(x, "no_auto_captcha", False)),
+            )
         except jwxt.NetworkError as e:
             print(f"网络错误：{e}", file=sys.stderr)
             sys.exit(1)
