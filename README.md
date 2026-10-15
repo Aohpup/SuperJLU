@@ -295,3 +295,19 @@ jlu-toolkit sessions clear <id>
   （session 是带该站 cookie 的 `JwxtClient`，只发一次无副作用 GET；None → unknown）与 `vpn_url(url)`；
   也可 `sessions.register_check(id, fn)` / `sessions.register_vpn_url(fn)`。`vpn_url` 未实现时抛 `NotImplementedError`。
 - 站点代码抛 `sessions.SiteSessionExpired("<id>")`，并可调用 `sessions.mark_expired(id, reason)`。
+
+## 登录保持与离线缓存
+
+统一认证要微信验证码，所以**不做**用密码静默重登。改为：
+
+- **CAS 单点登录持久化**：每次 `save_session()` 后，把 `cas.jlu.edu.cn` 主机上的全部 cookie（含 TGC 类长期票据，不假设具体名字）加密保存为站点 `cas`。
+  登录表单若有 `remember*` / `rememberMe` 字段会自动开启。
+- **静默换票** `sessions.refresh_via_cas(site)`：仅 `auth == "cas"` 且已知 service 的站点（目前只有 `jwxt`）。
+  教务会话过期时（`session_alive` / 接口请求落到登录页）自动尝试一次：带 CAS cookie 访问 `tpass/login?service=…`，回到教务则保存新会话；
+  落在 CAS 登录页则把 `cas` 标记为过期，照常抛 `SessionExpiredError`（界面显示应用内登录）。
+- **保活** `sessions.keepalive()`：一次轻量 GET。`jlu-toolkit sessions keepalive [--json]`（失效退出码 3）；
+  `POST /api/session/keepalive`（App 前台约每 15 分钟调用；Python 端没有后台循环）。
+- **加密数据缓存**：`secure_store.save_json(path, obj)` / `load_json(path, default)` / `json_exists(path)`。
+  `official_gpa.json`、`completion.json`、`plan_courses.json` 改为加密 `.enc`（旧明文首次读取时迁移）；
+  每次写入在 `data/cache_meta.json` 记 `updated_at`。课表/成绩/考试 CSV 与设置、OA 缓存暂保持原格式。
+- **离线标记**：`GET /api/session`、`GET /api/data` 增加 `offline`（教务会话不是 ok 但本地有缓存）与 `cached_at`（ISO 时间）。
