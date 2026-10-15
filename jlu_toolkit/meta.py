@@ -30,14 +30,22 @@ EP_CALENDAR = "/jwapp/sys/wdkb/modules/xskcb/cxxljc.do"
 EP_PERIODS = "/jwapp/sys/wdkb/modules/jshkcb/jc.do"
 EP_GPA = "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"
 # 吉大成绩页真实官方绩点（浏览器 DevTools）：rxylgpacx / rxylgpacxcx.do
-EP_GPA_RXYL = "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx/rxylgpacxcx.do"
+# 浏览器实测：路径里是字面量 modules*cjcx（不是 modules/cjcx）
+EP_GPA_RXYL = "/jwapp/sys/cjcx/modules*cjcx/rxylgpacx/rxylgpacxcx.do"
+EP_GPA_RXYL_ENC = "/jwapp/sys/cjcx/modules%2Acjcx/rxylgpacx/rxylgpacxcx.do"  # * 被编码时的回退
+EP_GPA_RXYL_SLASH = "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx/rxylgpacxcx.do"
 EP_GPA_RXYL_ALT = "/jwapp/sys/cjcx/modules/rxylgpacx/rxylgpacxcx.do"
+EP_RXYL_META = "/jwapp/sys/cjcx/modules*cjcx/rxylgpacx.do"
+EP_RXYL_META_ENC = "/jwapp/sys/cjcx/modules%2Acjcx/rxylgpacx.do"
+EP_RXYL_META_SLASH = "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx.do"
 EP_GPA_JLU = "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do"
 EP_GPA_TERM = "/jwapp/sys/cjcx/modules/cjcx/cxsfwfcsj.do"
 EP_GPA_TERM_ALT = "/jwapp/sys/cjcx/modules/cjcx/cxcjcxsfkf.do"
 GPA_CANDIDATES = [
-    (EP_GPA_RXYL, "XH"),
-    (EP_GPA_RXYL_ALT, "XH"),
+    (EP_GPA_RXYL, "page"),       # 浏览器实测：仅 pageSize/pageNumber，无学号
+    (EP_GPA_RXYL_ENC, "page"),
+    (EP_GPA_RXYL_SLASH, "page"),
+    (EP_GPA_RXYL_ALT, "page"),
     (EP_GPA_JLU, "XH"),
     (EP_GPA_TERM, "XH"),
     (EP_GPA_TERM_ALT, "XH"),
@@ -167,30 +175,54 @@ def parse_periods(rows: list) -> dict:
     return dict(sorted(out.items(), key=lambda kv: int(kv[0])))
 
 
-_CODE_FIELD = __import__("re").compile(r"^[A-Z][A-Z0-9_]{1,30}$")
+_CODE_FIELD = re.compile(r"^[A-Z][A-Z0-9_]{1,30}$")
+_SKIP_GPA_KEYS = frozenset({
+    "XH", "WID", "XNXQDM", "XNXQ", "XN", "XQ", "PYFADM", "PYFAMC", "TJLX",
+    "pageSize", "pageNumber", "totalSize", "extParams",
+})
 
 
 def parse_official_gpa(row: dict, captions: Optional[dict] = None) -> dict:
-    """captions: 元数据字段名→中文；优先于内置 GPA_FIELDS。跳过学号等标识字段。"""
-    skip = {"XH", "WID", "XNXQDM", "XNXQ", "XN", "XQ", "PYFADM", "TJLX"}
-    known = dict(GPA_FIELDS)
+    """解析官方绩点行：尽量保留全部字段。
+
+    - 跳过 ``*_DISPLAY`` 键本身，但对基键优先用 DISPLAY 值（代码→可读）
+    - 标签：元数据 caption > 内置 GPA_FIELDS > 字段名
+    - 跳过学号等标识字段
+    """
     caps = captions or {}
+    known = dict(GPA_FIELDS)
     items, seen = [], set()
-    for k, label in GPA_FIELDS:
-        v = _s(row.get(k))
+
+    def label_for(k: str) -> str:
+        return caps.get(k) or known.get(k) or k
+
+    def value_for(k: str):
+        disp = row.get(k + "_DISPLAY")
+        if disp not in (None, ""):
+            return _s(disp)
+        return _s(row.get(k))
+
+    # 已知顺序优先
+    for k, _lab in GPA_FIELDS:
+        if k in seen or k not in row:
+            continue
+        v = value_for(k)
         if v:
-            items.append({"key": k, "label": caps.get(k) or label, "value": v})
+            items.append({"key": k, "label": label_for(k), "value": v})
             seen.add(k)
-    for k, v in row.items():
-        if k in seen or k in skip or not isinstance(k, str) or not _CODE_FIELD.match(k):
+    # 其余字段
+    for k in row:
+        if not isinstance(k, str) or k.endswith("_DISPLAY"):
             continue
-        val = _s(v)
-        if not val:
+        if k in seen or k in _SKIP_GPA_KEYS or not _CODE_FIELD.match(k):
             continue
-        if k in caps or re.search(r"(JD|GPA|PJF|XF|JDF|HD|XK)", k, re.I):
-            items.append({"key": k, "label": caps.get(k) or known.get(k) or k, "value": val})
-            seen.add(k)
+        v = value_for(k)
+        if not v:
+            continue
+        items.append({"key": k, "label": label_for(k), "value": v})
+        seen.add(k)
     return {"plan": _s(row.get("PYFAMC")), "items": items}
+
 
 
 def parse_completion(summary: dict, plan: dict, groups: list) -> dict:
@@ -461,10 +493,12 @@ def extract_gpa_payload(obj) -> Optional[dict]:
     return None
 
 
-def _param_variants(xh: str, action_fields: list[str], term: str = "") -> list[tuple[str, str, dict]]:
+def _param_variants(xh: str, action_fields: list[str], term: str = "", *, page_first: bool = False) -> list[tuple[str, str, dict]]:
     """(variant_name, method, form) — 针对 cxxspjjdxx 等实测 200 空行的情况穷举。"""
     f = set(action_fields or [])
     vs = []
+    if page_first:
+        vs.append(("POST:pageSize+pageNumber", "POST", {"pageSize": "10", "pageNumber": "1"}))
     if xh:
         vs.append(("POST:XH", "POST", {"XH": xh}))
         vs.append(("POST:XH1..6", "POST", {f"XH{i}": xh for i in range(1, 7)}))
@@ -502,7 +536,8 @@ def _param_variants(xh: str, action_fields: list[str], term: str = "") -> list[t
     return out
 
 
-CJCX_REFERER = APP_CJCX + "?EMAP_LANG=zh#/cjcx"
+CJCX_REFERER = APP_CJCX + "?EMAP_LANG=zh"  # 浏览器 cURL 无带 hash
+CJCX_REFERER_HASH = APP_CJCX + "?EMAP_LANG=zh#/cjcx"
 
 
 def _request_json(client, url: str, method: str, form: dict) -> tuple[int, object]:
@@ -557,8 +592,10 @@ def probe_gpa(client, log=print) -> dict:
     for a in candidates:
         if a["url"] not in seen:
             seen.add(a["url"]); uniq.append(a)
-    uniq.sort(key=lambda a: (0 if "rxylgpacx" in a["url"] else 1 if "cxxspjjdxx" in a["url"]
-                             else 2 if ("cxsfwfcsj" in a["url"] or "cxcjcxsfkf" in a["url"]) else 3, a["url"]))
+    uniq.sort(key=lambda a: (0 if "modules*cjcx" in a["url"] or "modules%2Acjcx" in a["url"]
+                             else 1 if "rxylgpacx" in a["url"]
+                             else 2 if "cxxspjjdxx" in a["url"]
+                             else 3 if ("cxsfwfcsj" in a["url"] or "cxcjcxsfkf" in a["url"]) else 4, a["url"]))
     plan = _plan_row(client)
     xh = _s(plan.get("XH"))
     term = ""
@@ -571,7 +608,7 @@ def probe_gpa(client, log=print) -> dict:
     tries = []
     # 优先动作多试几种参数；其它动作只试 XH / meta_fields
     for a in uniq:
-        variants = _param_variants(xh, a["fields"], term)
+        variants = _param_variants(xh, a["fields"], term, page_first=("rxylgpacx" in a["url"]))
         if not any(s in a["url"] for s in ("rxylgpacx", "cxxspjjdxx", "cxsfwfcsj", "cxcjcxsfkf")):
             variants = [v for v in variants if v[0] in ("POST:XH", "POST:meta_fields", "POST:XH1..6", "POST:empty")][:3]
         for vname, method, form in variants:
@@ -638,6 +675,84 @@ def _call_gpa_action(client, url: str, fields: list[str], xh: str, term: str = "
     return None
 
 
+
+def _star_paths(*paths: str) -> list[str]:
+    """保留字面量 *；若调用方需要再附带 %2A 回退。"""
+    out = []
+    for p in paths:
+        if p and p not in out:
+            out.append(p)
+    return out
+
+
+def fetch_rxyl_captions(client) -> dict:
+    """拉取 rxylgpacx 模块元数据中的字段 caption（无个人数据）。"""
+    from . import emap
+    caps = {}
+    for path in _star_paths(EP_RXYL_META, EP_RXYL_META_ENC, EP_RXYL_META_SLASH,
+                            "/jwapp/sys/cjcx/modules/rxylgpacx.do"):
+        for method, form in (("GET", None), ("POST", {}), ("POST", {"*json": "1"})):
+            try:
+                if method == "GET":
+                    code, obj = _request_json(client, path + "?*json=1", "GET", {})
+                else:
+                    code, obj = _request_json(client, path, "POST", form or {})
+            except (jwxt.JwxtError, Exception):
+                continue
+            if isinstance(obj, dict):
+                caps.update(emap.parse_captions(obj))
+            if caps:
+                return caps
+    return caps
+
+
+def fetch_rxyl_official_gpa(client, captions: Optional[dict] = None) -> Optional[dict]:
+    """浏览器实测：POST ``.../modules*cjcx/rxylgpacx/rxylgpacxcx.do``，body=pageSize&pageNumber。"""
+    form = {"pageSize": "10", "pageNumber": "1"}
+    caps = captions if captions is not None else fetch_rxyl_captions(client)
+    for path in _star_paths(EP_GPA_RXYL, EP_GPA_RXYL_ENC, EP_GPA_RXYL_SLASH, EP_GPA_RXYL_ALT):
+        try:
+            code, obj = _request_json(client, path, "POST", form)
+        except jwxt.JwxtError:
+            continue
+        if code != 200 or not isinstance(obj, dict):
+            continue
+        rows = []
+        datas = obj.get("datas")
+        if isinstance(datas, dict):
+            for blk in datas.values():
+                if isinstance(blk, dict) and isinstance(blk.get("rows"), list):
+                    rows = [r for r in blk["rows"] if isinstance(r, dict)]
+                    if rows:
+                        break
+                if isinstance(blk, list):
+                    rows = [r for r in blk if isinstance(r, dict)]
+                    if rows:
+                        break
+        elif isinstance(datas, list):
+            rows = [r for r in datas if isinstance(r, dict)]
+        # 优先含汇总键的行；官方端点若只有一行也试 parse
+        chosen = next((r for r in rows if is_summary_gpa_row(r)), rows[0] if rows else None)
+        if not chosen:
+            continue
+        # 非 star 回退路径仍必须有汇总键，避免单科误认
+        if path not in (EP_GPA_RXYL, EP_GPA_RXYL_ENC) and not is_summary_gpa_row(chosen):
+            continue
+        g = parse_official_gpa(chosen, caps)
+        if not g["items"]:
+            continue
+        # star 路径：若没有汇总键但有字段，仍要求至少命中一个 SUMMARY 或内置 GPA 标签
+        if not is_summary_gpa_row(chosen):
+            if not any(i["key"] in SUMMARY_GPA_KEYS or i["key"] in dict(GPA_FIELDS) for i in g["items"]):
+                continue
+        g["source"] = "official"
+        g["endpoint"] = path
+        g["variant"] = "POST:pageSize+pageNumber"
+        g["rows"] = len(rows)
+        return g
+    return None
+
+
 def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
     from . import emap
     tried = []
@@ -648,6 +763,15 @@ def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
     except Exception:
         pass
     client.enter_emap_app(APP_CJCX)
+    # 1) 浏览器实测主路径（modules*cjcx + pageSize/pageNumber）
+    try:
+        hit = fetch_rxyl_official_gpa(client)
+        if hit:
+            return hit
+    except jwxt.LoginError:
+        raise
+    except jwxt.JwxtError as e:
+        tried.append(f"rxyl:{type(e).__name__}")
     app = emap.App("cjcx", "cjcx")
     try:
         disc = emap.discover(client, app)

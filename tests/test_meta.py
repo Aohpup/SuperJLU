@@ -396,20 +396,17 @@ def test_call_gpa_tries_variants_until_nonempty_rows():
 
 
 def test_rxylgpacx_primary_with_captions():
-    from jlu_toolkit import emap
-
     class FC:
         def enter_emap_app(self, a): pass
         def current_semester(self): return "2026-2027-1"
         def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
             if "index.do" in url:
                 return 200, "<html></html>", url, b""
-            if "rxylgpacx.do" in url and "*json" in url:
+            if "rxylgpacx.do" in url:
                 return 200, json.dumps({"models": [{
                     "name": "rxylgpacxcx",
                     "url": "cjcx/rxylgpacx/rxylgpacxcx.do",
                     "controls": [
-                        {"name": "XH", "caption": "学号"},
                         {"name": "PJJD", "caption": "平均绩点"},
                         {"name": "JQPJF", "caption": "加权平均分"},
                         {"name": "CUSTOMXF", "caption": "培养方案学分"},
@@ -417,28 +414,31 @@ def test_rxylgpacx_primary_with_captions():
                 }]}), url, b""
             return 404, "", url, b""
         def post_raw(self, path, fields, ref):
-            if path.endswith("grpyfacx.do"):
+            if "grpyfacx" in path:
                 return 200, json.dumps({"datas": {"grpyfacx": {"rows": [{"XH": "20240001"}]}}}), path
-            if path.endswith("rxylgpacx.do"):
-                return 200, json.dumps({"models": [{
-                    "name": "rxylgpacxcx", "url": "cjcx/rxylgpacx/rxylgpacxcx.do",
-                    "controls": [{"name": "PJJD", "caption": "平均绩点"}, {"name": "JQPJF", "caption": "加权平均分"}],
-                }]}), path
-            if path == "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx/rxylgpacxcx.do":
-                if fields.get("XH") == "20240001":
-                    return 200, json.dumps({"code": "0", "datas": {"rxylgpacxcx": {"rows": [
-                        {"PJJD": "3.747", "JQPJF": "87.5", "CUSTOMXF": "120"}]}}}), path
-                return 200, json.dumps({"code": "0", "datas": {"rxylgpacxcx": {"rows": []}}}), path
-            if "/jwapp/sys/cjcx/cjcx/" in path:
-                raise AssertionError(path)
+            if path == meta.EP_GPA_RXYL or "modules*cjcx/rxylgpacx/rxylgpacxcx.do" in path:
+                assert fields == {"pageSize": "10", "pageNumber": "1"}
+                assert "modules*cjcx" in path
+                assert "cjcx" in ref and "EMAP_LANG" in ref
+                return 200, json.dumps({"code": "0", "datas": {"rxylgpacxcx": {"rows": [
+                    {"PJJD": "3.747", "JQPJF": "87.5", "XBDM": "1", "XBDM_DISPLAY": "男", "CUSTOMXF": "120"}]}}}), path
             return 404, "", path
 
     g = meta.fetch_official_gpa(FC())
-    assert g["source"] == "official" and "rxylgpacxcx.do" in g["endpoint"]
-    assert g["variant"] == "POST:XH"
+    assert g["source"] == "official"
+    assert g["endpoint"] == meta.EP_GPA_RXYL
+    assert g["variant"] == "POST:pageSize+pageNumber"
+    assert g["rows"] == 1
     labels = {i["key"]: i["label"] for i in g["items"]}
-    assert labels["PJJD"] == "平均绩点" and labels["JQPJF"] == "加权平均分"
-    assert "3.747" not in json.dumps({"k": labels})  # values not in labels map
+    vals = {i["key"]: i["value"] for i in g["items"]}
+    assert labels["PJJD"] == "平均绩点" and labels.get("CUSTOMXF") == "培养方案学分"
+    assert vals.get("XBDM") == "男"  # prefer DISPLAY
+    assert "3.747" not in json.dumps(labels)
+
+
+def test_star_path_constant():
+    assert "modules*cjcx" in meta.EP_GPA_RXYL
+    assert "modules/" not in meta.EP_GPA_RXYL.split("modules")[0] + "modules"
 
 
 def test_emap_abs_nested_rxyl():
