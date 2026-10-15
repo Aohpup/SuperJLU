@@ -95,7 +95,7 @@ def test_session_status_lifecycle(cfg, mem):
     assert st["state"] == "ok" and st["logged_in"] and st["storage"].startswith("keyring")
     jwxt.mark_session_expired("test")
     st = jwxt.session_status()
-    assert st["state"] == "expired" and st["needs_login"] and "请重新登录" in st["message"]
+    assert st["state"] == "expired" and st["needs_login"] and st["session_expired"] is True and "请重新登录" in st["message"]
 
 
 def test_post_form_redirect_to_login_raises_typed_error(cfg, mem, monkeypatch):

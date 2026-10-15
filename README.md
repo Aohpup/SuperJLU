@@ -234,7 +234,7 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 `GET /api/session`（新增，只读本地记录，不访问教务）：
 
 ```json
-{"state": "ok|expired|missing|unknown", "logged_in": true, "needs_login": false,
+{"state": "ok|expired|missing|unknown", "logged_in": true, "needs_login": false, "session_expired": false,
  "message": "已登录", "checked_at": 1760000000, "saved_at": 1760000000, "storage": "keyring:WinVaultKeyring"}
 ```
 

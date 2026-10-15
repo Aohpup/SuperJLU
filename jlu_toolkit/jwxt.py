@@ -244,6 +244,7 @@ def session_status() -> dict:
         "state": state,
         "logged_in": state == SESSION_OK,
         "needs_login": state in (SESSION_EXPIRED, SESSION_MISSING),
+        "session_expired": state == SESSION_EXPIRED,  # 与 Web UI（PR #6）约定的顶层字段
         "message": msg,
         "checked_at": info.get("checked_at"),
         "saved_at": info.get("saved_at"),

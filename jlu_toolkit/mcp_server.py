@@ -1,6 +1,7 @@
 """MCP 接口：让 Claude、Cursor 等 AI 助手直接查询你的课表和绩点。数据只从本地文件读取。
 环境变量 JLU_SCHEDULE_CSV / JLU_GRADES_CSV 指定文件路径。"""
 import os
+from typing import Optional
 from . import core
 
 def main():
@@ -25,7 +26,7 @@ def main():
     @mcp.tool()
     def free_rooms(campus: str, date: str = "", periods: str = "1-2", building: str = "", room_type: str = "",
                    seat_min: int = 0, seat_max: int = 0, exam_seat_min: int = 0, exam_seat_max: int = 0,
-                   weeks: str = "", weekday: int = 0, extra: dict | None = None) -> dict:
+                   weeks: str = "", weekday: int = 0, extra: Optional[dict] = None) -> dict:
         """查询空教室（需已用 jlu-toolkit fetch 保存会话）。campus 校区代码（list_campuses），
         building 教学楼代码（list_buildings），room_type 教室类型代码（list_room_types）；
         按日期：date=YYYY-MM-DD；按周次：weeks="6-8" + weekday=1-7；periods 如 "3-4"；
