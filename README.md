@@ -4,7 +4,7 @@
 
 <p align="center"><b>SuperJLU —— 吉大人的一站式服务</b></p>
 
-<p align="center">课表 · 成绩 · 绩点 · 考试 · 空教室 · 培养方案 · OA 与学院通知 · 校园站点一键直达</p>
+<p align="center">课表 · 成绩加权分析 · 绩点 · 考试 · 空教室 · 培养方案 · OA 与学院通知 · 校园站点一键直达</p>
 
 > 原名 JLU Toolkit。为兼容，Python 包名仍为 `jlu_toolkit`，命令行仍是 `jlu-toolkit`（等价别名 `superjlu`），配置目录不变。
 
@@ -12,20 +12,20 @@
 
 ## 下载安装
 
-到 [Releases](https://github.com/Runa-Asahi/JLU-Toolkit/releases/latest) 下载最新版：
+到 [Releases](https://github.com/Runa-Asahi/SuperJLU/releases/latest) 下载最新版：
 
 | 平台 | 文件 | 用法 |
 | --- | --- | --- |
 | Windows | `SuperJLU.exe` | 双击即可：后台启动服务并自动打开浏览器界面，托盘图标可重新打开或退出；已在运行时再双击只会打开现有界面。 |
-| Android | `SuperJLU-<版本>.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
+| Android | `SuperJLU-<版本>.apk` | 直接安装。同签名可覆盖安装；装过旧版「JLU Toolkit」（包名不同）的请先卸载。 |
 | 命令行 / 开发者 | pip | 见下方。 |
 
 每个文件都附带 `.sha256` 校验值（PowerShell：`Get-FileHash 文件名`）。
 
 ```bash
 # 推荐装在独立环境里（uv 或 pipx 二选一）
-uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
-pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/SuperJLU"
+pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/SuperJLU"
 # 需要 MCP 时把 [captcha] 换成 [captcha,mcp]
 
 jlu-toolkit ui --open        # 打开网页界面
@@ -37,6 +37,7 @@ jlu-toolkit ui --open        # 打开网页界面
 
 - **一次登录，长期有效**：账号 + 密码 → 微信验证码，图形验证码全自动识别；登录状态加密保存，过期时用统一认证自动续登。
 - **课表与成绩**：从教务自动同步，并缓存在本地，断网或登录失效时也能查看；导出 iCal 日历（课前 15 分钟提醒）。
+- **成绩加权分析**：保研 / 奖学金 / 全部课程模板，自定义规则，搜索筛选排序；可选导入 Excel/CSV 成绩单临时预览，不覆盖教务缓存。不及格按 55 分计入加权。
 - **绩点与培养方案**：学分加权绩点、官方绩点、各课组已修/在修/未修课程。
 - **考试安排**、**空教室查询**（六个校区直接选，按日期/周次、节次、座位数筛选）。
 - **通知聚合**：吉大 OA 校内通知 + 软件学院、计算机学院官网通知，支持搜索和关键词订阅提醒。
@@ -151,7 +152,7 @@ jlu-toolkit exams exams.csv             # 离线查看考试倒计时
 ```bash
 pkg install python git python-pillow python-cryptography   # cryptography 用 pkg 的预编译包，免去在手机上编译
 termux-setup-storage
-pip install -U "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+pip install -U "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/SuperJLU"
 # Termux 没有系统钥匙串：会话以 600 权限明文保存在 ~/.config/jlu-toolkit/，首次会打印一条警告，属正常
 jlu-toolkit fetch --probe
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login
@@ -243,7 +244,7 @@ v2 会额外用内存中的学号/方案代码探测官方绩点与课组明细�
 
 MCP 依赖需要 Python 3.10 或更高版本；普通 CLI / Web UI 仍支持 Python 3.9。Python 3.9 安装时会跳过不兼容的可选 MCP 依赖，以免影响基础功能和 `uv` 的跨版本依赖解析。
 ```bash
-pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/SuperJLU"
 ```
 ```json
 {"mcpServers": {"jlu": {"command": "jlu-toolkit-mcp",
