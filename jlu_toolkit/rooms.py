@@ -20,15 +20,29 @@ from typing import Callable, Optional
 
 from . import jwxt
 
-APP = "https://iedu.jlu.edu.cn/jwapp/sys/kxjscx/*default/index.do"
-BASE = "/jwapp/sys/kxjscx/modules/"
-META_MODULES = ("kxjscx", "kxjs", "cxkxjs", "kxjas", "jscx")
+# 吉大真实页面：/jwapp/sys/kxjas/*default/index.do#/kxjscx → 应用 kxjas，kxjscx 是前端路由/视图。
+# （kxjscx 作为应用名会返回 #E2140 Not found app）
+APP_NAME = "kxjas"
+ROUTE = "kxjscx"
+APP_ROOT = f"/jwapp/sys/{APP_NAME}/"
+APP = f"https://iedu.jlu.edu.cn{APP_ROOT}*default/index.do"
+BASE = APP_ROOT + "modules/"
+META_MODULES = ("kxjscx", "kxjas", "kxjs", "jscx")
 ENDPOINTS = (
     BASE + "kxjscx/cxkxjs.do",
     BASE + "kxjscx/kxjscx.do",
     BASE + "kxjscx/cxkxjas.do",
+    BASE + "kxjscx/cxkxjscx.do",
     BASE + "kxjscx/jscx.do",
-    BASE + "kxjs/cxkxjs.do",
+    BASE + "kxjas/cxkxjas.do",
+    BASE + "kxjas/kxjas.do",
+)
+# EMAP 前端常见的视图脚本位置（路由 #/kxjscx）
+VIEW_FILES = (
+    f"modules/{ROUTE}/{ROUTE}.js", f"modules/{ROUTE}.js", f"{ROUTE}/{ROUTE}.js",
+    f"pages/{ROUTE}/{ROUTE}.js", f"{ROUTE}.js", "index.js", "config.js", "router.js",
+    "public/js/index.js", "public/js/config.js", f"modules/{ROUTE}/{ROUTE}.html",
+    f"{ROUTE}/{ROUTE}.html", "*default/config.json",
 )
 
 
@@ -115,22 +129,55 @@ def parse_meta(obj) -> dict:
     return {"actions": sorted(actions), "fields": sorted(fields), "dicts": dicts}
 
 
-def fetch_meta(client) -> dict:
+def _meta_urls(extra_modules=()) -> list[tuple[str, str, dict]]:
+    """(方法, 路径, 表单)：EMAP 元数据常见取法。"""
+    out = []
+    for m in dict.fromkeys(list(META_MODULES) + list(extra_modules)):
+        path = BASE + m + ".do"
+        out += [("POST", path, {}), ("GET", path + "?*json=1", {}), ("POST", path, {"*json": "1"}),
+                ("GET", path, {})]
+    return out
+
+
+def _try_json(client, method: str, path: str, form: dict):
+    try:
+        if method == "POST":
+            code, text, _ = client.post_raw(path, form, APP)
+        else:
+            code, text, _, _ = client._request("https://iedu.jlu.edu.cn" + path,
+                                               headers={"Referer": APP, "X-Requested-With": "XMLHttpRequest",
+                                                        "Accept": "application/json, */*"})
+    except jwxt.NetworkError:
+        return None, None
+    try:
+        return code, json.loads(text) if text else None
+    except (json.JSONDecodeError, ValueError):
+        return code, text
+
+
+def fetch_meta(client, extra_modules=(), trace: Optional[list] = None) -> dict:
     merged = {"modules_ok": [], "actions": [], "fields": [], "dicts": {}}
-    for m in META_MODULES:
-        try:
-            code, text, _ = client.post_raw(BASE + m + ".do", {}, APP)
-        except jwxt.NetworkError:
-            continue
-        if code != 200:
-            continue
-        try:
-            obj = json.loads(text)
-        except (json.JSONDecodeError, ValueError):
+    for method, path, form in _meta_urls(extra_modules):
+        code, obj = _try_json(client, method, path, form)
+        rec = {"method": method, "path": path, "form_keys": sorted(form), "status": code}
+        if isinstance(obj, dict):
+            rec["keys"] = sorted(obj)[:20]
+            if isinstance(obj.get("code"), (str, int)):
+                rec["code"] = str(obj["code"])[:8]
+            if isinstance(obj.get("msg"), str):
+                rec["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
+        elif isinstance(obj, str):
+            rec["non_json_bytes"] = len(obj)
+        if trace is not None:
+            trace.append(rec)
+        if not isinstance(obj, (dict, list)):
             continue
         meta = parse_meta(obj)
         if meta["actions"] or meta["fields"]:
-            merged["modules_ok"].append(m)
+            m = path.rsplit("/", 1)[-1].split(".do")[0]
+            rec["actions"], rec["fields"] = meta["actions"], meta["fields"]
+            if m not in merged["modules_ok"]:
+                merged["modules_ok"].append(m)
             merged["actions"] = sorted(set(merged["actions"]) | set(meta["actions"]))
             merged["fields"] = sorted(set(merged["fields"]) | set(meta["fields"]))
             merged["dicts"].update(meta["dicts"])
@@ -224,9 +271,67 @@ def row_to_room(r: dict) -> Optional[Room]:
     )
 
 
+def _abs(a: str) -> str:
+    a = a.split("?")[0]
+    if a.startswith("/"):
+        return a
+    a = a.lstrip("./")
+    return APP_ROOT + a if not a.startswith("jwapp/") else "/" + a
+
+
+_DO_RE = re.compile(r"""["'(]([\w./*-]*?\.do)\b""")
+_SRC_RE = re.compile(r"""(?:src|href)\s*=\s*["']([^"'#?]+\.(?:js|json|html))""", re.I)
+_JS_REF = re.compile(r"""["']([\w./*-]+\.(?:js|html))["']""")
+
+
+def discover(client, max_files: int = 30) -> dict:
+    """只读：进入 kxjas 入口，抓取页面引用及常见视图脚本，提取 *.do、模块名、字典 URL。"""
+    import urllib.parse as up
+    out: dict = {"app": APP_NAME, "route": ROUTE}
+    try:
+        code, html, final, _ = client._request(APP + "?EMAP_LANG=zh", headers={"Referer": jwxt.IEDU_PORTAL})
+    except jwxt.NetworkError as e:
+        return {"error": type(e).__name__}
+    out["index_status"], out["index_bytes"] = code, len(html or "")
+    out["index_final"] = up.urlparse(final or "").path
+    srcs = [up.urljoin(final or APP, s) for s in _SRC_RE.findall(html or "")]
+    out["script_srcs"] = [up.urlparse(s).path for s in srcs][:60]
+    queue = [s for s in srcs if APP_ROOT in s] + ["https://iedu.jlu.edu.cn" + APP_ROOT + f for f in VIEW_FILES]
+    queue = list(dict.fromkeys(queue))
+    paths = set(_DO_RE.findall(html or ""))
+    fetched, seen = [], set()
+    while queue and len(seen) < max_files:
+        u = queue.pop(0)
+        if u in seen:
+            continue
+        seen.add(u)
+        try:
+            c, txt, _, _ = client._request(u, headers={"Referer": APP})
+        except jwxt.NetworkError:
+            continue
+        if c != 200 or not txt or "loginForm" in txt:
+            continue
+        fetched.append({"path": up.urlparse(u).path, "bytes": len(txt)})
+        paths.update(_DO_RE.findall(txt))
+        for ref in _JS_REF.findall(txt)[:40]:
+            v = up.urljoin(u, ref)
+            if APP_ROOT in v and v not in seen:
+                queue.append(v)
+    out["fetched"] = fetched
+    out["do_paths"] = sorted(p for p in paths if len(p) < 160)
+    mods = set()
+    for p in out["do_paths"]:
+        m = re.search(r"modules/(\w+)\.do$", p) or re.search(r"modules/(\w+)/\w+\.do$", p)
+        if m:
+            mods.add(m.group(1))
+    out["modules_seen"] = sorted(mods)
+    return out
+
+
 def _attempts(meta: dict, profile: Optional[dict]):
-    actions = [a if a.startswith("/") else BASE + a.lstrip("./") for a in meta.get("actions", [])
-               if re.search(r"(kx|cx|jscx)", a)]
+    actions = [_abs(a) for a in meta.get("actions", []) if re.search(r"(kx|cx|jscx)", a)]
+    actions += [_abs(a) for a in meta.get("discovered_do", []) if re.search(r"(kx|cx)", a)
+                and not re.search(r"modules/\w+\.do$", a) and "code" not in a.lower()]
     endpoints = list(dict.fromkeys(actions + list(ENDPOINTS)))
     schemes = dict(SCHEMES)
     ms = _meta_scheme(meta.get("fields", []))
@@ -243,7 +348,8 @@ def query_rooms(client, q: RoomQuery, profile_path: Optional[Path] = None,
                 meta: Optional[dict] = None, max_tries: int = 40) -> tuple[list[Room], dict]:
     """返回 (空教室列表, 命中的 profile)。全部失败则抛 JwxtError（附各尝试的 code/msg）。"""
     client.enter_emap_app(APP)
-    meta = meta if meta is not None else fetch_meta(client)
+    if meta is None:
+        meta = full_meta(client)
     profile = None
     if profile_path and profile_path.exists():
         try:
@@ -275,9 +381,24 @@ def query_rooms(client, q: RoomQuery, profile_path: Optional[Path] = None,
     raise jwxt.JwxtError("空教室查询未成功；尝试：" + "；".join(errs[:12]))
 
 
+def full_meta(client, trace: Optional[list] = None, disc: Optional[dict] = None) -> dict:
+    disc = disc if disc is not None else discover(client)
+    meta = fetch_meta(client, disc.get("modules_seen", []), trace)
+    meta["discovered_do"] = disc.get("do_paths", [])
+    # 页面代码里出现的字典 URL（含 code）也收进来
+    for p in meta["discovered_do"]:
+        low = p.lower()
+        if "code" in low or "dic" in low:
+            if re.search(r"(xq|campus|xiaoqu)", low):
+                meta["dicts"].setdefault("XXXQDM", p)
+            elif re.search(r"(jxl|jzw|lou|building)", low):
+                meta["dicts"].setdefault("JXLDM", p)
+    return meta
+
+
 def fetch_code_list(client, url: str, parent: dict | None = None) -> list[dict]:
     """EMAP 代码表 → [{code, name}]（校区/教学楼是公共信息）。"""
-    path = url if url.startswith("/") else "/jwapp/" + url.lstrip("./")
+    path = _abs(url)
     code, text, _ = client.post_raw(path, parent or {}, APP)
     if code != 200:
         return []
@@ -307,7 +428,7 @@ def campus_codes_from_jc(client) -> list[str]:
 
 def list_campuses(client, meta: Optional[dict] = None) -> list[dict]:
     client.enter_emap_app(APP)
-    meta = meta if meta is not None else fetch_meta(client)
+    meta = meta if meta is not None else full_meta(client)
     for k in ("XXXQDM", "XQDM", "XXXQ"):
         if k in meta.get("dicts", {}):
             got = fetch_code_list(client, meta["dicts"][k])
@@ -318,7 +439,7 @@ def list_campuses(client, meta: Optional[dict] = None) -> list[dict]:
 
 def list_buildings(client, campus: str = "", meta: Optional[dict] = None) -> list[dict]:
     client.enter_emap_app(APP)
-    meta = meta if meta is not None else fetch_meta(client)
+    meta = meta if meta is not None else full_meta(client)
     for k in ("JXLDM", "JZWDM"):
         if k in meta.get("dicts", {}):
             return fetch_code_list(client, meta["dicts"][k], {"XXXQDM": campus} if campus else None)
@@ -338,9 +459,15 @@ def probe(client, first_monday: Optional[str], term: str, campuses: Optional[lis
         rep["entered"] = True
     except jwxt.JwxtError as e:
         rep["entered"] = f"{type(e).__name__}"
-    meta = fetch_meta(client)
+    disc = discover(client)
+    rep["discover"] = disc
+    trace: list = []
+    meta = full_meta(client, trace, disc)
+    rep["meta_trace"] = trace
     rep["meta"] = {"modules_ok": meta["modules_ok"], "actions": meta["actions"], "fields": meta["fields"],
                    "dict_fields": sorted(meta["dicts"]), "dict_urls": sorted(set(meta["dicts"].values()))}
+    log(f"[发现] 文件 {len(disc.get('fetched', []))} 个，.do {len(disc.get('do_paths', []))} 个，"
+        f"模块 {disc.get('modules_seen')}")
     log(f"[元数据] 模块={meta['modules_ok']} 动作={len(meta['actions'])} 字段={len(meta['fields'])}")
     if not campuses:
         try:

@@ -499,7 +499,11 @@ def _cmd_rooms(x):
             path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_rooms_probe.json"
             path.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
             err(f"探测报告：{path}")
+            d = rep.get("discover") or {}
             print(json.dumps({"hit": rep["hit"], "meta": rep["meta"], "campus_count": rep["campus_count"],
+                              "discover": {k: d.get(k) for k in ("index_status", "index_bytes", "index_final",
+                                                                  "script_srcs", "fetched", "do_paths", "modules_seen")},
+                              "meta_trace": [m for m in rep.get("meta_trace", []) if m.get("status") == 200][:20],
                               "campus_source": rep.get("campus_source"),
                               "tries": [{k: t.get(k) for k in ("endpoint", "scheme", "status", "code", "msg", "rows")}
                                         for t in rep["tries"][:30]]}, ensure_ascii=False, indent=1))

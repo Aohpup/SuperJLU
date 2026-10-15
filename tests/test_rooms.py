@@ -17,7 +17,7 @@ def test_week_and_weekday():
     assert rooms.week_and_weekday("2026-10-15", None) == (0, 4)
 
 
-META = {"models": [{"name": "cxkxjs", "url": "/jwapp/sys/kxjscx/modules/kxjscx/cxkxjs.do",
+META = {"models": [{"name": "cxkxjs", "url": "/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do",
                     "controls": [{"name": "XXXQDM", "url": "/jwapp/code/abc-xq.do"},
                                  {"name": "KXRQ"}, {"name": "KSJC"}, {"name": "JSJC"},
                                  {"name": "JXLDM", "url": "/jwapp/code/abc-jxl.do"}, {"name": "XNXQDM"}]}]}
@@ -25,7 +25,7 @@ META = {"models": [{"name": "cxkxjs", "url": "/jwapp/sys/kxjscx/modules/kxjscx/c
 
 def test_parse_meta():
     m = rooms.parse_meta(META)
-    assert m["actions"] == ["/jwapp/sys/kxjscx/modules/kxjscx/cxkxjs.do"]
+    assert m["actions"] == ["/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do"]
     assert {"XXXQDM", "KXRQ", "KSJC", "JSJC"} <= set(m["fields"])
     assert m["dicts"]["XXXQDM"].endswith("abc-xq.do")
 
@@ -36,7 +36,14 @@ class FC:
         self.calls = []
 
     def enter_emap_app(self, app):
-        pass
+        self.entered = app
+
+    def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+        if "*default/index.do" in url:
+            return 200, '<script src="../modules/kxjscx/kxjscx.js"></script>', url, b""
+        if url.endswith("/jwapp/sys/kxjas/modules/kxjscx/kxjscx.js"):
+            return 200, 'WIS_EMAP_SERV.getModel("modules/kxjscx.do","cxkxjs");$.post("./modules/kxjscx/cxkxjs.do")', url, b""
+        return 404, "", url, b""
 
     def post_raw(self, path, fields, ref):
         self.calls.append((path, dict(fields)))
@@ -82,3 +89,15 @@ def test_probe_has_no_data_values():
     assert rep["hit"] and rep["hit"]["rows"] == 1
     for v in ("逸夫楼A101", "前卫南区", "2026-10-15"):
         assert v not in dumped
+
+
+def test_discover_finds_view_script_and_module():
+    d = rooms.discover(FC(lambda p, f: False))
+    assert "/jwapp/sys/kxjas/modules/kxjscx/kxjscx.js" in [f["path"] for f in d["fetched"]]
+    assert "modules/kxjscx.do" in d["do_paths"] and "kxjscx" in d["modules_seen"]
+
+
+def test_app_is_kxjas():
+    assert rooms.APP.endswith("/jwapp/sys/kxjas/*default/index.do")
+    assert rooms._abs("./modules/kxjscx/cxkxjs.do") == "/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do"
+    assert rooms._abs("modules/kxjscx.do?*json=1") == "/jwapp/sys/kxjas/modules/kxjscx.do"

@@ -111,7 +111,7 @@ jlu-toolkit rooms --campus 校区代码 --date 2026-10-16 --periods 3-4
 jlu-toolkit rooms --probe                             # 只读探测接口/参数组合，只打印结构
 ```
 
-- 先进入 `kxjscx` 应用（EMAP 需要先换取 `_WEU`），再读取模块元数据（动作 URL、查询字段、校区/教学楼字典），按元数据推断参数，并尝试几种常见的金智参数格式
+- 应用名是 `kxjas`（页面 `/jwapp/sys/kxjas/*default/index.do#/kxjscx`，`kxjscx` 只是前端路由）。先进入 `kxjas` 入口（EMAP 需要先换取 `_WEU`），再抓取页面脚本找出 `*.do` 接口，再读取模块元数据（动作 URL、查询字段、校区/教学楼字典），按元数据推断参数，并尝试几种常见的金智参数格式
 - 第一次查询成功后，接口和参数格式会保存到 `rooms_profile.json`，以后直接复用
 - 周次、星期按教务校历自动推算
 - 网页「教室」页和 MCP 工具 `free_rooms` / `list_campuses` 用的是同一套逻辑
