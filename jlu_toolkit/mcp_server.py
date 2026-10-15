@@ -90,7 +90,7 @@ def main():
             if refresh or not f.exists():
                 c = jwxt.JwxtClient()
                 c.load_session()
-                oa.save(root, oa.fetch_notices(c, ch, keyword, limit))
+                oa.save(root, oa.fetch_notices(c, ch, keyword, limit, channel_filter=bool(category)))
                 known = _j.loads(f.read_text(encoding="utf-8"))
         except (jwxt.JwxtError, ValueError) as e:
             return {"error": str(e)}
@@ -98,6 +98,13 @@ def main():
         if keyword:
             items = [i for i in items if keyword in i.get("title", "") or keyword in i.get("dept", "")]
         return {"channel": ch, "updated": known.get("updated"), "count": len(items[:limit]), "items": items[:limit]}
+
+    @mcp.tool()
+    def oa_new_matches(limit: int = 20, since: str = "") -> dict:
+        """OA 订阅命中的新通知（只读本地 oa_matches.json，由 jlu-toolkit oa watch 产生）。
+        since：ISO 时间，只返回之后命中的；同时返回当前订阅规则。"""
+        from . import oa_subscribe as osub
+        return {"rules": osub.list_rules(), "matches": osub.recent_matches(limit, since)}
 
     @mcp.tool()
     def list_campuses() -> list:

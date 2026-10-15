@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 
 import pytest
 
@@ -66,7 +67,9 @@ def test_fetch_and_save(tmp_path):
     c = Fake(pages=3)
     r = oa.fetch_notices(c, limit=5, max_pages=5)
     assert r["count"] == 5 and len({i["id"] for i in r["items"]}) == 5
+    oa._search_pref = ()  # 强制本地过滤
     r2 = oa.fetch_notices(Fake(1), keyword="教务")
+    oa._search_pref = None
     assert [i["id"] for i in r2["items"]] == ["222"]
     oa.save(tmp_path, r)
     oa.save(tmp_path, r2)
@@ -119,14 +122,70 @@ def test_cli_all_handlers_defined():
         assert callable(getattr(cli, name, None)), name
 
 
-def test_search_variants_and_channels():
+ROW = ('<div class="li rel"><a class="font14" href="PortalInformation!getInformation.action?id={id}&channelId={ch}">'
+       '{t}</a><span>2026年10月0{d}日 08:00</span><a href="#">单位</a></div>')
+POOL = [("501", "179577", "2025 教务通知", 1), ("502", "179578", "2025 讲座", 2),
+        ("503", "179577", "放假", 3), ("504", "179579", "通知 2025", 4)]
+
+
+class Server(Fake):
+    """模拟实测：GET/POST searchId UTF-8 无 channelId 才过滤（跨栏目）；带 channelId 忽略；GBK 中文 0 行。"""
+
+    def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+        if "searchId" in url or data is not None:
+            self.urls.append(url)
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        if data is not None:
+            q = urllib.parse.parse_qs(data.decode("ascii"))
+        raw = (data or b"").decode() + url
+        if "searchId" in q or "searchId=" in raw:
+            if "channelId" in q:
+                return Fake._request(self, oa.list_url(), None, headers, None, allow_redirects)
+            kw = None
+            try:
+                src = data.decode() if data is not None else urllib.parse.urlparse(url).query
+                kw = urllib.parse.unquote(src.split("searchId=")[1].split("&")[0], errors="strict")
+            except UnicodeDecodeError:
+                pass
+            rows = [r for r in POOL if kw and kw in r[2]]
+            h = "".join(ROW.format(id=i, ch=c, t=tt, d=d) for i, c, tt, d in rows) or "<html></html>"
+            return 200, h, url, h.encode()
+        return Fake._request(self, url, data, headers, method, allow_redirects)
+
+
+def test_search_variants_real_behaviour():
+    sv = oa.search_variants(Server(1))
+    assert sv["get_searchId_utf8"]["filters"] and sv["post_searchId_utf8"]["filters"]
+    assert not sv["get_searchId_utf8_ch"]["filters"] and sv["get_searchId_utf8_ch"]["rare"]["rows"] == 2
+    assert sv["get_searchId_gbk"]["cjk"]["rows"] == 0 and sv["get_searchId_utf8"]["rare"]["rows"] == 0
+    assert sv["get_searchId_utf8"]["ascii"] == {"rows": 3, "overlap": 0, "hits": 3}
+
+
+def test_filters_tolerates_body_matches(monkeypatch):
+    real = oa.parse_list
+    def fuzzy(h):  # 5 行里 1 行标题不含关键字（正文命中）→ 80% 仍判定为过滤
+        r = real(h)
+        if any(i["id"] == "501" for i in r["items"]):
+            r["items"] = r["items"][:1] * 4 + [{**r["items"][0], "id": "x", "title": "其他"}]
+        return r
+    monkeypatch.setattr(oa, "parse_list", fuzzy)
+    assert oa.search_variants(Server(1))["get_searchId_utf8"]["filters"]
+
+
+def test_notices_server_search_and_channel_filter():
     oa._search_pref = None
-    c = Fake(1)
-    sv = oa.search_variants(c)
-    assert sv["post_searchId_utf8"]["cjk"] == 2 and sv["get_searchId_gbk"]["cjk"] == 0
+    c = Server(1)
+    r = oa.fetch_notices(c, keyword="2025", limit=10)
+    assert r["search"] == "server" and [i["id"] for i in r["items"]] == ["501", "502", "504"]
+    assert "channelId" not in c.urls[-1] and "searchId=2025" in c.urls[-1]
+    r = oa.fetch_notices(Server(1), channel="179577", keyword="2025", channel_filter=True)
+    assert [i["id"] for i in r["items"]] == ["501"] and r["channel_filtered"]
+    c = Server(1)
     r = oa.fetch_notices(c, keyword="教务")
-    assert [i["id"] for i in r["items"]] == ["222"]
+    assert r["count"] == 1 and "searchId=%E6%95%99%E5%8A%A1" in c.urls[0]
+
+
+def test_channels_discovery():
     d = oa.discover_channels(Fake(1))
     assert d["channels"]["190001"] == "学术讲座" and d["channels"]["190002"] == "放假安排"
     assert d["sources"]["jldx_left.js"] == 1
-    oa._search_pref = None

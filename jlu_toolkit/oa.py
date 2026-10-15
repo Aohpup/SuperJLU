@@ -203,28 +203,48 @@ def search_request(client, keyword: str, variant: tuple, page: int = 1) -> tuple
     return code, _decode(raw or b"", text or ""), final or LIST
 
 
+RARE_KEYWORD = "zzqx9"
+
+
 def search_variants(client, keywords=("2025", "通知")) -> dict:
+    """每个变体：行数、与未过滤第 1 页的 id 重叠数、标题含关键字数；rare 关键字应为 0 行。
+    filters=true 表示服务端确实按关键字过滤。只输出计数。"""
+    try:
+        c0, h0, f0 = get(client, list_url())
+        base = {i["id"] for i in parse_list(h0)["items"]}
+    except jwxt.NetworkError:
+        base = set()
     out = {}
     for v in SEARCH_VARIANTS:
         row = {}
-        for k, kw in zip(("ascii", "cjk"), keywords):
+        for k, kw in zip(("ascii", "cjk", "rare"), (*keywords, RARE_KEYWORD)):
             try:
                 c, h, f = search_request(client, kw, v)
-                row[k] = len(parse_list(h)["items"]) if c == 200 and not needs_login(f, h) else -c
+                if c != 200 or needs_login(f, h):
+                    row[k] = {"rows": -c}
+                    continue
+                items = parse_list(h)["items"]
+                row[k] = {"rows": len(items), "overlap": sum(1 for i in items if i["id"] in base),
+                          "hits": sum(1 for i in items if kw in i["title"] or kw in i["dept"])}
             except jwxt.NetworkError:
-                row[k] = -1
+                row[k] = {"rows": -1}
+        asc, rare = row["ascii"], row["rare"]
+        n = asc.get("rows", 0)
+        row["filters"] = bool(rare.get("rows") == 0 and n > 0 and asc.get("hits", 0) >= 0.8 * n
+                              and (asc.get("overlap", 0) < n or not base))
         out[v[0]] = row
+    out["base_rows"] = len(base)
     return out
 
 
+# PC 实测（2026-10）：GET/POST searchId UTF-8 且不带 channelId 时服务端按关键字检索（跨全部栏目，
+# 可能命中正文）；带 channelId 时忽略关键字；GBK 中文返回 0。
+DEFAULT_SEARCH = ("get_searchId_utf8", "GET", "searchId", "utf-8", False)
+
+
 def pick_search(client) -> Optional[tuple]:
-    global _search_pref
-    if _search_pref is None:
-        res = search_variants(client)
-        ok = [v for v in SEARCH_VARIANTS if res[v[0]]["cjk"] > 0] or \
-             [v for v in SEARCH_VARIANTS if res[v[0]]["ascii"] > 0]
-        _search_pref = ok[0] if ok else ()
-    return _search_pref or None
+    """默认使用 DEFAULT_SEARCH；_search_pref 可被设为 () 以强制本地过滤。"""
+    return DEFAULT_SEARCH if _search_pref is None else (_search_pref or None)
 
 
 # ───────────────────────── 栏目发现 ─────────────────────────
@@ -282,8 +302,18 @@ def reach(client) -> dict:
     return info
 
 
+def _select(items, keyword, variant, channel, channel_filter):
+    if keyword and not variant:
+        items = [i for i in items if keyword in i["title"] or keyword in i["dept"]]
+    if channel_filter and variant:
+        items = [i for i in items if not i["channel"] or i["channel"] == channel]
+    return items
+
+
 def fetch_notices(client, channel: str = DEFAULT_CHANNEL, keyword: str = "", limit: int = 30,
-                  max_pages: int = 5) -> dict:
+                  max_pages: int = 5, channel_filter: bool = False) -> dict:
+    """keyword 走服务端搜索（跨栏目，可能匹配正文，不再按标题二次过滤）；
+    channel_filter=True 时按条目链接中的 channelId 本地筛到指定栏目。"""
     items: list = []
     channels: dict = {}
     variant = pick_search(client) if keyword else None
@@ -302,14 +332,11 @@ def fetch_notices(client, channel: str = DEFAULT_CHANNEL, keyword: str = "", lim
         if not new:
             break
         items += new
-        if keyword:
-            if len([i for i in items if keyword in i["title"]]) >= limit:
-                break
-        elif len(items) >= limit:
+        if len(_select(items, keyword, variant, channel, channel_filter)) >= limit:
             break
-    if keyword:
-        items = [i for i in items if keyword in i["title"] or keyword in i["dept"]]
-    return {"channel": channel, "channel_name": channels.get(channel) or KNOWN_CHANNELS.get(channel, ""),
+    items = _select(items, keyword, variant, channel, channel_filter)
+    return {"search": "server" if variant else ("local" if keyword else "none"),
+            "pages_scanned": page, "channel_filtered": bool(channel_filter and variant), "channel": channel, "channel_name": channels.get(channel) or KNOWN_CHANNELS.get(channel, ""),
             "fetched_at": dt.datetime.now().isoformat(timespec="seconds"), "count": min(len(items), limit),
             "items": items[:limit], "channels": channels}
 
