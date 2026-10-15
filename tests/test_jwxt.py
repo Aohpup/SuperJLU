@@ -52,6 +52,55 @@ def test_row_to_course_and_grade():
     assert g is not None and g.score == "88"
 
 
+def test_emap_str_coerces_numeric():
+    assert jwxt._emap_str(None) == ""
+    assert jwxt._emap_str(92.0) == "92"
+    assert jwxt._emap_str(3.5) == "3.5"
+    assert jwxt._emap_str(88) == "88"
+    assert jwxt._emap_str(" 优秀 ") == "优秀"
+    assert jwxt._emap_str("92.0") == "92"
+
+
+def test_row_to_grade_numeric_fields():
+    """EMAP 常把 ZCJ/XF 序列化为 JSON number（float）。"""
+    g = jwxt.row_to_grade(
+        {"KCM": "操作系统", "XF": 3.0, "ZCJ": 92.0, "XNXQDM": "2025-2026-1"}
+    )
+    assert g is not None
+    assert g.score == "92"
+    assert g.credit == 3.0
+    assert g.name == "操作系统"
+
+    g2 = jwxt.row_to_grade(
+        {"KCM": "体育", "XF": 1, "ZCJ": None, "DJCJMC": "优秀", "XNXQDM": 202520261}
+    )
+    assert g2 is not None and g2.score == "优秀"
+    assert g2.term == "202520261"
+
+    g3 = jwxt.row_to_grade(
+        {"KCM": "选修", "XF": 2.0, "ZCJ": "", "XSZCJMC": "及格", "XNXQDM": "2024-2025-2"}
+    )
+    assert g3 is not None and g3.score == "及格"
+
+
+def test_row_to_course_numeric_fields():
+    c = jwxt.row_to_course(
+        {
+            "KCM": "数据结构",
+            "SKJS": "赵六/9",
+            "JASMC": None,
+            "SKXQ": 3.0,
+            "KSJC": 5.0,
+            "JSJC": 6,
+            "SKZC": 1111111111111111,  # 偶发 number
+        }
+    )
+    assert c is not None
+    assert c.weekday == 3 and c.start == 5 and c.end == 6
+    assert c.location == "待定"
+    assert c.teacher == "赵六"
+
+
 def test_classify_need_second_factor():
     html = """
     <html><body><h1>二次认证</h1>

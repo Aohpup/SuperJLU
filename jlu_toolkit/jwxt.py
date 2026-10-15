@@ -1046,8 +1046,35 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _emap_str(value) -> str:
+    """EMAP JSON 字段可能是 str / int / float / None；统一成去空白字符串。
+
+    整数值浮点（如 92.0、3.0）格式化为无小数点形式（'92'、'3'），
+    保留真正的小数与等级制文字（'优秀'、'及格'）。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value != value:  # NaN
+            return ""
+        if value == int(value):
+            return str(int(value))
+        # 去掉多余尾零：3.50 -> 3.5
+        text = f"{value:.10g}"
+        return text
+    text = str(value).strip()
+    # 偶发 "92.0" 字符串也规整
+    if text.endswith(".0") and text[:-2].lstrip("-").isdigit():
+        return text[:-2]
+    return text
+
+
 def row_to_course(row: dict) -> Optional[core.Course]:
-    name = (row.get("KCM") or "").strip()
+    name = _emap_str(row.get("KCM"))
     if not name:
         return None
     try:
@@ -1056,13 +1083,14 @@ def row_to_course(row: dict) -> Optional[core.Course]:
         end = int(row.get("JSJC"))
     except (TypeError, ValueError):
         return None
-    weeks = parse_weeks_skzc(str(row.get("SKZC") or ""))
+    weeks = parse_weeks_skzc(_emap_str(row.get("SKZC")))
     if not weeks or weekday < 1:
         return None
+    loc = _emap_str(row.get("JASMC")) or "待定"
     return core.Course(
         name=name,
-        teacher=clean_teacher(str(row.get("SKJS") or "")),
-        location=str(row.get("JASMC") or "待定"),
+        teacher=clean_teacher(_emap_str(row.get("SKJS"))),
+        location=loc,
         weekday=weekday,
         start=start,
         end=end,
@@ -1071,7 +1099,7 @@ def row_to_course(row: dict) -> Optional[core.Course]:
 
 
 def row_to_grade(row: dict) -> Optional[core.Grade]:
-    name = (row.get("KCM") or "").strip()
+    name = _emap_str(row.get("KCM"))
     if not name:
         return None
     try:
@@ -1081,17 +1109,17 @@ def row_to_grade(row: dict) -> Optional[core.Grade]:
     if credit <= 0:
         return None
     score = (
-        (row.get("ZCJ") or "").strip()
-        or (row.get("XSZCJMC") or "").strip()
-        or (row.get("DJCJMC") or "").strip()
+        _emap_str(row.get("ZCJ"))
+        or _emap_str(row.get("XSZCJMC"))
+        or _emap_str(row.get("DJCJMC"))
     )
     if not score:
         return None
     return core.Grade(
         name=name,
         credit=credit,
-        score=str(score),
-        term=str(row.get("XNXQDM") or "").strip(),
+        score=score,
+        term=_emap_str(row.get("XNXQDM")),
     )
 
 
