@@ -52,6 +52,9 @@ def _main(argv=None):
     ss.add_argument("action", nargs="?", default="list", choices=["list", "clear", "check"])
     ss.add_argument("site", nargs="?", default="")
     ss.add_argument("--json", action="store_true")
+    camp = sub.add_parser("campus", help="校园站点探测（只读 GET；pay/xsxk/ilearn/vpn/lib）")
+    camp.add_argument("--probe", action="store_true", help="匿名探测登录类型/重定向/候选只读接口（无个人数值）")
+    camp.add_argument("--json", action="store_true", help="输出完整 JSON 报告")
     st = sub.add_parser("status", help="查看登录会话状态（默认不联网；--check 访问教务一次验证）")
     st.add_argument("--check", action="store_true", help="访问教务一次确认会话是否仍有效")
     st.add_argument("--json", action="store_true")
@@ -234,6 +237,8 @@ def _main(argv=None):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
     elif x.cmd == "sessions":
         _cmd_sessions(x)
+    elif x.cmd == "campus":
+        _cmd_campus(x)
     elif x.cmd == "status":
         _cmd_status(x)
     elif x.cmd == "fetch":
@@ -867,6 +872,30 @@ def _cmd_oa(x):
     print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
     for i in res["items"]:
         print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")
+
+
+def _cmd_campus(x):
+    from . import campus, jwxt
+    if not x.probe:
+        print("用法：jlu-toolkit campus --probe [--json]", file=sys.stderr)
+        sys.exit(2)
+    try:
+        rep = campus.probe(jwxt.JwxtClient())
+    except jwxt.NetworkError as e:
+        print(f"campus: {e}", file=sys.stderr)
+        sys.exit(1)
+    if x.json:
+        print(json.dumps(rep, ensure_ascii=False, indent=2))
+        return
+    print(campus.probe_table(rep))
+    print()
+    print(f"vpn_url 格式：{rep.get('vpn_format')}")
+    print(f"vpn_key：{rep.get('vpn_key')}")
+    for s in rep.get("sites") or []:
+        need = s.get("needs_login_to_confirm") or []
+        if need:
+            print(f"  [{s.get('id')}] 仍需登录确认：{', '.join(need)}")
+
 
 def _cmd_sessions(x):
     from . import sessions

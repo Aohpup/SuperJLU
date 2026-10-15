@@ -39,7 +39,8 @@ def test_registry_ids_are_identifiers():
     assert sessions.SITES["ilearn"].captcha and sessions.SITES["lib"].auth == "none"
 
 
-def test_default_status_without_campus():
+def test_default_status_without_campus(monkeypatch):
+    monkeypatch.setattr(sessions, "_campus", lambda: None)
     s = by_id(sessions.all_status())
     assert s["jwxt"]["state"] == "missing" and s["pay"]["needs_login"]
     assert s["lib"]["state"] == "ok" and not s["lib"]["needs_login"]
@@ -99,9 +100,11 @@ def test_hook_errors_become_unknown(monkeypatch):
 
 
 def test_vpn_url_pluggable(monkeypatch):
+    monkeypatch.setattr(sessions, "_campus", lambda: None)
     with pytest.raises(NotImplementedError):
         sessions.vpn_url("https://iedu.jlu.edu.cn/")
     fake_campus(monkeypatch, vpn_url=lambda u: "VPN:" + u)
+    monkeypatch.setattr(sessions, "_campus", lambda: sys.modules.get("jlu_toolkit.campus"))
     assert sessions.vpn_url("u") == "VPN:u"
     sessions.register_vpn_url(lambda u: "R:" + u)
     assert sessions.vpn_url("u") == "R:u"

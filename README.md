@@ -279,6 +279,10 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 | vpn | WebVPN | vpn.jlu.edu.cn | CAS |
 | lib | 图书馆 | lib.jlu.edu.cn | 无需登录 |
 
+> 探测备注（`campus --probe`，2026-10）：`pay` / `xsxk` 实际是自有表单+验证码（非 CAS）；
+> `ilearn` 课程中心会经 `ilearn.jlu.edu.cn/cas-server` 桥到 `cas.jlu.edu.cn`；
+> `lib` 门户匿名，个人中心走 CAS `service=.../sso/login/3rd/30569`。上表认证列待 sessions 注册表后续对齐。
+
 **策略**：cookie 一律经 `secure_store` 加密保存为 `session-<id>.enc`；状态文件 `sessions_status.json` 只记 `state/checked_at/reason`；
 从不保存任何支付信息，缴费站只读；带验证码的站点不保存密码（除非用户明确选择保存）；教务凭据行为不变。
 
@@ -291,7 +295,9 @@ jlu-toolkit sessions clear <id>
 - HTTP：`GET /api/sessions` → `{"ok":true,"sites":[{"id","name","host","auth","vpn","captcha","state","checked_at","needs_login","message","has_check"}]}`，
   `state` ∈ ok/expired/missing/unknown。任何 `POST /api/*` 遇到某站会话过期返回 401：`{"ok":false,"error":"...","session_expired":true,"site":"<id>"}`（教务为 `"jwxt"`）。
 - MCP：`sessions_status()`，返回同上。
-- 钩子：可选模块 `jlu_toolkit/campus.py` 提供 `check_<id>(session) -> {"logged_in": True/False/None, "reason": str}`
-  （session 是带该站 cookie 的 `JwxtClient`，只发一次无副作用 GET；None → unknown）与 `vpn_url(url)`；
-  也可 `sessions.register_check(id, fn)` / `sessions.register_vpn_url(fn)`。`vpn_url` 未实现时抛 `NotImplementedError`。
+- 钩子：`jlu_toolkit/campus.py`（`feat/campus-probe`）提供 `check_<id>(session) -> {"logged_in": True/False/None, "reason": str}`
+  （session 是带该站 cookie 的 `JwxtClient`，只发一次无副作用 GET；判定过期时先 `mark_expired` 再抛 `SiteSessionExpired`；
+  None → unknown）与 `vpn_url(url)`（AES-128-CFB / key=`Didida1127Didida` → `https://vpn.jlu.edu.cn/{scheme}/{token}{path}`）；
+  也可 `sessions.register_check(id, fn)` / `sessions.register_vpn_url(fn)`。无 campus 且未注册时 `vpn_url` 抛 `NotImplementedError`。
+- 探测：`jlu-toolkit campus --probe [--json]`（只读，无个人数值）。
 - 站点代码抛 `sessions.SiteSessionExpired("<id>")`，并可调用 `sessions.mark_expired(id, reason)`。
