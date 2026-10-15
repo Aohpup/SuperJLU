@@ -824,6 +824,13 @@ def _cmd_oa(x):
     try:
         if x.probe:
             rep = {"saved_session": has, **oa.probe(client, anon_client=jwxt.JwxtClient())}
+            try:
+                ch = oa.discover_channels(jwxt.JwxtClient())["channels"]
+                if ch:
+                    d = ui.data_dir(); d.mkdir(parents=True, exist_ok=True)
+                    (d / "oa_channels.json").write_text(json.dumps(ch, ensure_ascii=False, indent=1), encoding="utf-8")
+            except jwxt.JwxtError:
+                pass
             print(json.dumps(rep, indent=1))
             if has:
                 client.save_session()
@@ -832,6 +839,10 @@ def _cmd_oa(x):
         known = {}
         try:
             known = json.loads(store.p("oa_notices.json").read_text(encoding="utf-8")).get("channels", {})
+        except (OSError, ValueError):
+            pass
+        try:
+            known = {**json.loads(store.p("oa_channels.json").read_text(encoding="utf-8")), **known}
         except (OSError, ValueError):
             pass
         ch = oa.resolve_category(x.category, known)

@@ -165,11 +165,103 @@ def parse_detail(html: str) -> dict:
 
 # ───────────────────────── 访问 ─────────────────────────
 
-def list_url(channel: str = DEFAULT_CHANNEL, page: int = 1, keyword: str = "") -> str:
+def list_url(channel: str = DEFAULT_CHANNEL, page: int = 1, keyword: str = "", enc: str = "utf-8",
+             field: str = "searchId") -> str:
     q = {"channelId": channel, "startPage": str(page)}
     if keyword:
-        q.update({"searchnr": keyword, "searchlx": "1"})
-    return LIST + "?" + urllib.parse.urlencode(q)
+        q[field] = keyword
+    return LIST + "?" + urllib.parse.urlencode(q, encoding=enc)
+
+
+# 搜索变体：(名称, 方法, 字段, 编码, 是否带 channelId)。门户搜索表单只有 searchId 一个输入。
+SEARCH_VARIANTS = [
+    ("get_searchId_utf8_ch", "GET", "searchId", "utf-8", True),
+    ("get_searchId_gbk_ch", "GET", "searchId", "gbk", True),
+    ("get_searchId_utf8", "GET", "searchId", "utf-8", False),
+    ("get_searchId_gbk", "GET", "searchId", "gbk", False),
+    ("post_searchId_utf8", "POST", "searchId", "utf-8", False),
+    ("post_searchId_gbk", "POST", "searchId", "gbk", False),
+    ("post_searchId_utf8_ch", "POST", "searchId", "utf-8", True),
+    ("get_searchnr_utf8_ch", "GET", "searchnr", "utf-8", True),
+]
+_search_pref: Optional[tuple] = None
+
+
+def search_request(client, keyword: str, variant: tuple, page: int = 1) -> tuple[int, str, str]:
+    """门户搜索（只读查询；POST 仅用于提交搜索框，与页面表单一致）。"""
+    _, method, field, enc, with_ch = variant
+    q = {field: keyword}
+    if with_ch:
+        q["channelId"] = DEFAULT_CHANNEL
+    if page > 1:
+        q["startPage"] = str(page)
+    if method == "GET":
+        return get(client, LIST + "?" + urllib.parse.urlencode(q, encoding=enc))
+    body = urllib.parse.urlencode(q, encoding=enc).encode("ascii")
+    code, text, final, raw = client._request(LIST, data=body, method="POST", headers={
+        "Referer": LOGIN, "Content-Type": "application/x-www-form-urlencoded"})
+    return code, _decode(raw or b"", text or ""), final or LIST
+
+
+def search_variants(client, keywords=("2025", "通知")) -> dict:
+    out = {}
+    for v in SEARCH_VARIANTS:
+        row = {}
+        for k, kw in zip(("ascii", "cjk"), keywords):
+            try:
+                c, h, f = search_request(client, kw, v)
+                row[k] = len(parse_list(h)["items"]) if c == 200 and not needs_login(f, h) else -c
+            except jwxt.NetworkError:
+                row[k] = -1
+        out[v[0]] = row
+    return out
+
+
+def pick_search(client) -> Optional[tuple]:
+    global _search_pref
+    if _search_pref is None:
+        res = search_variants(client)
+        ok = [v for v in SEARCH_VARIANTS if res[v[0]]["cjk"] > 0] or \
+             [v for v in SEARCH_VARIANTS if res[v[0]]["ascii"] > 0]
+        _search_pref = ok[0] if ok else ()
+    return _search_pref or None
+
+
+# ───────────────────────── 栏目发现 ─────────────────────────
+
+_CH_LINK = re.compile(r"channelId=(\d+)[^<>]{0,300}?>\s*(?:<[^>]+>\s*)*([^<>\s][^<>]{0,30}?)\s*<", re.S)
+_CH_JS = re.compile(r"channelId=(\d+)[\s\S]{0,200}?['\">]([\u4e00-\u9fff][\u4e00-\u9fff\w/（）()·]{1,20})")
+
+
+def discover_channels(client) -> dict:
+    """从登录页链接与 jldx_left.js / main.js 中提取 channelId→名称。"""
+    found: dict = {}
+    src_counts: dict = {}
+    try:
+        code, html, final, raw = client._request(LOGIN)
+        html = _decode(raw or b"", html or "")
+    except jwxt.NetworkError:
+        return {"channels": {}, "sources": {"login": -1}}
+    pages = [("login", html)]
+    for s in re.findall(r'<script[^>]*src="([^"]+)"', html or "", re.I):
+        name = s.rsplit("/", 1)[-1].split("?")[0]
+        if name in ("jldx_left.js", "main.js") or "jldx" in name:
+            try:
+                c, t, f, r = client._request(urllib.parse.urljoin(final or LOGIN, s))
+                pages.append((name, _decode(r or b"", t or "")))
+            except jwxt.NetworkError:
+                src_counts[name] = -1
+    for name, text in pages:
+        n0 = len(found)
+        for rx in (_CH_LINK, _CH_JS):
+            for cid, label in rx.findall(text or ""):
+                label = label.strip()
+                if label and not label.startswith(("http", "javascript")):
+                    found.setdefault(cid, label)
+        for cid in re.findall(r"channelId=(\d+)", text or ""):
+            found.setdefault(cid, "")
+        src_counts[name] = len(found) - n0
+    return {"channels": found, "sources": src_counts}
 
 
 def reach(client) -> dict:
@@ -194,8 +286,12 @@ def fetch_notices(client, channel: str = DEFAULT_CHANNEL, keyword: str = "", lim
                   max_pages: int = 5) -> dict:
     items: list = []
     channels: dict = {}
+    variant = pick_search(client) if keyword else None
     for page in range(1, max_pages + 1):
-        code, html, final = get(client, list_url(channel, page))
+        if variant:
+            code, html, final = search_request(client, keyword, variant, page)
+        else:
+            code, html, final = get(client, list_url(channel, page))
         if code != 200 or needs_login(final, html):
             if page == 1:
                 raise jwxt.LoginError("OA 需要登录（会话无法复用）；运行 jlu-toolkit oa --probe 查看")
@@ -303,12 +399,16 @@ def probe(client, anon_client=None) -> dict:
         rep["detail"] = {"endpoint": "PortalInformation!getInformation.action", "pattern": "id=<id>&channelId=<ch>",
                          "status": code3, "has_title": bool(d["title"]), "has_time_dept": bool(d["time_dept"]),
                          "text_chars": len(d["text"]), "attachments": d["attachments"]}
-        code4, html4, _ = get(client, list_url(DEFAULT_CHANNEL, 1, keyword="通知"))
-        rep["search"] = {"params": "searchnr,searchlx", "status": code4, "rows": len(parse_list(html4)["items"])}
+        rep["search_variants"] = search_variants(client)
+    disc = discover_channels(anon_client or client)
+    allch = {**disc["channels"], **got["channels"]}
+    rep["channel_discovery"] = {"sources": disc["sources"], "total": len(allch), "ids": sorted(allch)[:40],
+                                "named": sum(1 for v in allch.values() if v)}
+    got["channels"] = allch
     if got["channels"]:
         cnt = {}
-        for cid in sorted(got["channels"])[:8]:
+        for cid in sorted(got["channels"])[:12]:
             c5, h5, f5 = get(client, list_url(cid))
-            cnt[str(len(cnt))] = {"status": c5, "rows": len(parse_list(h5)["items"]), "login_needed": needs_login(f5, h5)}
+            cnt[cid] = {"status": c5, "rows": len(parse_list(h5)["items"]), "login_needed": needs_login(f5, h5)}
         rep["category_lists"] = cnt
     return rep
