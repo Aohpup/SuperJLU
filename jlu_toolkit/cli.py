@@ -600,13 +600,21 @@ def _cmd_plan(x):
             if not client.load_session():
                 raise jwxt.LoginError("没有已保存的会话")
             if x.probe:
-                rep, _ = pl.explore(client, log=err)
+                rep, found = pl.explore(client, log=err)
+                cf = store.p("completion.json")
+                comp_groups = (json.loads(cf.read_text(encoding="utf-8")).get("groups")
+                               if cf.exists() else None)
+                try:
+                    rep["diagnostics"] = pl.diagnose(client, found, comp_groups)
+                except jwxt.JwxtError as e:
+                    rep["diagnostics"] = {"error": type(e).__name__}
                 path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_plan_probe.json"
                 path.write_text(json.dumps(rep, indent=1), encoding="ascii")
                 client.save_session()
                 err(f"probe report: {path}")
                 calls = rep["calls_with_rows"]
-                print(json.dumps({"best": rep["best"], "apps": {k: {"entered": v.get("entered"),
+                print(json.dumps({"best": rep["best"], "tree_candidates": rep["tree_candidates"],
+                                  "diagnostics": rep["diagnostics"], "apps": {k: {"entered": v.get("entered"),
                                   "modules": sorted(v.get("modules") or {})} for k, v in rep["apps"].items()},
                                   "calls_total": len(rep["calls"]), "calls_with_rows": calls}))
                 return

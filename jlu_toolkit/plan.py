@@ -11,10 +11,12 @@ from typing import Optional
 
 from . import emap, jwxt
 
-APPS = (("xsfacx", "xsfacx"), ("xywccx", "xywccx"), ("pyfacx", "pyfacx"), ("facx", "facx"),
+APPS = (("xsfacx", "ckgrpyfa"), ("xsfacx", "xsfacx"), ("xywccx", "xywccx"), ("pyfacx", "pyfacx"), ("facx", "facx"),
         ("kcxx", "kcxx"), ("jwpubapp", "pyfa"))
 # 已知的候选（发现失败时兜底）
 KNOWN = (
+    ("xsfacx", "modules/ckgrpyfa/cxkzxx.do"), ("xsfacx", "modules/ckgrpyfa/cxpyfakz.do"),
+    ("xsfacx", "modules/ckgrpyfa/kzkccx.do"), ("xsfacx", "modules/pyfacxepg/cxpyfakz.do"),
     ("xsfacx", "modules/pyfacxepg/kzkccx.do"), ("xsfacx", "modules/pyfacxepg/cxfakc.do"),
     ("xsfacx", "modules/pyfacxepg/grpyfakccx.do"), ("xsfacx", "modules/pyfacxepg/pyfakccx.do"),
     ("xywccx", "modules/xywccx/cxscfakzkc.do"), ("xywccx", "modules/xywccx/cxxsscfakc.do"),
@@ -41,6 +43,8 @@ COLS = {
     "group_code": (("KZH", "KZDM"), ()),
     "score": (("ZCJ", "CJ", "XSZCJMC", "ZZCJ", "ZSCJ"), ("成绩",)),
     "selected": (("SFXK",), ("是否选课",)),
+    "sub_rd": (("RDKCH",), ()),
+    "sub_td": (("TDKCH",), ()),
     "status_raw": (("XDZTDM", "XDZT", "WCZT", "TGZT", "SFTG", "SFWC", "SFXD"), ("修读状态", "完成", "是否通过", "是否已修")),
 }
 
@@ -154,6 +158,11 @@ def _actions(client, app: emap.App, rep_app: dict) -> list[tuple[str, dict]]:
     return [(p, c) for p, c in out.items() if _HINT.search(p.rsplit("/", 1)[-1]) and not _SKIP.search(p.rsplit("/", 1)[-1])]
 
 
+def _is_tree(fields) -> bool:
+    f = set(fields)
+    return "KZH" in f and bool(f & {"KZM", "KZMC"}) and not (f & {"KCH", "KCDM"})
+
+
 def _is_course(fields) -> bool:
     f = set(fields)
     return bool(f & {"KCH", "KCDM"}) and bool(f & {"KCM", "KCMC"})
@@ -167,7 +176,7 @@ def explore(client, log=lambda s: None) -> tuple[dict, dict]:
     for name, route in APPS:
         app = emap.App(name, route)
         ra: dict = {}
-        rep["apps"][name] = ra
+        rep["apps"][f"{name}/{route}"] = ra
         acts = _actions(client, app, ra)
         log(f"[{name}] entered={ra.get('entered')} modules={ra.get('modules_seen')} candidates={len(acts)}")
         for path, caps in acts[:40]:
@@ -194,6 +203,10 @@ def explore(client, log=lambda s: None) -> tuple[dict, dict]:
                         f"{' REJECTED' if rec.get('rejected') else ''}")
                     if rec.get("rejected"):
                         continue  # 试下一个（带过滤的）变体
+                    if _is_tree(rec["fields"]):
+                        best.setdefault("trees", {})[path] = {"app": name, "route": route, "path": path,
+                                                              "form": form, "variant": vname, "captions": caps,
+                                                              "total": tot}
                     if _is_course(rec["fields"]):
                         # 学生本人方案（xywccx，带 XH/PYFADM）优先
                         kind = "plan"
@@ -204,7 +217,9 @@ def explore(client, log=lambda s: None) -> tuple[dict, dict]:
                                           "variant": vname, "captions": caps, "score": score, "total": tot}
                     break
     rep["best"] = {k: {"app": v["app"], "action": v["path"].split("/sys/", 1)[-1], "variant": v["variant"],
-                       "total": v["total"]} for k, v in best.items()}
+                       "total": v["total"]} for k, v in best.items() if k != "trees"}
+    rep["tree_candidates"] = [{"action": v["path"].split("/sys/", 1)[-1], "variant": v["variant"], "total": v["total"]}
+                              for v in best.get("trees", {}).values()]
     rep["calls_with_rows"] = [c for c in rep["calls"] if c.get("rows")]
     return rep, best
 
@@ -319,17 +334,23 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
     if "plan" not in best or "kzkccx" in best["plan"].get("path", "") and not any(
             k in best["plan"].get("form", {}) for k in ("PYFADM", "querySetting")):
         _, found = explore(client)
-        best = {k: {kk: v[kk] for kk in ("app", "route", "path", "form", "captions")} for k, v in found.items()}
+        best = {k: {kk: v[kk] for kk in ("app", "route", "path", "form", "captions")}
+                for k, v in found.items() if k != "trees"}
+        if found.get("trees"):
+            best["trees"] = {p: {kk: v[kk] for kk in ("app", "route", "path", "form", "captions", "variant")}
+                             for p, v in found["trees"].items()}
         if not best:
             raise jwxt.JwxtError("未找到培养方案课程接口（运行 jlu-toolkit plan --probe 查看）")
         # 缓存里不保存 XH 等个人参数值：只存参数名，调用时重新取
-        cache = {k: {**v, "form": {f: ("" if f in ("XH", "PYFADM", "BYNJDM", "SCLBDM") else val)
-                                    for f, val in v["form"].items()}} for k, v in best.items()}
+        strip = lambda v: {**v, "form": {f: ("" if f in ("XH", "PYFADM", "BYNJDM", "SCLBDM") else val)  # noqa: E731
+                                         for f, val in v["form"].items()}}
+        cache = {k: ({p: strip(x) for p, x in v.items()} if k == "trees" else strip(v)) for k, v in best.items()}
         cp.parent.mkdir(parents=True, exist_ok=True)
         cp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
-    if any(v for b in best.values() for k, v in b["form"].items() if k in ("XH", "PYFADM") and not v):
+    allb = [b for k, b in best.items() if k != "trees"] + list((best.get("trees") or {}).values())
+    if any(True for b in allb for k, v in b["form"].items() if k in ("XH", "PYFADM") and not v):
         ctx = _context(client)
-        for b in best.values():
+        for b in allb:
             for k in list(b["form"]):
                 if k in ctx and not b["form"][k]:
                     b["form"][k] = ctx[k]
@@ -341,13 +362,139 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
         except jwxt.JwxtError:
             done = []
     courses = merge(plan, done, grades, courses_now)
-    return {"source": {k: {"app": v["app"], "action": v["path"].split("/sys/", 1)[-1]} for k, v in best.items()},
-            "count": len(courses), "courses": courses}
+    kzh = {c["group_code"] for c in courses if c.get("group_code")}
+    tree, tree_src = None, None
+    for pth, b in (best.get("trees") or {}).items():
+        try:
+            nodes = tree_nodes(fetch_all(client, b))
+        except jwxt.JwxtError:
+            continue
+        cov = len(kzh & {n["code"] for n in nodes})
+        if nodes and (tree is None or cov > tree[0]):
+            tree, tree_src = (cov, nodes), pth.split("/sys/", 1)[-1]
+    res = {"source": {k: {"app": v["app"], "action": v["path"].split("/sys/", 1)[-1]}
+                      for k, v in best.items() if k != "trees"},
+           "count": len(courses), "courses": courses}
+    if tree:
+        res["tree_nodes"] = tree[1]
+        res["source"]["tree"] = {"action": tree_src}
+    return res
+
+
+def _f(v):
+    try:
+        return float(v) if _s(v) else None
+    except ValueError:
+        return None
+
+
+def tree_nodes(rows: list) -> list[dict]:
+    out, seen = [], set()
+    for r in rows:
+        k = _s(r.get("KZH"))
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append({"code": k, "name": _s(r.get("KZM") or r.get("KZMC")) or k,
+                    "parent": _s(r.get("FKZH") or r.get("SJKZH") or r.get("FKZDM")),
+                    "required": _f(r.get("YQXF") if _s(r.get("YQXF")) else r.get("ZSYQXF") if _s(r.get("ZSYQXF")) else r.get("XF")),
+                    "earned": _f(r.get("WCXF") if _s(r.get("WCXF")) else r.get("YHXF")),
+                    "nature": _s(r.get("KCXZDM_DISPLAY") or r.get("KCXZDM"))})
+    return out
+
+
+def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict:
+    """嵌套课组树；课程按 KZH 挂载；返回 {roots, unmatched, stats}。"""
+    idx = {n["code"]: {**n, "children": [], "courses": []} for n in nodes}
+    for g in comp_groups or []:  # 学业完成里的已获学分补齐
+        n = idx.get(g.get("code"))
+        if n and n["earned"] is None and g.get("earned") is not None:
+            n["earned"] = g["earned"]
+        if n and n["required"] is None and g.get("required") is not None:
+            n["required"] = g["required"]
+    roots = []
+    for n in idx.values():
+        par = idx.get(n["parent"]) if n["parent"] and n["parent"] != n["code"] else None
+        (par["children"] if par else roots).append(n)
+    unmatched, reasons = [], {}
+    for c in courses:
+        n = idx.get(c.get("group_code") or "")
+        if n:
+            n["courses"].append(c)
+            continue
+        why = ("substitute" if c.get("sub_rd") or c.get("sub_td")
+               else "no_kzh" if not c.get("group_code") else "kzh_not_in_tree")
+        c["unmatched_reason"] = why
+        reasons[why] = reasons.get(why, 0) + 1
+        unmatched.append(c)
+
+    def roll(n, depth=0):
+        tot = sum((x["credit"] or 0) for x in n["courses"] if x["status"] == "已修")
+        if depth < 12:
+            tot += sum(roll(ch, depth + 1) for ch in n["children"])
+        n["earned_courses"] = round(tot, 2)
+        if n["earned"] is None:
+            n["earned"] = n["earned_courses"]
+            n["earned_source"] = "plan_courses"
+        else:
+            n.setdefault("earned_source", "jw")
+        n["missing"] = round(max(0.0, n["required"] - n["earned"]), 2) if n["required"] is not None else None
+        return tot
+
+    for r in roots:
+        roll(r)
+    kzh = {c.get("group_code") for c in courses if c.get("group_code")}
+    return {"roots": roots, "unmatched": unmatched,
+            "stats": {"groups": len(idx), "roots": len(roots), "courses": len(courses),
+                      "matched": len(courses) - len(unmatched), "unmatched": len(unmatched),
+                      "unmatched_kzh": len(kzh - set(idx)), "reasons": reasons}}
+
+
+def diagnose(client, best: dict, comp_groups=None) -> dict:
+    """只输出计数：各候选课组树覆盖了多少课程 KZH。"""
+    out: dict = {"course_source": None, "trees": []}
+    if "plan" not in best:
+        return out
+    courses = merge(normalize(fetch_all(client, best["plan"]), best["plan"].get("captions") or {}), [])
+    kzh = {c["group_code"] for c in courses if c["group_code"]}
+    out.update({"course_source": best["plan"]["path"].split("/sys/", 1)[-1], "courses": len(courses),
+                "course_kzh_distinct": len(kzh), "courses_without_kzh": sum(1 for c in courses if not c["group_code"]),
+                "substitute_courses": sum(1 for c in courses if c.get("sub_rd") or c.get("sub_td"))})
+    cands = [(v["path"].split("/sys/", 1)[-1], v) for v in best.get("trees", {}).values()]
+    for name, v in cands:
+        try:
+            nodes = tree_nodes(fetch_all(client, v))
+        except jwxt.JwxtError as e:
+            out["trees"].append({"action": name, "error": type(e).__name__})
+            continue
+        st = build_tree(nodes, [dict(c) for c in courses])["stats"]
+        out["trees"].append({"action": name, "variant": v["variant"], "groups": st["groups"],
+                             "roots": st["roots"], "kzh_in_tree": len(kzh & {n["code"] for n in nodes}),
+                             "matched": st["matched"], "unmatched": st["unmatched"],
+                             "unmatched_kzh": st["unmatched_kzh"], "reasons": st["reasons"]})
+    if comp_groups:
+        st = build_tree([{"code": g.get("code"), "name": g.get("name"), "parent": g.get("parent"),
+                          "required": g.get("required"), "earned": g.get("earned"), "nature": ""}
+                         for g in comp_groups if g.get("code")], [dict(c) for c in courses])["stats"]
+        out["trees"].append({"action": "completion.json (cxscfakz)", "groups": st["groups"], "roots": st["roots"],
+                             "kzh_in_tree": len(kzh) - st["unmatched_kzh"], "matched": st["matched"],
+                             "unmatched": st["unmatched"], "unmatched_kzh": st["unmatched_kzh"],
+                             "reasons": st["reasons"]})
+    return out
 
 
 def attach_to_completion(comp: dict, plan: dict) -> dict:
-    """把课程挂到课组；服务器 WCXF 优先，缺失才用课程明细合计。"""
+    """把课程挂到课组；服务器 WCXF 优先，缺失才用课程明细合计。另附嵌套课组树 comp['tree']。"""
     groups = comp.get("groups") or []
+    nodes = plan.get("tree_nodes") or [{"code": g.get("code"), "name": g.get("name"), "parent": g.get("parent"),
+                                         "required": g.get("required"), "earned": g.get("earned"),
+                                         "nature": g.get("nature", "")} for g in groups if g.get("code")]
+    if nodes:
+        t = build_tree(nodes, [dict(c) for c in plan.get("courses", [])], groups)
+        comp["tree"] = t["roots"]
+        comp["unmatched"] = t["unmatched"]
+        comp["tree_stats"] = t["stats"]
+        comp["tree_source"] = (plan.get("source") or {}).get("tree", {}).get("action") or "completion"
     idx = {g.get("code"): g for g in groups if g.get("code")}
     by_name = {g.get("name"): g for g in groups}
     for c in plan.get("courses", []):

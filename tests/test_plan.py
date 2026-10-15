@@ -90,3 +90,18 @@ def test_cxscfakzkc_fields():
     assert a["status"] == "已修" and cs["B2"]["status"] == "在修" and cs["C3"]["status"] == "未修"
     s = json.dumps(list(cs.values()), ensure_ascii=False)
     assert "S1" not in s and "P1" not in s and '"w"' not in s
+
+
+def test_build_tree_nested_and_unmatched():
+    nodes = plan.tree_nodes([{"KZH": "R", "KZM": "总"}, {"KZH": "A", "KZM": "数学", "FKZH": "R", "YQXF": 8},
+                             {"KZH": "B", "KZM": "体育", "FKZH": "R", "YQXF": 4}])
+    cs = [{"code": "1", "name": "高数", "credit": 5, "status": "已修", "group_code": "A"},
+          {"code": "2", "name": "体育", "credit": 1, "status": "未修", "group_code": "B"},
+          {"code": "3", "name": "x", "credit": 2, "status": "已修", "group_code": "Z"},
+          {"code": "4", "name": "y", "credit": 2, "status": "已修", "group_code": "Z", "sub_rd": "9"}]
+    t = plan.build_tree(nodes, cs, [{"code": "B", "earned": 2.0}])
+    assert len(t["roots"]) == 1 and [c["code"] for c in t["roots"][0]["children"]] == ["A", "B"]
+    a, b = t["roots"][0]["children"]
+    assert a["earned"] == 5 and a["missing"] == 3 and b["earned"] == 2.0 and b["earned_source"] == "jw"
+    assert t["stats"] == {"groups": 3, "roots": 1, "courses": 4, "matched": 2, "unmatched": 2,
+                          "unmatched_kzh": 1, "reasons": {"kzh_not_in_tree": 1, "substitute": 1}}
