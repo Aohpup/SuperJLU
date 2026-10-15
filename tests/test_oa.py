@@ -23,17 +23,25 @@ class Fake:
         self.pages, self.login, self.urls = pages, login, []
 
     def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
-        assert data is None and method in (None, "GET")
+        assert method in (None, "GET", "POST")
         self.urls.append(url)
+        if data is not None or "searchId=" in url:
+            q = (data or b"").decode() + url
+            ok = (data is not None and "%E" in data.decode()) or "searchId=2025" in q
+            h = LIST if ok else "<html></html>"
+            return 200, h, url, h.encode()
         if self.login:
             return 200, '<form id="loginForm"><input type="password" name="p"></form>', \
                 "https://oa.jlu.edu.cn/defaultroot/login.jsp", b""
         if "getInformation" in url:
             return 200, DETAIL, url, DETAIL.encode()
-        if "login.jsp" in url:
-            h = '<form action="/defaultroot/login.jsp"><input name="userAccount"><input type="password" name="userPassword"></form>'
+        if url.endswith("jldx_left.js"):
+            h = "var m=[{u:'PortalInformation!jldxList.action?channelId=190002',t:'放假安排'}];"
             return 200, h, url, h.encode()
-        page = int(url.split("startPage=")[1].split("&")[0])
+        if "login.jsp" in url:
+            h = '<script src="js/jldx_left.js"></script><a href="x?channelId=190001"><span>学术讲座</span></a><form action="/defaultroot/login.jsp"><input name="userAccount"><input type="password" name="userPassword"></form>'
+            return 200, h, url, h.encode()
+        page = int(url.split("startPage=")[1].split("&")[0]) if "startPage=" in url else 1
         h = LIST if page <= self.pages else "<html></html>"
         if page > 1:
             h = h.replace("id=111", f"id=1{page}1").replace("id=222", f"id=2{page}2")
@@ -109,3 +117,16 @@ def test_cli_all_handlers_defined():
     src = open(cli.__file__, encoding="utf-8").read()
     for name in set(re.findall(r"\b(_cmd_\w+)\(x\)", src)):
         assert callable(getattr(cli, name, None)), name
+
+
+def test_search_variants_and_channels():
+    oa._search_pref = None
+    c = Fake(1)
+    sv = oa.search_variants(c)
+    assert sv["post_searchId_utf8"]["cjk"] == 2 and sv["get_searchId_gbk"]["cjk"] == 0
+    r = oa.fetch_notices(c, keyword="教务")
+    assert [i["id"] for i in r["items"]] == ["222"]
+    d = oa.discover_channels(Fake(1))
+    assert d["channels"]["190001"] == "学术讲座" and d["channels"]["190002"] == "放假安排"
+    assert d["sources"]["jldx_left.js"] == 1
+    oa._search_pref = None
