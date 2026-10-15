@@ -12,7 +12,8 @@ from . import exams as ex, jwxt, meta
 
 
 def _wjson(path: Path, obj) -> None:
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
+    from .endpoints import scrub
+    path.write_text(json.dumps(scrub(obj), ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> dict:

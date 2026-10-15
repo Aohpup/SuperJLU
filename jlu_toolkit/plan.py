@@ -24,7 +24,7 @@ KNOWN = (
 )
 _HINT = re.compile(r"(kc|kz|fa|wc|xx|cx)", re.I)
 _SKIP = re.compile(r"(save|add|del|update|xg|bc|sc[a-z]*sq|tj[a-z]*sq|submit|export|dc)", re.I)
-MAX_TOTAL = 2000  # 超过即视为未过滤（全校数据），拒绝且绝不翻页
+from .endpoints import MAX_TOTAL  # noqa: E402  超过即视为未过滤（全校数据），拒绝且绝不翻页
 COURSE_KEYS = ("KCH", "KCM", "KCDM", "KCMC")
 DONE_KEYS = ("ZCJ", "CJ", "XSZCJMC", "SFTG", "TGZT", "XDZT", "XDZTDM", "WCZT", "SFXD", "SFWC", "CJDM")
 
@@ -54,29 +54,11 @@ def _s(v) -> str:
 
 
 def _rows_any(obj):
-    if not isinstance(obj, dict):
-        return None
-    d = obj.get("datas")
-    if isinstance(d, dict):
-        for k, blk in d.items():
-            if isinstance(blk, dict) and isinstance(blk.get("rows"), list):
-                return k, blk["rows"], blk.get("totalSize")
-            if isinstance(blk, list):
-                return k, blk, None
-    if isinstance(d, list):
-        return "datas", d, None
-    return None
+    return emap.rows_any(obj)
 
 
 def _post(client, app: emap.App, path: str, form: dict):
-    try:
-        code, text, _ = client.post_raw(path, form, app.index + "?EMAP_LANG=zh")
-    except jwxt.NetworkError:
-        return None, None
-    try:
-        return code, json.loads(text) if text else None
-    except (json.JSONDecodeError, ValueError):
-        return code, None
+    return emap.post_json(client, path, form, app.index + "?EMAP_LANG=zh")
 
 
 def _variants(ctx: dict, path: str = ""):
@@ -106,14 +88,12 @@ def _context(client) -> dict:
         pass
     try:
         client.enter_emap_app(meta.APP_XYWCCX)
-        for act in ("cxxsjbxx", "cxscfa"):
-            obj = meta._post(client, f"/jwapp/sys/xywccx/modules/xywccx/{act}.do",
-                             {"pageSize": "10", "pageNumber": "1"}, meta.APP_XYWCCX)
-            hit = _rows_any(obj)
-            if hit and hit[1] and isinstance(hit[1][0], dict):
+        for name in ("student_info", "student_plan"):
+            rows = emap.call_known(client, name) or []
+            if rows:
                 for k in ("XH", "PYFADM", "BYNJDM", "SCLBDM"):
-                    if _s(hit[1][0].get(k)):
-                        ctx.setdefault(k, _s(hit[1][0].get(k)))
+                    if _s(rows[0].get(k)):
+                        ctx.setdefault(k, _s(rows[0].get(k)))
     except jwxt.JwxtError:
         pass
     try:
@@ -227,20 +207,7 @@ def explore(client, log=lambda s: None) -> tuple[dict, dict]:
 def fetch_all(client, b: dict, page_size: int = 200, max_pages: int = 30) -> list:
     app = emap.App(b["app"], b["route"])
     client.enter_emap_app(app.index)
-    out: list = []
-    for page in range(1, max_pages + 1):
-        code, obj = _post(client, app, b["path"], {**b["form"], "pageSize": str(page_size),
-                                                    "pageNumber": str(page)})
-        hit = _rows_any(obj) if code == 200 else None
-        if not hit or not hit[1]:
-            break
-        if hit[2] is not None and int(hit[2]) > MAX_TOTAL:
-            raise jwxt.JwxtError(f"refused: unfiltered source total {hit[2]} > {MAX_TOTAL}")
-        out += [r for r in hit[1] if isinstance(r, dict)]
-        total = hit[2]
-        if (total is not None and len(out) >= int(total)) or len(hit[1]) < page_size:
-            break
-    return out
+    return emap.fetch_paged(client, b["path"], b["form"], app.index + "?EMAP_LANG=zh", page_size, max_pages)
 
 
 def _col(row: dict, caps: dict, col: str) -> str:
@@ -338,7 +305,35 @@ def _cache_path():
     return jwxt.config_dir() / "data" / "plan_profile2.json"
 
 
-def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) -> dict:
+def fetch_known(client, grades=None, courses_now=None) -> Optional[dict]:
+    """已知接口优先：xywccx/cxscfakzkc(XH+PYFADM) + xsfacx/kzcx(querySetting PYFADM)。空/失败返回 None。"""
+    ctx = _context(client)
+    try:
+        raw = emap.call_known(client, "plan_courses", ctx)
+    except emap.TooLarge:
+        raw = None
+    if not raw:
+        return None
+    courses = merge(normalize(raw, {}), [], grades, courses_now)
+    res = {"source": {"plan": {"app": "xywccx", "action": "xywccx/modules/xywccx/cxscfakzkc.do", "via": "known"}},
+           "count": len(courses), "courses": courses}
+    try:
+        tree_raw = emap.call_known(client, "plan_tree", ctx)
+    except emap.TooLarge:
+        tree_raw = None
+    nodes = tree_nodes(tree_raw or [])
+    if nodes:
+        bt = build_tree(nodes, [dict(c) for c in courses])
+        res.update({"tree_nodes": nodes, "tree_stats": bt["stats"], "tree_summary": tree_summary(bt["roots"])})
+        res["source"]["tree"] = {"action": "xsfacx/modules/pyfacxepg/kzcx.do", "via": "known"}
+    return res
+
+
+def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True, use_known: bool = True) -> dict:
+    if use_known:
+        got = fetch_known(client, grades, courses_now)
+        if got and got.get("tree_nodes"):
+            return got
     best: dict = {}
     cp = _cache_path()
     if use_cache and cp.exists():
