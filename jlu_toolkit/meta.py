@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import urllib.parse
 from collections import Counter
 from typing import Optional
 
@@ -44,6 +45,13 @@ GPA_CANDIDATES = [
     (EP_GPA, "XH"),
 ]
 RXYL_MODULE = "rxylgpacx"
+# 真正的「汇总绩点」字段；缺这些就不是官方绩点（防 cxxscj 单科成绩误认）
+SUMMARY_GPA_KEYS = frozenset({
+    "GPA", "PJJD", "JQPJF", "PJF", "XQPJF", "SSPJF",
+    "SYBXKGPA", "SYBXXXKGPA", "XQBXKGPA", "XQBXXXKGPA",
+    "PPJDCX", "PPJDZG", "BXKPPJD", "XWKPJJDCX", "XWKPJJDZG", "XWKJQPJF",
+})
+COURSE_GPA_BLOCK = ("cxxscj", "xscjcx", "/xscj/", "cxxszhxqkb")  # 单科成绩/课表，绝不当官方绩点
 EP_PLAN_COURSES = "/jwapp/sys/jwpubapp/modules/pyfa/kzkccx.do"
 
 
@@ -356,6 +364,8 @@ def _xh_fields(xh: str, fields: list[str], term: str = "") -> dict:
 
 
 def _gpaish(name: str, url: str, fields: list[str]) -> bool:
+    if is_course_endpoint(url) or is_course_endpoint(name):
+        return False
     blob = f"{name} {url} {' '.join(fields)}"
     return bool(GPA_ACTION_HINT.search(blob))
 
@@ -390,37 +400,64 @@ def response_shape(obj, max_paths: int = 40) -> dict:
     return {"paths": paths, "gpa_keys_seen": sorted(set(labels))}
 
 
-def extract_gpa_payload(obj) -> Optional[dict]:
-    """从任意常见 EMAP 形状中取出含官方绩点字段的一行/一块。
+def is_summary_gpa_row(row: dict) -> bool:
+    """必须含至少一个汇总绩点字段；单科成绩行（ZCJ/KCM/XFJD）不算。"""
+    if not isinstance(row, dict):
+        return False
+    if not SUMMARY_GPA_KEYS.intersection(row.keys()):
+        return False
+    # 典型单科行：有课程名+成绩，却没有汇总键以外的「像汇总」——已有汇总键则放行
+    return True
 
-    非空 rows[0] 一律返回（字段标签交给 parse_official_gpa + captions）。
-    """
+
+def is_course_endpoint(url: str) -> bool:
+    u = (url or "").lower()
+    return any(b in u for b in COURSE_GPA_BLOCK)
+
+
+def extract_gpa_payload(obj) -> Optional[dict]:
+    """只取出含汇总绩点字段的一行/一块；空 rows / 单科成绩行一律忽略。"""
     if not isinstance(obj, dict):
         return None
-    # 1) datas.<name>.rows[0]
+
+    def pick(row):
+        return row if is_summary_gpa_row(row) else None
+
     for name, blk in (obj.get("datas") or {}).items() if isinstance(obj.get("datas"), dict) else ():
         if isinstance(blk, dict):
             rows = blk.get("rows")
-            if isinstance(rows, list) and rows and isinstance(rows[0], dict):
-                return rows[0]
-            if any(k in blk for k, _ in GPA_FIELDS):
-                return blk
-        if isinstance(blk, list) and blk and isinstance(blk[0], dict):
-            return blk[0]
-    # 2) datas 本身是 list
-    if isinstance(obj.get("datas"), list) and obj["datas"] and isinstance(obj["datas"][0], dict):
-        if any(k in obj["datas"][0] for k, _ in GPA_FIELDS):
-            return obj["datas"][0]
-    # 3) 顶层就有绩点字段
-    if any(k in obj for k, _ in GPA_FIELDS):
-        return obj
-    # 4) data / result 常见别名
+            if isinstance(rows, list):
+                for r in rows:
+                    hit = pick(r)
+                    if hit:
+                        return hit
+            hit = pick(blk)
+            if hit:
+                return hit
+        if isinstance(blk, list):
+            for r in blk:
+                hit = pick(r)
+                if hit:
+                    return hit
+    if isinstance(obj.get("datas"), list):
+        for r in obj["datas"]:
+            hit = pick(r)
+            if hit:
+                return hit
+    hit = pick(obj)
+    if hit:
+        return hit
     for alt in ("data", "result", "rows"):
         v = obj.get(alt)
-        if isinstance(v, dict) and any(k in v for k, _ in GPA_FIELDS):
-            return v
-        if isinstance(v, list) and v and isinstance(v[0], dict) and any(k in v[0] for k, _ in GPA_FIELDS):
-            return v[0]
+        if isinstance(v, dict):
+            hit = pick(v)
+            if hit:
+                return hit
+        if isinstance(v, list):
+            for r in v:
+                hit = pick(r)
+                if hit:
+                    return hit
     return None
 
 
@@ -465,15 +502,20 @@ def _param_variants(xh: str, action_fields: list[str], term: str = "") -> list[t
     return out
 
 
+CJCX_REFERER = APP_CJCX + "?EMAP_LANG=zh#/cjcx"
+
+
 def _request_json(client, url: str, method: str, form: dict) -> tuple[int, object]:
+    """POST 走 post_raw（已带 X-Requested-With / Origin）；Referer 用成绩页 #/cjcx。"""
     if method == "GET":
-        from urllib.parse import urlencode
-        full = "https://iedu.jlu.edu.cn" + url + (("?" + urlencode(form)) if form else "")
+        full = "https://iedu.jlu.edu.cn" + url + (("?" + urllib.parse.urlencode(form)) if form else "")
         code, text, _, _ = client._request(full, headers={
-            "Referer": APP_CJCX, "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json, */*"})
+            "Referer": CJCX_REFERER,
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+        })
     else:
-        code, text, _ = client.post_raw(url, form, APP_CJCX)
+        code, text, _ = client.post_raw(url, form, CJCX_REFERER)
     try:
         return code, json.loads(text) if text else {}
     except (json.JSONDecodeError, ValueError):
@@ -505,6 +547,7 @@ def probe_gpa(client, log=print) -> dict:
             actions.append({"module": "", "name": "", "url": u, "fields": [],
                             "gpaish": _gpaish("", u, [])})
     report["actions"] = actions
+    actions = [a for a in actions if not is_course_endpoint(a["url"])]
     candidates = [a for a in actions if a["gpaish"]] + [
         {"module": "guess", "name": n, "url": p,
          "fields": list(captions) if "rxylgpacx" in p else [], "gpaish": True}
@@ -574,6 +617,8 @@ def probe_gpa(client, log=print) -> dict:
 
 def _call_gpa_action(client, url: str, fields: list[str], xh: str, term: str = "",
                      captions: Optional[dict] = None) -> Optional[dict]:
+    if is_course_endpoint(url):
+        return None
     for vname, method, form in _param_variants(xh, fields, term):
         try:
             code, obj = _request_json(client, url, method, form)

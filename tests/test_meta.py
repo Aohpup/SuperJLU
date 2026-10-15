@@ -446,3 +446,35 @@ def test_emap_abs_nested_rxyl():
     app = emap.App("cjcx", "cjcx")
     assert app.abs("cjcx/rxylgpacx/rxylgpacxcx.do") == "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx/rxylgpacxcx.do"
     assert app.abs("rxylgpacx/rxylgpacxcx.do") == "/jwapp/sys/cjcx/modules/rxylgpacx/rxylgpacxcx.do"
+
+
+def test_reject_course_row_as_official_gpa():
+    assert meta.extract_gpa_payload({"datas": {"cxxscj": {"rows": [
+        {"KCM": "高数", "ZCJ": 92, "XFJD": 4.0, "JDF": 4.0}]}}}) is None
+    assert meta.is_course_endpoint("/jwapp/sys/cjcx/modules/cjcx/cxxscj.do")
+    assert meta._call_gpa_action(
+        type("C", (), {"post_raw": staticmethod(lambda *a, **k: (200, "{}", "")),
+                       "_request": staticmethod(lambda *a, **k: (200, "{}", "", b""))})(),
+        "/jwapp/sys/cjcx/modules/cjcx/cxxscj.do", [], "20240001") is None
+
+
+def test_sync_does_not_promote_cxxscj(tmp_path):
+    routes = dict(ROUTES)
+    # 所有绩点候选空，但 cxxscj 有单科行
+    routes[meta.EP_GPA] = {"code": "404"}
+    routes[meta.EP_GPA_JLU] = {"code": "0", "datas": {"cxxspjjdxx": {"rows": []}}}
+    routes[meta.EP_GPA_RXYL] = {"code": "404"}
+    routes[meta.EP_GPA_RXYL_ALT] = {"code": "403"}
+    fc = FakeClient(routes)
+    # FakeClient._request returns empty html; post_raw for cxxscj if called
+    orig = fc.post_raw
+    def post_raw(path, fields, ref):
+        if "cxxscj" in path:
+            return 200, json.dumps({"datas": {"cxxscj": {"rows": [{"KCM": "x", "ZCJ": 90, "XFJD": 4}]}}}), path
+        return orig(path, fields, ref)
+    fc.post_raw = post_raw
+    s = sync.sync_all(fc, tmp_path)
+    g = json.loads((tmp_path / "official_gpa.json").read_text(encoding="utf-8"))
+    assert g.get("source") != "official" or "cxxscj" not in (g.get("endpoint") or "")
+    # 应回退 jw_point 或 available false
+    assert g.get("source") in ("grades_jw_point", None) or g.get("available") is False or g.get("source") == "grades_jw_point"
