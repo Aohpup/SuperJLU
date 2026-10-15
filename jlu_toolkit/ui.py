@@ -125,6 +125,7 @@ class Store:
                                     else "calendar" if self.calendar().get("first_monday") else None),
             "official_gpa": self._json("official_gpa.json", None),
             "completion": self._json("completion.json", None),
+            "plan_courses": self._json("plan_courses.json", None),
             "gpa_all": core.gpa(gs),
             "updated": (dt.datetime.fromtimestamp(max(mtimes)).isoformat(timespec="minutes")
                         if mtimes else None),
@@ -324,7 +325,7 @@ def seed_demo(root: Path) -> None:
         src = ex_dir / n
         if src.exists():
             shutil.copy(src, root / n)
-    for n in ("calendar.json", "periods.json", "official_gpa.json", "completion.json"):
+    for n in ("calendar.json", "periods.json", "official_gpa.json", "completion.json", "plan_courses.json"):
         src = ex_dir / n
         if src.exists():
             shutil.copy(src, root / n)

@@ -32,8 +32,11 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
     term = term or client.current_semester()
     s["term"] = term
 
+    courses_cache: list = []
+
     def _courses():
         cs = client.fetch_schedule(term)
+        courses_cache.extend(cs)
         jwxt.export_courses_csv(cs, str(root / "schedule.csv"))
         return {"ok": True, "count": len(cs)}
 
@@ -78,9 +81,23 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
                 "groups_with_earned": sum(1 for g in c["groups"] if g.get("earned") is not None),
                 "groups_derived": c.get("groups_derived", 0)}
 
+    def _plan():
+        from . import plan as pl
+        p = pl.fetch_plan(client, grades=grades_cache, courses_now=courses_cache)
+        _wjson(root / "plan_courses.json", p)
+        cf = root / "completion.json"
+        if cf.exists():
+            comp = json.loads(cf.read_text(encoding="utf-8"))
+            _wjson(cf, pl.attach_to_completion(comp, p))
+        st: dict = {}
+        for c in p["courses"]:
+            st[c["status"]] = st.get(c["status"], 0) + 1
+        return {"ok": True, "count": p["count"], "source": p["source"], "status_counts": st,
+                "with_group": sum(1 for c in p["courses"] if c.get("group") or c.get("group_code"))}
+
     for name, fn in (("schedule", _courses), ("grades", _grades), ("exams", _exams),
                      ("calendar", _cal), ("periods", _periods),
-                     ("official_gpa", _gpa), ("completion", _prog)):
+                     ("official_gpa", _gpa), ("completion", _prog), ("plan_courses", _plan)):
         step(name, fn)
     client.save_session()
     return s

@@ -49,6 +49,20 @@ def main():
         return ui.room_types_api(ui.Store(ui.data_dir()))["types"]
 
     @mcp.tool()
+    def plan_courses(status: str = "", term: str = "", nature: str = "") -> dict:
+        """培养方案课程明细（本地 plan_courses.json，先运行 jlu-toolkit sync 或 plan --refresh）。
+        status：已修/在修/未修/未通过；term：建议修读学期（包含匹配）；nature：课程性质/类别（包含匹配）。"""
+        import json as _j
+        from . import ui
+        from .cli import filter_plan
+        f = ui.Store(ui.data_dir()).p("plan_courses.json")
+        if not f.exists():
+            return {"error": "尚无 plan_courses.json，请先运行 jlu-toolkit sync"}
+        p = _j.loads(f.read_text(encoding="utf-8"))
+        cs = filter_plan(p.get("courses", []), status, term, nature)
+        return {"count": len(cs), "courses": cs}
+
+    @mcp.tool()
     def list_campuses() -> list:
         """列出空教室查询可用的校区代码。"""
         from . import ui

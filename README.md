@@ -4,6 +4,15 @@
 
 > 🔒 **隐私**：课表/成绩默认只在你自己的电脑上读取和计算。可选的「教务拉取」会用你的统一身份认证账号直接向学校服务器发 HTTPS 请求，**凭据与会话只存在本机**（chmod 600），不经过任何第三方。
 
+#### 培养方案课程明细（0.3.13）
+
+```bash
+jlu-toolkit plan --probe      # 只读：应用/模块/动作、字段名+标题、行数（无数值）
+jlu-toolkit plan --refresh    # 拉取到 data/plan_courses.json（sync 也会做）
+jlu-toolkit plan --status 未修 --nature 必修
+```
+网页「学业」页各课组可展开查看课程（已修/在修/未修），可按学期、性质筛选。MCP 工具：`plan_courses`。
+
 #### 空教室筛选（0.3.11）
 
 ```bash

@@ -73,6 +73,7 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:3px;opacity:.9}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
 .rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:8px}
 table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:6px;border-bottom:1px solid var(--line,#eee);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none}
+details.gc{margin-top:6px}details.gc summary{cursor:pointer;font-size:12px;opacity:.8}
 </style></head>
 <body>
 <header><h1>JLU Toolkit <small id="upd"></small></h1>
@@ -173,15 +174,26 @@ function renderOfficial(){const o=D.official_gpa,box=$("#ogpa");if(o&&o.availabl
  box.innerHTML=`<h3>教务官方统计 <span class="chip">只读</span></h3><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div><p class="sub" style="margin:8px 0 0">${o.source==="grades_jw_point"?"按教务单科绩点计算":"来自教务「学分绩点统计」"}${o.plan?" · "+esc(o.plan):""}</p>`}
 function num(v){return v==null?"-":(Math.round(v*100)/100)}
 function officialCard(){const o=D.official_gpa;if(!o||o.source!=="official"||!o.items)return"";return`<div class="card"><h2>教务官方 GPA <span class="chip">只读</span></h2><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div></div>`}
+let PF={st:"",tm:"",nt:""};
+function planCourses(){return(D.plan_courses&&D.plan_courses.courses)||[]}
+function pfOk(c){return(!PF.st||c.status===PF.st)&&(!PF.tm||(c.term||"")===PF.tm)&&(!PF.nt||(c.nature||c.category||"")===PF.nt)}
+function planFilters(){const cs=planCourses();if(!cs.length)return"";const u=k=>[...new Set(cs.map(k).filter(Boolean))].sort();const sel=(id,l,v,lab)=>`<label>${lab}<select id="${id}"><option value="">全部</option>${l.map(x=>`<option${x===v?" selected":""}>${esc(x)}</option>`).join("")}</select></label>`;
+ const n=s=>cs.filter(c=>c.status===s).length;return`<div class="card"><h2>培养方案课程 <span class="sub">${cs.length} 门 · 已修 ${n("已修")} · 在修 ${n("在修")} · 未修 ${n("未修")}</span></h2><div class="rgrid">${sel("pf-st",["已修","在修","未修","未通过"],PF.st,"状态")}${sel("pf-tm",u(c=>c.term),PF.tm,"建议修读学期")}${sel("pf-nt",u(c=>c.nature||c.category),PF.nt,"课程性质/类别")}</div></div>`}
+function courseRows(cs){const tag={"已修":"done","在修":"chip","未修":"miss","未通过":"miss"};return cs.filter(pfOk).map(c=>`<tr><td><span class="${tag[c.status]||"chip"}">${esc(c.status)}</span></td><td>${esc(c.code)}</td><td>${esc(c.name)}</td><td>${c.credit??""}</td><td>${esc(c.hours||"")}</td><td>${esc(c.nature||c.category||"")}</td><td>${esc(c.term||"")}</td><td>${esc(c.dept||"")}</td><td>${esc(c.score||"")}</td></tr>`).join("")}
+const PCH="<tr><th>状态</th><th>课程号</th><th>课程名</th><th>学分</th><th>学时</th><th>性质</th><th>建议学期</th><th>开课单位</th><th>成绩</th></tr>";
+function groupCourses(g){const cs=g.courses||[];if(!cs.length)return"";const rows=courseRows(cs);const k=cs.filter(pfOk).length;return`<details class="gc"${PF.st||PF.tm||PF.nt?" open":""}><summary>课程 ${k}/${cs.length}</summary><div style="overflow-x:auto"><table class="rt"><thead>${PCH}</thead><tbody>${rows||'<tr><td colspan="9" class="sub">无符合筛选的课程</td></tr>'}</tbody></table></div></details>`}
+function ungrouped(){const c=D.completion,cs=planCourses();if(!cs.length)return"";const inG=new Set(((c&&c.groups)||[]).flatMap(g=>(g.courses||[]).map(x=>x.code+"|"+x.group_code)));const rest=cs.filter(x=>!inG.has(x.code+"|"+x.group_code));if(!rest.length)return"";return`<div class="card"><h2>${c&&c.groups&&c.groups.length?"未归入课组的课程":"全部课程"} <span class="sub">${rest.filter(pfOk).length} 门</span></h2><div style="overflow-x:auto"><table class="rt"><thead>${PCH}</thead><tbody>${courseRows(rest)}</tbody></table></div></div>`}
 function renderProgress(){const c=D.completion,box=$("#prog");
  if(!c){box.innerHTML=officialCard()+'<div class="card"><p class="empty">还没有学业完成数据，点右上角“刷新”</p></div>';return}
  const pct=c.required?Math.min(100,(c.earned||0)/c.required*100):0;
  let h=officialCard()+`<div class="card"><h2>${esc(c.plan||"培养方案")}</h2><div class="row"><span class="big">${num(c.earned)}</span><span class="sub">/ ${num(c.required)} 学分</span><span class="sp"></span>${c.passed?'<span class="done">✓ 已满足毕业学分</span>':`<span class="miss">还差 ${num(c.missing)} 学分</span>`}</div><div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div><p class="sub" style="margin:0">${c.selected!=null?"已选（含在修）"+num(c.selected)+" 学分 · ":""}${c.calculated_at?"教务计算于 "+esc(c.calculated_at):""}</p></div>`;
  const gs=c.groups||[];
  if(gs.length){const todo=gs.filter(g=>!g.passed&&(g.missing||0)>0);
-  h+=`<div class="card"><h2>各类课程 <span class="sub">${todo.length?todo.length+" 类未完成":"全部完成"}</span></h2>`+gs.map(g=>{const p=g.required?Math.min(100,(g.earned||0)/g.required*100):0;return`<div class="grp"><div class="row"><b>${esc(g.name)}</b>${g.nature?`<span class="chip">${esc(g.nature)}</span>`:""}</div><div class="bar"><i style="width:${p.toFixed(1)}%;${g.passed?"background:var(--ok)":""}"></i></div><div class="row sub"><span>${num(g.earned)} / ${num(g.required)} 学分${g.courses_done?" · "+g.courses_done+" 门":""}${g.earned_source==="derived"?' <span class="chip">按成绩推算</span>':""}</span><span class="sp"></span>${g.passed||!g.missing?'<span class="done">已完成</span>':`<span class="miss">差 ${num(g.missing)}</span>`}</div></div>`}).join("")+`</div>`}
+  h+=planFilters()+`<div class="card"><h2>各类课程 <span class="sub">${todo.length?todo.length+" 类未完成":"全部完成"}</span></h2>`+gs.map(g=>{const p=g.required?Math.min(100,(g.earned||0)/g.required*100):0;return`<div class="grp"><div class="row"><b>${esc(g.name)}</b>${g.nature?`<span class="chip">${esc(g.nature)}</span>`:""}</div><div class="bar"><i style="width:${p.toFixed(1)}%;${g.passed?"background:var(--ok)":""}"></i></div><div class="row sub"><span>${num(g.earned)} / ${num(g.required)} 学分${g.courses_done?" · "+g.courses_done+" 门":""}${g.earned_source==="derived"?' <span class="chip">按成绩推算</span>':""}</span><span class="sp"></span>${g.passed||!g.missing?'<span class="done">已完成</span>':`<span class="miss">差 ${num(g.missing)}</span>`}</div>${groupCourses(g)}</div>`}).join("")+`</div>`}
  else h+='<div class="card"><p class="sub">教务未返回分类明细（课组），仅显示总学分。可运行 jlu-toolkit explore 帮助适配。</p></div>';
- box.innerHTML=h}
+ if(!gs.length)h+=planFilters();
+ box.innerHTML=h+ungrouped()}
+document.addEventListener("change",e=>{const id=e.target.id;if(id==="pf-st"||id==="pf-tm"||id==="pf-nt"){PF={st:$("#pf-st").value,tm:$("#pf-tm").value,nt:$("#pf-nt").value};renderProgress()}});
 function renderAll(){
  $("#upd").textContent=D.updated?"更新于 "+D.updated.replace("T"," "):"";
  $("#fm").value=D.first_monday||"";

@@ -145,6 +145,16 @@ def main():
     rm.add_argument("-o", "--out", help="--probe 报告路径（默认临时目录 jlu_rooms_probe.json）")
     rm.add_argument("--debug", action="store_true")
 
+    pp = sub.add_parser("plan", help="培养方案课程明细（课程号/学分/学期/课组/修读状态）")
+    pp.add_argument("--probe", action="store_true", help="只读探测：应用/模块/动作名、字段名+标题、行数（无数值）")
+    pp.add_argument("--refresh", action="store_true", help="从教务重新拉取（默认读本地 plan_courses.json）")
+    pp.add_argument("--status", default="", help="只看某状态：已修/在修/未修/未通过")
+    pp.add_argument("--term", default="", help="按建议修读学期筛选（包含匹配）")
+    pp.add_argument("--nature", default="", help="按课程性质/类别筛选（包含匹配）")
+    pp.add_argument("--json", action="store_true", help="ASCII JSON 输出")
+    pp.add_argument("-o", "--out", help="--probe 报告路径")
+    pp.add_argument("--debug", action="store_true")
+
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
@@ -183,6 +193,8 @@ def main():
         _cmd_explore(x)
     elif x.cmd == "ui":
         _cmd_ui(x)
+    elif x.cmd == "plan":
+        _cmd_plan(x)
     elif x.cmd == "sync":
         _cmd_sync(x)
     elif x.cmd == "rooms":
@@ -566,6 +578,66 @@ def sort_rooms(rs, key: str):
     num = k in ("seats", "exam_seats")
     f = (lambda r: float(getattr(r, k) or 0)) if num else (lambda r: str(getattr(r, k, "")))
     return sorted(rs, key=f, reverse=desc)
+
+
+def filter_plan(courses: list, status: str = "", term: str = "", nature: str = "") -> list:
+    return [c for c in courses if (not status or c.get("status") == status)
+            and (not term or term in (c.get("term") or ""))
+            and (not nature or nature in (c.get("nature") or "") or nature in (c.get("category") or ""))]
+
+
+def _cmd_plan(x):
+    import tempfile
+    from pathlib import Path
+
+    from . import plan as pl, ui
+    store = ui.Store(ui.data_dir())
+    f = store.p("plan_courses.json")
+    err = lambda m: print(m, file=sys.stderr)  # noqa: E731
+    try:
+        if x.probe or x.refresh or not f.exists():
+            client = jwxt.JwxtClient(debug=bool(x.debug))
+            if not client.load_session():
+                raise jwxt.LoginError("没有已保存的会话")
+            if x.probe:
+                rep, _ = pl.explore(client, log=err)
+                path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_plan_probe.json"
+                path.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
+                client.save_session()
+                err(f"探测报告：{path}")
+                calls = [c for c in rep["calls"] if c.get("rows")]
+                print(json.dumps({"best": rep["best"], "apps": {k: {"entered": v.get("entered"),
+                                  "modules": sorted(v.get("modules") or {})} for k, v in rep["apps"].items()},
+                                  "calls_total": len(rep["calls"]), "calls_with_rows": calls}))
+                return
+            grades = jwxt.load_grades(str(store.p("grades.csv"))) if store.p("grades.csv").exists() else []
+            courses_now = core.load_courses(str(store.p("schedule.csv"))) if store.p("schedule.csv").exists() else []
+            p = pl.fetch_plan(client, grades, courses_now, use_cache=not x.refresh)
+            f.write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
+            cf = store.p("completion.json")
+            if cf.exists():
+                cf.write_text(json.dumps(pl.attach_to_completion(json.loads(cf.read_text(encoding="utf-8")), p),
+                                         ensure_ascii=False, indent=1), encoding="utf-8")
+            client.save_session()
+        p = json.loads(f.read_text(encoding="utf-8"))
+    except jwxt.LoginError as e:
+        err(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login"); _json_err(x, e); sys.exit(1)
+    except jwxt.JwxtError as e:
+        err(f"培养方案获取失败：{e}"); _json_err(x, e); sys.exit(1)
+    cs = filter_plan(p.get("courses", []), x.status, x.term, x.nature)
+    if x.json:
+        print(json.dumps({"source": p.get("source"), "count": len(cs), "courses": cs}))
+        return
+    groups: dict = {}
+    for c in cs:
+        groups.setdefault(c.get("group") or c.get("category") or c.get("nature") or "未分组", []).append(c)
+    for g, items in groups.items():
+        done = sum(c["credit"] or 0 for c in items if c["status"] == "已修")
+        tot = sum(c["credit"] or 0 for c in items)
+        print(f"■ {g}  已修 {done:g}/{tot:g} 学分")
+        for c in items:
+            print(f"   [{c['status']}] {c['code']} {c['name']} {c['credit'] or ''}学分 "
+                  f"{c.get('term') or ''} {c.get('nature') or ''} {c.get('score') or ''}".rstrip())
 
 
 def _json_err(x, e) -> None:
