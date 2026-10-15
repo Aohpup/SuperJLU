@@ -334,6 +334,15 @@ def _link_ok(u) -> bool:
     return p.scheme == "https" and (h == "jlu.edu.cn" or h.endswith(".jlu.edu.cn")) and not p.username
 
 
+def _vpn_rewriter():
+    """露娜 #18 的 campus.vpn_url（WebVPN 主机 AES-CFB 加密）；还没合进来时返回 None。"""
+    try:
+        from .campus import vpn_url  # type: ignore
+    except Exception:  # noqa: BLE001 — 模块不存在或缺 cryptography 都当作暂不支持
+        return None
+    return vpn_url
+
+
 def campus_links_api(override: Optional[Path] = None) -> dict:
     """GET /api/links —— 内置 data/campus_links.json + 可选用户覆盖（config_dir/campus_links.json）。
 
@@ -358,6 +367,7 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
         except (json.JSONDecodeError, OSError, AttributeError, TypeError) as e:
             err = f"覆盖文件无效，已忽略：{e}"
     out, dropped = [], 0
+    rewrite = _vpn_rewriter()
     for i in order:
         x = items[i]
         if x.get("hidden"):
@@ -369,6 +379,13 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
         if "vpn_url" in y and not _link_ok(y["vpn_url"]):
             y.pop("vpn_url")
         y["campus_only"] = bool(y.get("campus_only"))
+        if y["campus_only"] and "vpn_url" not in y and rewrite is not None:
+            try:
+                v = rewrite(y["url"])
+            except Exception:  # noqa: BLE001
+                v = None
+            if v and v != y["url"] and _link_ok(v):
+                y["vpn_url"] = v
         out.append(y)
     r = {"ok": True, "links": out, "source": src, "dropped": dropped}
     if err:

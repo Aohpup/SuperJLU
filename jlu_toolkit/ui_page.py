@@ -120,6 +120,7 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 .lk{display:flex;flex-direction:column;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px}
 .lk .hd{display:flex;align-items:center;gap:10px}.lk .ic{width:34px;height:34px;border-radius:10px;background:var(--pri2);color:var(--pri);display:grid;place-items:center;font-size:17px;flex:none}
 .lk .hd b{flex:1;font-size:15px}.lk .lg{font-size:12.5px;color:var(--sub)}.lk .row{margin-top:4px}
+.offl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:2px 10px;border-radius:999px;margin:0 0 10px;background:var(--card2);color:var(--sub,inherit);border:1px dashed var(--line)}
 .tag{display:inline-block;font-size:11.5px;font-weight:600;padding:0 8px;border-radius:999px;line-height:1.7;background:var(--warn2);color:var(--warn)}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head>
@@ -128,7 +129,7 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 <div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">◐</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">☀</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">☾</button></div>
 <button class="btn" id="refresh" title="用已保存会话从教务刷新">⟳ 刷新</button></header>
 <main>
-<div id="sess" hidden></div>
+<div id="sess" hidden></div><div id="offl" hidden></div>
 <div id="boot" class="card"><div class="state"><div class="spin"></div><b>正在读取本地数据…</b><div class="skel"></div><div class="skel" style="max-width:300px"></div></div></div>
 <section class="tab on" id="t-kb">
  <div class="card" id="nextexam" hidden></div>
@@ -197,7 +198,7 @@ const COLORS=["#3b6fd4","#d4573b","#2e9e6a","#9b51e0","#d48a1e","#1f8fa8","#c241
 let D=null, week=1, include=new Set(), current="__all__", dirty=false;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2600)}
 function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
-async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});try{renderSession()}catch(_){}}if(!r.ok||j.ok===false)throw new Error(j.error||(r.status===401?"登录会话已过期":r.status));return j}
+async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});if(D&&((D.courses||[]).length||(D.grades||[]).length)&&!D.offline){D.offline=true;D.cached_at=D.cached_at||D.updated}try{renderSession();renderOffline()}catch(_){}}if(j&&j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j;if(!r.ok||j.ok===false)throw new Error(j.error||(r.status===401?"登录会话已过期":r.status));return j}
 function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
 function maxWeek(){return Math.max((D.calendar&&D.calendar.total_weeks)||16,...D.courses.flatMap(c=>c.weeks))}
 function color(name){let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;return COLORS[h%COLORS.length]}
@@ -269,7 +270,10 @@ function renderProgress(){const c=D.completion,box=$("#prog");
  if(!gs.length)h+=planFilters();
  box.innerHTML=h+ungrouped()}
 document.addEventListener("change",e=>{const id=e.target.id;if(id==="pf-st"||id==="pf-tm"||id==="pf-nt"){PF={st:$("#pf-st").value,tm:$("#pf-tm").value,nt:$("#pf-nt").value};renderProgress()}});
-function renderAll(){
+function fmtCached(t){if(!t)return"未知时间";const d=new Date(typeof t==="number"?t*1000:t);if(isNaN(d))return esc(String(t));const p=n=>String(n).padStart(2,"0");return `${d.getMonth()+1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+function offlineBadge(j){return j&&j.offline===true?`<span class="offl" title="登录失效或网络不通，显示的是本机缓存">⏏ 离线数据 · 更新于 ${fmtCached(j.cached_at)}</span>`:""}
+function renderOffline(){const b=$("#offl");if(!b)return;const h=offlineBadge(D);b.hidden=!h;b.innerHTML=h}
+function renderAll(){try{renderOffline()}catch(_){}
  $("#upd").textContent=D.updated?"更新于 "+D.updated.replace("T"," "):"";
  $("#fm").value=D.first_monday||"";
  const terms=[...new Set(D.grades.map(g=>g.term))].sort().reverse();const tf=$("#termf"),keep=tf.value;
@@ -314,7 +318,7 @@ $("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查�
 let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null;
 function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
 function oaLink(u,label){return/^https?:\/\/oa\.jlu\.edu\.cn\//.test(u||"")?`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`:""}
-function renderOA(){const box=$("#oa-box");if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">校外请先连接 vpn.jlu.edu.cn 再点“更新”。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
+function renderOA(){const box=$("#oa-box");queueMicrotask(()=>{if(OA&&OA.offline===true&&!box.querySelector(".offl"))box.insertAdjacentHTML("afterbegin",offlineBadge(OA))});if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">校外请先连接 vpn.jlu.edu.cn 再点“更新”。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
  if(!OA)return;const all=OA.items||[];const ds=[...new Set(all.map(i=>i.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh"));const sel=$("#oa-dept");sel.innerHTML='<option value="">全部单位</option>'+ds.map(d=>`<option${d===OAQ.dept?" selected":""}>${esc(d)}</option>`).join("");
  $("#oa-meta").textContent=all.length?`${all.length} 条${OA.fetched_at?" · 更新于 "+String(OA.fetched_at).replace("T"," ").slice(0,16):""}`:"";
  if(!all.length){box.innerHTML=`<div class="state"><b>还没有通知</b>点右上角“更新”从 OA 取第一页，或在终端运行 <code>jlu-toolkit oa notices</code>。</div>`;return}
