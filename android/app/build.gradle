@@ -29,6 +29,9 @@ chaquopy {
             install "cryptography==42.0.8"
             // 图形验证码自动识别（captcha_solver）需要 Pillow；Chaquopy 提供 cp313 arm64/x86_64 轮子
             install "pillow==11.0.0"
+            // 成绩文件导入：纯 Python 读取器，不引入 pandas / NumPy 原生依赖。
+            install "openpyxl>=3.1,<4"
+            install "xlrd>=2.0,<3"
             // keyring 在 Android 上没有可用后端，暂不安装，走 secure_store 的文件回退
         }
     }
