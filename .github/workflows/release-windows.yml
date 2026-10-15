@@ -1,0 +1,71 @@
+name: Release Windows exe
+
+# 推送 v* 标签时：构建 Windows 单文件 exe，附带 SHA256，发布到 GitHub Release。
+# 也可在 Actions 页面手动运行（只上传构建产物，不发 Release）。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[captcha]" pyinstaller pytest
+      - name: Test
+        run: pytest -q
+      - name: Check tag matches version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(python -c "import jlu_toolkit; print(jlu_toolkit.__version__)")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v$v"; exit 1; }
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --name jlu-toolkit --console
+          --collect-data jlu_toolkit
+          --collect-submodules jlu_toolkit
+          --hidden-import keyring.backends.Windows
+          packaging/jlu_toolkit_exe.py
+      - name: Smoke test
+        run: dist\jlu-toolkit.exe --version
+      - name: SHA256
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist\jlu-toolkit.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  jlu-toolkit.exe" | Out-File -Encoding ascii dist\jlu-toolkit.exe.sha256
+          Get-Content dist\jlu-toolkit.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jlu-toolkit-windows
+          path: |
+            dist/jlu-toolkit.exe
+            dist/jlu-toolkit.exe.sha256
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: jlu-toolkit-windows
+          path: dist
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/jlu-toolkit.exe dist/jlu-toolkit.exe.sha256 \
+            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

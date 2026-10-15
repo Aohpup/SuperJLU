@@ -17,9 +17,40 @@ def _utf8_stdio() -> None:
 
 
 def main():
+    try:
+        _main()
+    except jwxt.SessionExpiredError as e:
+        print(f"{e}", file=sys.stderr)
+        sys.exit(3)
+
+
+def _cmd_status(x):
+    if x.check:
+        client = jwxt.JwxtClient()
+        if client.load_session():
+            try:
+                client.session_alive()
+            except jwxt.JwxtError:
+                pass
+    st = jwxt.session_status()
+    if x.json:
+        print(json.dumps(st, ensure_ascii=False))
+    else:
+        print(f"会话：{st['message']}（state={st['state']}，存储={st['storage']}）")
+    if st["needs_login"]:
+        sys.exit(3)
+
+
+def _main():
     _utf8_stdio()
+    from . import __version__
     p = argparse.ArgumentParser(prog="jlu-toolkit", description="吉大课表/成绩本地工具")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    st = sub.add_parser("status", help="查看登录会话状态（默认不联网；--check 访问教务一次验证）")
+    st.add_argument("--check", action="store_true", help="访问教务一次确认会话是否仍有效")
+    st.add_argument("--json", action="store_true")
 
     a = sub.add_parser("ics", help="课表 CSV 导出 iCal")
     a.add_argument("csv")
@@ -53,7 +84,7 @@ def main():
     f.add_argument(
         "--save-credentials",
         action="store_true",
-        help="可选：把账号密码保存到 ~/.config/jlu-toolkit/credentials.json（chmod 600）",
+        help="可选：保存账号密码（优先加密存入系统钥匙串；不可用时为 ~/.config/jlu-toolkit/credentials.json，chmod 600）",
     )
     f.add_argument(
         "--force-login",
@@ -185,6 +216,8 @@ def main():
     elif x.cmd == "today":
         for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
+    elif x.cmd == "status":
+        _cmd_status(x)
     elif x.cmd == "fetch":
         _cmd_fetch(x)
     elif x.cmd == "exams":
