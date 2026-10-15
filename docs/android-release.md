@@ -14,7 +14,7 @@ CI：`.github/workflows/release-android.yml`。推 `v*` 标签 → 签名 releas
    versionName = System.getenv("JLU_VERSION_NAME") ?: "0.0.0-dev"   // = jlu_toolkit.__version__
    versionCode = (System.getenv("JLU_VERSION_CODE") ?: "1").toInt()  // = GitHub run number，单调递增
    ```
-5. JDK 17、CI 用 `android-actions/setup-android` 的最新 build-tools；Chaquopy `buildPython` 用 CI 里的 Python 3.11（`python3` 在 PATH 上）。
+5. JDK 17、SDK platform 35（build-tools 35.0.0）、Chaquopy 16.1、CI 用 `android-actions/setup-android` 的最新 build-tools；Chaquopy `buildPython` 用 CI 里的 Python 3.13（`python3` 在 PATH 上）。
 6. 签名：CI 从 secrets `ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD` 还原 PKCS12 keystore（别名 `jlu-toolkit`，RSA 4096，30 年）。Gradle 不需要读这些变量。
 
 ## Chaquopy 与 cryptography
