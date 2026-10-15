@@ -272,11 +272,18 @@ def row_to_room(r: dict) -> Optional[Room]:
 
 
 def _abs(a: str) -> str:
-    a = a.split("?")[0]
+    """相对 URL → /jwapp/sys/kxjas/modules/...（见 emap.App.abs）。"""
+    a = (a or "").split("?")[0].strip()
+    if not a:
+        return a
     if a.startswith("/"):
         return a
     a = a.lstrip("./")
-    return APP_ROOT + a if not a.startswith("jwapp/") else "/" + a
+    if a.startswith("jwapp/"):
+        return "/" + a
+    if a.startswith("modules/"):
+        return APP_ROOT + a
+    return BASE + a
 
 
 _DO_RE = re.compile(r"""["'(]([\w./*-]*?\.do)\b""")

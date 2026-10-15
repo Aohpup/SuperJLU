@@ -28,11 +28,23 @@ class App:
         self.base = self.root + "modules/"
 
     def abs(self, a: str) -> str:
-        a = a.split("?")[0]
+        """解析 EMAP 元数据里的相对 URL。
+
+        元数据常给 ``cjcx/cxxspjjdxx.do`` 或 ``./modules/cjcx/xxx.do``，
+        正确绝对路径是 ``/jwapp/sys/<app>/modules/...``（不是 ``/<app>/cjcx/...``）。
+        """
+        a = (a or "").split("?")[0].strip()
+        if not a:
+            return a
         if a.startswith("/"):
             return a
         a = a.lstrip("./")
-        return "/" + a if a.startswith("jwapp/") else self.root + a
+        if a.startswith("jwapp/"):
+            return "/" + a
+        if a.startswith("modules/"):
+            return self.root + a
+        # ``cjcx/xxx.do`` → modules/cjcx/xxx.do
+        return self.base + a
 
     def view_files(self) -> list[str]:
         r = self.route

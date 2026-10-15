@@ -45,7 +45,7 @@ def test_ics_uses_periods():
 def test_parse_official_gpa():
     g = meta.parse_official_gpa({"PPJDCX": 3.6123, "JQPJF": 87.0, "PYFAMC": "计科", "XH": "secret"})
     assert g["plan"] == "计科"
-    assert [i["key"] for i in g["items"]] == ["PPJDCX", "JQPJF"]
+    assert [i["key"] for i in g["items"]] == ["JQPJF", "PPJDCX"]  # GPA_FIELDS 顺序：JQPJF 在前
     assert g["items"][1]["value"] == "87"
     assert "secret" not in json.dumps(g)
 
@@ -122,7 +122,7 @@ def test_fetch_gpa_sends_xh_fields():
     fc = FakeClient(ROUTES)
     g = meta.fetch_official_gpa(fc)
     sent = dict(fc.posts)[meta.EP_GPA]
-    assert all(sent[f"XH{i}"] == "20240001" for i in range(1, 7))
+    assert sent.get("XH") == "20240001" or all(sent.get(f"XH{i}") == "20240001" for i in range(1, 7))
     assert g["items"][0]["value"] == "3.61"
 
 
@@ -269,17 +269,20 @@ def test_emap_discover_cjcx_finds_gpa_action():
                 return 200, json.dumps({"datas": {"grpyfacx": {"rows": [{"XH": "20240001"}]}}}), path
             if path.endswith("/cjcx.do"):
                 return 200, json.dumps({"models": [
-                    {"name": "cxzxfaxfjd", "url": "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do",
+                    {"name": "cxzxfaxfjd", "url": "cjcx/cxzxfaxfjd.do",
                      "controls": [{"name": "XH1"}, {"name": "XH2"}, {"name": "PPJDCX"}]},
-                    {"name": "xscjcx", "url": "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do",
+                    {"name": "xscjcx", "url": "cjcx/xscjcx.do",
                      "controls": [{"name": "XNXQDM"}]},
                 ]}), path
-            if path.endswith("cxzxfaxfjd.do"):
+            if path == "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do":
                 return 200, json.dumps({"datas": {"cxzxfaxfjd": {"rows": [{"PPJDCX": "3.61", "JQPJF": "87"}]}}}), path
+            if "/jwapp/sys/cjcx/cjcx/" in path:
+                raise AssertionError(f"bad path {path}")
             return 404, "", path
 
     g = meta.fetch_official_gpa(FC())
-    assert g["source"] == "official" and [i["key"] for i in g["items"]] == ["PPJDCX", "JQPJF"]
+    assert g["source"] == "official" and [i["key"] for i in g["items"]] == ["JQPJF", "PPJDCX"]
+    assert g["endpoint"] == "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"
     rep = meta.probe_gpa(FC(), log=lambda s: None)
     dumped = json.dumps(rep)
     assert "3.61" not in dumped and "87" not in dumped
@@ -291,3 +294,50 @@ def test_gpaish_hint():
     assert meta._gpaish("cxzxfaxfjd", "/x/cxzxfaxfjd.do", [])
     assert meta._gpaish("", "/x/xspjxfjd.do", ["XH"])
     assert not meta._gpaish("xscjcx", "/x/xscjcx.do", ["XNXQDM"])
+
+
+def test_emap_abs_resolves_under_modules():
+    from jlu_toolkit import emap
+    app = emap.App("cjcx", "cjcx")
+    assert app.abs("cjcx/cxxspjjdxx.do") == "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do"
+    assert app.abs("./modules/cjcx/cxxspjjdxx.do") == "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do"
+    assert app.abs("/jwapp/sys/cjcx/modules/cjcx/x.do") == "/jwapp/sys/cjcx/modules/cjcx/x.do"
+    assert app.abs("cjcx/xxx.do") != "/jwapp/sys/cjcx/cjcx/xxx.do"
+
+
+def test_parse_official_gpa_jlu_fields():
+    g = meta.parse_official_gpa({"PJJD": 3.747, "JQPJF": 87.5, "SYBXKGPA": 3.8, "XH": "secret"})
+    keys = [i["key"] for i in g["items"]]
+    assert keys == ["PJJD", "JQPJF", "SYBXKGPA"]
+    assert g["items"][0]["label"] == "平均绩点"
+    assert "secret" not in json.dumps(g)
+
+
+def test_fetch_uses_resolved_cxxspjjdxx():
+    class FC:
+        def enter_emap_app(self, app): pass
+        def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+            if "index.do" in url:
+                return 200, '<script src="../modules/cjcx/cjcx.js"></script>', url, b""
+            if url.endswith("/modules/cjcx/cjcx.js"):
+                return 200, 'getModel("modules/cjcx.do","cxxspjjdxx")', url, b""
+            return 404, "", url, b""
+        def post_raw(self, path, fields, ref):
+            if path.endswith("grpyfacx.do"):
+                return 200, json.dumps({"datas": {"grpyfacx": {"rows": [{"XH": "20240001"}]}}}), path
+            if path.endswith("/cjcx.do"):
+                return 200, json.dumps({"models": [
+                    {"name": "cxxspjjdxx", "url": "cjcx/cxxspjjdxx.do",
+                     "controls": [{"name": "XH"}, {"name": "XNXQDM"}, {"name": "PJJD"}, {"name": "JQPJF"}]},
+                ]}), path
+            if path == "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do":
+                assert fields.get("XH") == "20240001"
+                assert "XNXQDM" not in fields  # 累计，不传学期
+                return 200, json.dumps({"datas": {"cxxspjjdxx": {"rows": [{"PJJD": "3.747", "JQPJF": "87.5", "SYBXKGPA": "3.8"}]}}}), path
+            if "/jwapp/sys/cjcx/cjcx/" in path:
+                raise AssertionError(f"bad resolved path: {path}")
+            return 404, "", path
+
+    g = meta.fetch_official_gpa(FC())
+    assert g["source"] == "official" and g["endpoint"].endswith("cxxspjjdxx.do")
+    assert [i["key"] for i in g["items"]] == ["PJJD", "JQPJF", "SYBXKGPA"]

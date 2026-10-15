@@ -16,7 +16,6 @@ import datetime as dt
 import json
 import re
 from collections import Counter
-import re
 from typing import Optional
 
 from . import jwxt
@@ -30,7 +29,13 @@ EP_CALENDAR = "/jwapp/sys/wdkb/modules/xskcb/cxxljc.do"
 EP_PERIODS = "/jwapp/sys/wdkb/modules/jshkcb/jc.do"
 EP_GPA = "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"
 # 吉大实测 cxzxfaxfjd 返回 {"code":"404"}；依次尝试候选（探测用，均为只读查询）
+EP_GPA_JLU = "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do"
+EP_GPA_TERM = "/jwapp/sys/cjcx/modules/cjcx/cxsfwfcsj.do"
+EP_GPA_TERM_ALT = "/jwapp/sys/cjcx/modules/cjcx/cxcjcxsfkf.do"
 GPA_CANDIDATES = [
+    (EP_GPA_JLU, "XH"),          # 吉大实测：平均绩点 / 加权平均分 / 必修 GPA
+    (EP_GPA_TERM, "XH"),
+    (EP_GPA_TERM_ALT, "XH"),
     (EP_GPA, "XH1..6"),
     (EP_GPA, "XH"),
     ("/jwapp/sys/cjcx/modules/cjcx/cxxsjdtj.do", "XH"),
@@ -46,14 +51,28 @@ EP_PLAN = "/jwapp/sys/xsfacx/modules/pyfacxepg/grpyfacx.do"
 EP_COMPLETION = "/jwapp/sys/xywccx/modules/xywccx/cxxsscfa.do"
 EP_COMPLETION_GROUPS = "/jwapp/sys/xywccx/modules/xywccx/cxscfakz.do"
 
-# 官方绩点字段 → 中文标签（ysu-sdk 同款金智字段）
+# 官方绩点字段 → 中文标签（吉大 cxxspjjdxx + ysu-sdk 同款）
 GPA_FIELDS = [
+    # —— 吉大成绩页「平均绩点信息」cxxspjjdxx ——
+    ("PJJD", "平均绩点"),
+    ("JQPJF", "加权平均分"),
+    ("PJF", "平均分"),
+    ("SYBXKGPA", "全部必修课绩点"),
+    ("SYBXXXKGPA", "全部必修+选修绩点"),
+    ("XQBXKGPA", "本学期必修课绩点"),
+    ("XQBXXXKGPA", "本学期必修+选修绩点"),
+    ("XQPJF", "本学期平均分"),
+    # —— 学期统计 cxcjcxsfkf / cxsfwfcsj ——
+    ("GPA", "绩点（学期统计）"),
+    ("JDF", "绩点分"),
+    ("HDXF", "获得学分"),
+    ("XKXF", "选课学分"),
+    # —— 其他金智部署常见字段 ——
     ("PPJDCX", "平均学分绩点（初修）"),
     ("PPJDZG", "平均学分绩点（最高）"),
     ("BXKPPJD", "必修课平均学分绩点"),
     ("XWKPJJDCX", "学位课绩点（初修）"),
     ("XWKPJJDZG", "学位课绩点（最高）"),
-    ("JQPJF", "加权平均分"),
     ("SSPJF", "算术平均分"),
     ("XWKJQPJF", "学位课加权平均分"),
     ("BXKHDXF", "必修课已获学分"),
@@ -297,18 +316,24 @@ def gpa_from_jw_points(grades) -> Optional[dict]:
                       {"key": "JW_COUNT", "label": "含教务绩点的课程数", "value": str(n)}]}
 
 
-GPA_ACTION_HINT = re.compile(r"(xfjd|pjxfjd|pjxf|jqpjf|sspjf|gpa|jdtj|xftj|cxzxfa|cxpj|xspj)", re.I)
+GPA_ACTION_HINT = re.compile(r"(pjjd|spjjd|xfjd|pjxfjd|pjxf|jqpjf|sspjf|gpa|jdtj|xftj|cxzxfa|cxpj|xspj|sfwfcsj|cjcxsfkf)", re.I)
 
 
-def _xh_fields(xh: str, fields: list[str]) -> dict:
+def _xh_fields(xh: str, fields: list[str], term: str = "") -> dict:
     f = set(fields)
+    out = {}
     if any(k.startswith("XH") and k[2:].isdigit() for k in f):
-        return {k: xh for k in f if k.startswith("XH")}
-    if "XH" in f:
-        return {"XH": xh}
-    if any(k.startswith("XH") for k in f):
-        return {k: xh for k in f if k.startswith("XH")}
-    return {f"XH{i}": xh for i in range(1, 7)} | {"XH": xh}
+        out = {k: xh for k in f if k.startswith("XH")}
+    elif "XH" in f or not f:
+        out = {"XH": xh}
+    elif any(k.startswith("XH") for k in f):
+        out = {k: xh for k in f if k.startswith("XH")}
+    else:
+        out = {"XH": xh, **{f"XH{i}": xh for i in range(1, 7)}}
+    # XNXQDM：有学期就传；没有则不传（查累计），避免误查空学期
+    if "XNXQDM" in f and term:
+        out["XNXQDM"] = term
+    return out
 
 
 def _gpaish(name: str, url: str, fields: list[str]) -> bool:
@@ -336,11 +361,12 @@ def probe_gpa(client, log=print) -> dict:
         {"module": "guess", "name": n, "url": p, "fields": [], "gpaish": True}
         for p, n in [(p, p.rsplit("/", 1)[-1]) for p, _ in GPA_CANDIDATES]
         if not any(a["url"] == p for a in actions)]
-    # 去重
+    # 去重 + 优先 cxxspjjdxx
     seen, uniq = set(), []
     for a in candidates:
         if a["url"] not in seen:
             seen.add(a["url"]); uniq.append(a)
+    uniq.sort(key=lambda a: (0 if "cxxspjjdxx" in a["url"] else 1 if ("cxsfwfcsj" in a["url"] or "cxcjcxsfkf" in a["url"]) else 2, a["url"]))
     xh = _s(_plan_row(client).get("XH"))
     report["has_xh"] = bool(xh)
     tries = []
@@ -415,6 +441,15 @@ def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
         for path, _ in GPA_CANDIDATES:
             if path not in {u for u, _ in candidates}:
                 candidates.append((path, []))
+        # 吉大成绩页官方「平均绩点」优先
+        def _rank(item):
+            u = item[0]
+            if "cxxspjjdxx" in u:
+                return 0
+            if "cxsfwfcsj" in u or "cxcjcxsfkf" in u:
+                return 1
+            return 2
+        candidates.sort(key=_rank)
         if xh:
             for url, fields in candidates:
                 try:

@@ -503,18 +503,15 @@ def _cmd_gpa_probe(x):
     path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_gpa_probe.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"报告：{path}", file=sys.stderr)
-    # 只打印动作名/字段名/试调用结构
+    # 终端默认只打印试调用摘要；完整模块清单在报告文件里
     print(json.dumps({
-        "modules": {m: {"via": v["via"], "actions": [{"name": a["name"], "url": a["url"], "fields": a["fields"]}
-                                                     for a in v["actions"]]}
-                    for m, v in report.get("meta", {}).items()},
-        "gpaish_actions": [a for a in report.get("actions", []) if a.get("gpaish")],
-        "tries": [{k: t.get(k) for k in ("url", "name", "param_names", "status", "code", "msg",
-                                         "datas_key", "fields", "matched_labels")} for t in report.get("tries", [])],
         "hit": report.get("hit"),
         "has_xh": report.get("has_xh"),
-        "discovered_do": (report.get("discover") or {}).get("do_paths"),
         "modules_seen": (report.get("discover") or {}).get("modules_seen"),
+        "gpaish_actions": [{"name": a["name"], "url": a["url"], "fields": a["fields"]}
+                           for a in report.get("actions", []) if a.get("gpaish")],
+        "tries": [{k: t.get(k) for k in ("url", "status", "code", "msg", "datas_key", "fields", "matched_labels")}
+                  for t in report.get("tries", [])],
     }, ensure_ascii=False, indent=1))
 
 

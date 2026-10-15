@@ -100,4 +100,5 @@ def test_discover_finds_view_script_and_module():
 def test_app_is_kxjas():
     assert rooms.APP.endswith("/jwapp/sys/kxjas/*default/index.do")
     assert rooms._abs("./modules/kxjscx/cxkxjs.do") == "/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do"
+    assert rooms._abs("kxjscx/cxkxjs.do") == "/jwapp/sys/kxjas/modules/kxjscx/cxkxjs.do"
     assert rooms._abs("modules/kxjscx.do?*json=1") == "/jwapp/sys/kxjas/modules/kxjscx.do"
