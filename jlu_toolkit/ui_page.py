@@ -19,7 +19,10 @@ header .thm button{padding:4px 8px}
 *{box-sizing:border-box}html,body{margin:0}
 body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 code{font:12.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--pri2);color:var(--pri);padding:1px 6px;border-radius:6px}
-header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid transparent;padding:12px max(16px,env(safe-area-inset-left));display:flex;align-items:center;gap:10px}
+header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid transparent;padding:calc(12px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left));display:flex;align-items:center;gap:10px;min-width:0}
+header .ttl{white-space:nowrap;flex:none}header>.thm,header>.btn{flex:none;white-space:nowrap}
+@media(max-width:420px){header{gap:6px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}header .thm button{padding:3px 6px}header>.btn{padding-left:10px;padding-right:10px}header .lbl{display:none}}
+@media(max-width:350px){header .logo{width:26px;height:26px}header h1{font-size:16px}header .thm button{padding:3px 4px}}
 header .logo{width:30px;height:30px;border-radius:10px;background:var(--pri);color:#fff;display:grid;place-items:center;font-weight:750;font-size:14px;flex:none}
 header h1{font-size:17px;margin:0;flex:1;font-weight:680;letter-spacing:.2px;display:flex;flex-direction:column;line-height:1.25;min-width:0}
 header small{color:var(--sub);font-size:12px;font-weight:450;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -134,9 +137,9 @@ dialog#login .cap{display:flex;gap:8px;align-items:center}dialog#login .cap img{
 dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
 </style></head>
 <body>
-<header><span class="logo" aria-hidden="true">S</span><h1>SuperJLU <small class="sub" style="font-weight:500">吉大人的一站式服务</small> <small id="upd"></small></h1>
+<header><span class="logo" aria-hidden="true">S</span><h1><span class="ttl">SuperJLU</span><small class="sub" style="font-weight:500">吉大人的一站式服务</small> <small id="upd"></small></h1>
 <div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">◐</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">☀</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">☾</button></div>
-<button class="btn" id="refresh" title="用已保存会话从教务刷新">⟳ 刷新</button></header>
+<button class="btn" id="refresh" title="用已保存会话从教务刷新" aria-label="刷新">⟳<span class="lbl"> 刷新</span></button></header>
 <main>
 <div id="sess" hidden></div><div id="offl" hidden></div>
 <div id="boot" class="card"><div class="state"><div class="spin"></div><b>正在读取本地数据…</b><div class="skel"></div><div class="skel" style="max-width:300px"></div></div></div>
@@ -320,7 +323,7 @@ $("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});awa
 document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTheme(b.dataset.theme));window.__setTheme(localStorage.getItem("jlu-theme")||"system");
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
-$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.textContent="刷新中…";try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.textContent="⟳ 刷新"}};
+$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.innerHTML='⟳<span class="lbl"> 刷新中…</span>';try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.innerHTML='⟳<span class="lbl"> 刷新</span>'}};
 (function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);$("#rwd").value=String(new Date().getDay()||7)})();
 let RM="date",RR=[],RS={k:"name",d:1};
 document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>{RM=b.dataset.m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll(".m-date").forEach(e=>e.hidden=RM!=="date");document.querySelectorAll(".m-week").forEach(e=>e.hidden=RM!=="week")});
