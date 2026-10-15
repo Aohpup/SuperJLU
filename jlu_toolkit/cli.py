@@ -16,9 +16,9 @@ def _utf8_stdio() -> None:
             pass
 
 
-def main():
+def main(argv=None):
     try:
-        _main()
+        _main(argv)
     except jwxt.SessionExpiredError as e:
         print(f"{e}", file=sys.stderr)
         sys.exit(3)
@@ -41,7 +41,7 @@ def _cmd_status(x):
         sys.exit(3)
 
 
-def _main():
+def _main(argv=None):
     _utf8_stdio()
     from . import __version__
     p = argparse.ArgumentParser(prog="jlu-toolkit", description="吉大课表/成绩本地工具")
@@ -204,7 +204,7 @@ def _main():
     u.add_argument("--data-dir", help="自定义数据目录")
     u.add_argument("--open", action="store_true", help="启动后尝试打开浏览器")
 
-    x = p.parse_args()
+    x = p.parse_args(argv)
     if x.cmd == "ics":
         open(x.o, "w", encoding="utf-8").write(
             core.to_ics(core.load_courses(x.csv), x.first_monday)
@@ -815,8 +815,6 @@ def _cmd_ui(x):
     ui.serve(port=x.port, root=root, open_browser=x.open)
 
 
-if __name__ == "__main__":
-    main()
 
 
 def _cmd_oa(x):
@@ -852,3 +850,6 @@ def _cmd_oa(x):
     print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
     for i in res["items"]:
         print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")
+
+if __name__ == "__main__":
+    main()

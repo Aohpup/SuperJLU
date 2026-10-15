@@ -88,3 +88,24 @@ def test_read_only_guard():
 def test_category():
     assert oa.resolve_category("", {}) == "179577"
     assert oa.resolve_category("讲座", {"179578": "学术讲座"}) == "179578"
+
+
+def test_cli_main_oa_probe_and_notices(monkeypatch, capsys, tmp_path):
+    from jlu_toolkit import cli, jwxt, ui
+    monkeypatch.setattr(jwxt.JwxtClient, "load_session", lambda self: False)
+    monkeypatch.setattr(jwxt.JwxtClient, "_request", lambda self, url, **kw: Fake(2)._request(url, **kw))
+    monkeypatch.setattr(ui, "data_dir", lambda: tmp_path)
+    cli.main(["oa", "--probe"])
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["list"]["rows"] == 2 and rep["saved_session"] is False
+    cli.main(["oa", "notices", "--limit", "3", "--json"])
+    assert json.loads(capsys.readouterr().out)["count"] == 3
+    assert (tmp_path / "oa_notices.json").exists()
+
+
+def test_cli_all_handlers_defined():
+    import re
+    from jlu_toolkit import cli
+    src = open(cli.__file__, encoding="utf-8").read()
+    for name in set(re.findall(r"\b(_cmd_\w+)\(x\)", src)):
+        assert callable(getattr(cli, name, None)), name
