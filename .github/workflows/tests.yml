@@ -1,0 +1,34 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install ".[captcha]" pytest
+      - name: pytest (includes node UI tree tests)
+        run: pytest -q
+      - name: UI script syntax (node --check)
+        shell: bash
+        run: |
+          python -c "import re;from jlu_toolkit.ui_page import PAGE;[open(f'page{i}.js','w',encoding='utf-8').write(b) for i,b in enumerate(re.findall(r'<script>(.*?)</script>',PAGE,re.S))]"
+          for f in page*.js; do node --check "$f"; done

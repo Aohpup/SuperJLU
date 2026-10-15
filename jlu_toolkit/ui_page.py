@@ -1,0 +1,420 @@
+"""单页应用（内联 CSS/JS，无外部依赖）。"""
+
+PAGE = r"""<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.ico" sizes="any">
+<meta name="theme-color" id="tc-l" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" id="tc-d" content="#0e0f12" media="(prefers-color-scheme: dark)">
+<script>/* 首帧前应用主题，避免闪烁 */(function(){var t;try{t=localStorage.getItem("jlu-theme")}catch(e){}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))})};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)})();</script>
+<title>SuperJLU · 吉大人的一站式服务</title>
+<style>
+/* ===== 设计变量：柔和中性底色 + 单一沉稳强调色 ===== */
+:root{--pri:#3b5bdb;--pri-h:#3249c0;--pri2:#edf1ff;--bg:#f6f7f9;--card:#fff;--card2:#fafbfc;--txt:#16181d;--sub:#6b7280;--line:#e8eaee;--ok:#16a34a;--ok2:#e9f7ee;--warn:#c2710c;--warn2:#fff4e5;--bad:#dc2626;--bad2:#fdeeee;--r:18px;--r-sm:12px;--sh:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){--pri:#8ea2ff;--pri-h:#a5b4ff;--pri2:#1e2336;--bg:#0e0f12;--card:#17191e;--card2:#1c1f25;--txt:#eceef2;--sub:#9198a5;--line:#262a32;--ok:#4ade80;--ok2:#14261b;--warn:#fbbf24;--warn2:#2a2213;--bad:#f87171;--bad2:#2c1717;--sh:0 0 0 1px rgba(255,255,255,.03);color-scheme:dark}}
+:root[data-theme=dark]{--pri:#8ea2ff;--pri-h:#a5b4ff;--pri2:#1e2336;--bg:#0e0f12;--card:#17191e;--card2:#1c1f25;--txt:#eceef2;--sub:#9198a5;--line:#262a32;--ok:#4ade80;--ok2:#14261b;--warn:#fbbf24;--warn2:#2a2213;--bad:#f87171;--bad2:#2c1717;--sh:0 0 0 1px rgba(255,255,255,.03);color-scheme:dark}
+:root[data-theme=light]{color-scheme:light}
+.thm{display:inline-flex;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:2px;gap:2px}.thm button{border:0;background:none;color:var(--sub);font:inherit;font-size:13px;padding:4px 10px;border-radius:999px;cursor:pointer}.thm button[aria-pressed=true]{background:var(--pri2);color:var(--pri);font-weight:600}
+header .thm button{padding:4px 8px}
+*{box-sizing:border-box}html,body{margin:0}
+body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--pri2);color:var(--pri);padding:1px 6px;border-radius:6px}
+header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid transparent;padding:calc(12px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 12px max(16px,env(safe-area-inset-left));display:flex;align-items:center;gap:10px;min-width:0}
+header .ttl{white-space:nowrap;flex:none}header>.thm,header>.btn{flex:none;white-space:nowrap}
+@media(max-width:420px){header{gap:6px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}header .thm button{padding:3px 6px}header>.btn{padding-left:10px;padding-right:10px}header .lbl{display:none}}
+@media(max-width:350px){header .logo{width:26px;height:26px}header h1{font-size:16px}header .thm button{padding:3px 4px}}
+header .logo{width:30px;height:30px;color:var(--txt);flex:none;display:block}
+header h1{font-size:17px;margin:0;flex:1;font-weight:680;letter-spacing:.2px;display:flex;flex-direction:column;line-height:1.25;min-width:0}
+header small{color:var(--sub);font-size:12px;font-weight:450;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:1px solid transparent;border-radius:999px;padding:7px 14px;font:inherit;font-size:14px;cursor:pointer;background:var(--pri2);color:var(--pri);font-weight:600;transition:background .15s,transform .1s,opacity .15s;white-space:nowrap}
+.btn:hover{filter:brightness(.97)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.55;cursor:default}
+.btn.pri{background:var(--pri);color:#fff}.btn.pri:hover{background:var(--pri-h);filter:none}
+.btn.ghost{background:var(--card);border-color:var(--line);color:var(--txt)}
+header .btn{background:var(--card);border-color:var(--line);color:var(--txt)}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+main{max-width:1000px;margin:0 auto;padding:8px 14px 16px}
+.card{background:var(--card);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh);border:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sp{flex:1}
+h2{font-size:16px;margin:0 0 12px;font-weight:680;letter-spacing:.2px}h2 .sub{font-weight:450;margin-left:4px}
+.sub{color:var(--sub);font-size:13px}
+/* 会话 / 状态横幅 */
+.banner{display:flex;gap:12px;align-items:flex-start;border-radius:var(--r);padding:14px 16px;margin-bottom:14px;background:var(--warn2);color:var(--txt);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
+.banner b{display:block;color:var(--warn);font-size:14px}.banner .sub{margin:2px 0 0}.banner .ic{font-size:18px;line-height:1.3;color:var(--warn)}
+.banner.err{background:var(--bad2);border-color:color-mix(in srgb,var(--bad) 30%,transparent)}.banner.err b,.banner.err .ic{color:var(--bad)}
+.state{text-align:center;padding:48px 16px;color:var(--sub)}.state b{display:block;color:var(--txt);font-size:15px;margin-bottom:4px}
+.spin{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--pri);margin:0 auto 12px;animation:sp 0.8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.skel{height:14px;border-radius:8px;background:linear-gradient(90deg,var(--line),var(--card2),var(--line));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite;margin:10px auto;max-width:420px}@keyframes sk{to{background-position:-200% 0}}
+/* 底部导航：手机贴底，宽屏悬浮胶囊 */
+nav{position:fixed;bottom:0;left:0;right:0;box-sizing:border-box;max-width:100vw;overflow:hidden;background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;padding:4px 4px calc(4px + env(safe-area-inset-bottom));z-index:6}
+nav button{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0;background:none;padding:7px 0 6px;margin:2px;font:inherit;font-size:11.5px;color:var(--sub);cursor:pointer;border-radius:14px;transition:background .15s,color .15s}
+nav button b{display:block;font-size:18px;line-height:1.25;font-weight:500}
+.lga{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}.lga span{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;font-size:13px;overflow:hidden}.lga span.on{border-color:var(--pri);background:var(--pri2);color:var(--pri)}.lga button{border:0;background:none;color:inherit;font:inherit;padding:5px 4px 5px 10px;cursor:pointer}.lga button.x{padding:5px 9px 5px 4px;color:var(--sub)}.lga button.add{padding:5px 10px;border:1px dashed var(--line);border-radius:999px;color:var(--sub)}
+nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
+@media(max-width:380px){nav{padding-left:2px;padding-right:2px}nav button{margin:2px 1px;font-size:10.5px;padding:6px 0 5px;border-radius:11px}nav button b{font-size:16px}}
+@media(min-width:760px){nav{left:50%;right:auto;bottom:18px;transform:translateX(-50%);border:1px solid var(--line);border-radius:999px;padding:5px;box-shadow:0 8px 30px rgba(16,24,40,.12)}nav button{flex:none;padding:7px 16px;border-radius:999px;font-size:13px;display:flex;align-items:center;gap:6px}nav button b{display:inline;font-size:15px}body{padding-bottom:100px}}
+.tab{display:none}.tab.on{display:block;animation:fi .18s ease-out}@keyframes fi{from{opacity:0;transform:translateY(4px)}}
+/* 课表 */
+.wk{display:flex;align-items:center;gap:8px}
+.wk .n{font-size:18px;font-weight:700;min-width:96px;text-align:center}
+.wk .btn.ghost{width:36px;height:36px;padding:0;font-size:18px}
+.grid{display:grid;grid-template-columns:22px repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
+.card.kb{padding:14px 10px}
+.grid .h{font-size:11px;line-height:1.35;color:var(--sub);text-align:center;padding:4px 0;border-radius:10px}
+.grid .h.today{color:var(--pri);font-weight:700;background:var(--pri2)}
+.grid .p{font-size:11px;color:var(--sub);text-align:center;display:flex;align-items:center;justify-content:center;line-height:1.15}
+.grid .p em{font-style:normal;font-size:8.5px;opacity:.8}
+@media(min-width:640px){.grid .p em{font-size:10px}}
+.off-card h3{font-size:15px;margin:0 0 10px;font-weight:680}.ogpa{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 20px}
+.ogpa div{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding:7px 0;font-size:13.5px}.ogpa b{color:var(--pri);font-variant-numeric:tabular-nums;font-size:15px}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--pri);border-radius:99px;transition:width .4s}
+.grp{padding:12px 0;border-bottom:1px solid var(--line)}.grp:last-child{border:0}
+.grp .row b{flex:1}
+.miss,.done{display:inline-block;font-weight:600;font-size:12px;padding:1px 9px;border-radius:99px;line-height:1.6}
+.miss{color:var(--bad);background:var(--bad2)}.done{color:var(--ok);background:var(--ok2)}
+.big{font-size:34px;font-weight:750;color:var(--txt);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.cell{min-height:46px;border-radius:10px;background:var(--card2);border:1px dashed var(--line)}
+.cls{border-radius:10px;padding:4px 5px;font-size:10.5px;line-height:1.3;color:#fff;overflow:hidden;word-break:break-all;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.cls b{display:block;font-size:11px;font-weight:650}
+@media(min-width:640px){.grid{grid-template-columns:36px repeat(7,minmax(0,1fr))}.cls{font-size:12.5px;padding:7px 8px}.cls b{font-size:13.5px}.cell{min-height:52px}}
+.cls i{font-style:normal;opacity:.9}
+.empty{color:var(--sub);text-align:center;padding:36px 0}
+/* 成绩 */
+.gpa{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.gpa div{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px 4px}
+.gpa div:first-child{background:var(--pri2);border-color:transparent}
+.gpa b{display:block;font-size:26px;color:var(--txt);font-weight:720;font-variant-numeric:tabular-nums;letter-spacing:-.3px}.gpa div:first-child b{color:var(--pri)}.gpa span{font-size:12px;color:var(--sub)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left}
+tbody tr:last-child td{border-bottom:0}
+th{font-size:12px;color:var(--sub);font-weight:600;position:sticky;top:58px;background:var(--card)}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:hover td{background:var(--card2)}
+tr.off td{opacity:.42}
+.term td{background:var(--pri2)!important;font-size:12px;color:var(--pri);font-weight:650;padding:6px 10px}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri)}
+select,input[type=text],input[type=password],input[type=search],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
+select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px var(--pri2)}
+.chip{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:99px;background:var(--pri2);color:var(--pri);font-weight:550;line-height:1.6}
+/* 考试 */
+.exam{display:flex;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.exam:last-child{border:0}
+.cd{min-width:74px;text-align:center;border-radius:var(--r-sm);padding:9px 4px;background:var(--pri2);color:var(--pri)}
+.cd b{display:block;font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}.cd span{font-size:11px}
+.cd.soon{background:var(--bad2);color:var(--bad)}.cd.past{background:var(--card2);color:var(--sub)}
+.exam .t{flex:1}.exam .t b{display:block}
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--txt);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:14px;display:none;z-index:9;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.seg{display:flex;gap:4px;margin-bottom:14px;background:var(--card2);border:1px solid var(--line);padding:4px;border-radius:999px}.seg button{flex:1;padding:7px;border:0;background:transparent;border-radius:999px;color:var(--sub);font:inherit;font-size:14px;cursor:pointer}.seg button.on{background:var(--card);color:var(--pri);font-weight:650;box-shadow:var(--sh)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:5px;color:var(--sub);font-weight:550}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
+.rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:12px}
+table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none;position:static;top:auto;background:transparent}
+details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"›";display:inline-block;width:14px;color:var(--sub);transition:transform .15s;font-weight:700}details[open]>summary::before{transform:rotate(90deg)}
+details.gc{margin-top:8px}details.gc summary{font-size:12.5px;color:var(--sub)}
+details.tn{border-left:2px solid var(--line);padding:6px 0 6px 12px;margin-top:6px;border-radius:0 0 0 4px}details.tn>summary{padding:2px 0}
+details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))}
+@media(max-width:520px){main{padding:6px 10px 12px}.card{padding:14px;border-radius:16px}.gpa b{font-size:22px}.big{font-size:28px}}
+/* OA 通知 */
+.oal{list-style:none;margin:0;padding:0}.oal li{display:flex;gap:10px;align-items:flex-start;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:10px}.oal li:last-child{border-bottom:0}.oal li:hover{background:var(--card2)}
+.oal .tt{font-weight:600;line-height:1.45;flex:1;min-width:0}.oal .mt{display:block;color:var(--sub);font-size:12.5px;font-weight:450;margin-top:2px}.oal .ar{color:var(--sub);flex:none}
+.pin{display:inline-block;background:var(--warn2);color:var(--warn);font-size:11.5px;font-weight:650;padding:0 7px;border-radius:999px;margin-right:6px;vertical-align:1px}
+#oa-ch button{flex:none;white-space:nowrap;padding:7px 14px}.oaf{display:flex;gap:8px;flex-wrap:wrap}.oaf input{flex:2;min-width:160px}.oaf select{flex:1;min-width:120px}
+.oad h2{font-size:18px;line-height:1.45}.oad .body{white-space:pre-wrap;line-height:1.8;margin:14px 0;word-break:break-word}.oad .att{display:flex;flex-direction:column;gap:6px;margin-top:8px}.oad .att a{color:var(--pri);text-decoration:none;font-weight:550}.oad .att a:hover{text-decoration:underline}
+.soon{display:inline-block;background:var(--pri2);color:var(--pri);font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;vertical-align:2px;margin-left:6px}
+/* 校园服务 */
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.lk{display:flex;flex-direction:column;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px}
+.lk .hd{display:flex;align-items:center;gap:10px}.lk .ic{width:34px;height:34px;border-radius:10px;background:var(--pri2);color:var(--pri);display:grid;place-items:center;font-size:17px;flex:none}
+.lk .hd b{flex:1;font-size:15px}.lk .lg{font-size:12.5px;color:var(--sub)}.lk .row{margin-top:4px}
+.offl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:2px 10px;border-radius:999px;margin:0 0 10px;background:var(--card2);color:var(--sub,inherit);border:1px dashed var(--line)}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:0 8px;border-radius:999px;line-height:1.7;background:var(--warn2);color:var(--warn)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+dialog#login{border:0;border-radius:16px;padding:20px;width:min(92vw,380px);background:var(--card,#fff);color:inherit;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+dialog#login::backdrop{background:rgba(0,0,0,.4)}
+dialog#login label{display:block;margin:10px 0 4px;font-size:13px;opacity:.8}
+dialog#login input[type=text],dialog#login input[type=password]{width:100%;box-sizing:border-box}
+dialog#login .cap{display:flex;gap:8px;align-items:center}dialog#login .cap img{height:40px;image-rendering:pixelated;border-radius:6px;cursor:pointer;background:#fff}
+dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
+</style></head>
+<body>
+<header><svg class="logo" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false"><g transform="translate(0 1024) scale(.1 -.1)" fill="currentColor"><path d="M4735 10230 c-3 -6 -50 -10 -105 -10 -55 0 -102 -4 -105 -10 -3 -5 -37 -10 -75 -10 -38 0 -72 -4 -75 -10 -3 -5 -32 -10 -65 -10 -40 0 -59 -4 -63 -14 -3 -8 -23 -14 -53 -14 -26 -1 -52 -6 -58 -12 -5 -5 -32 -10 -58 -10 -26 0 -48 -4 -48 -10 0 -5 -18 -10 -39 -10 -22 0 -43 -4 -46 -10 -3 -5 -24 -10 -46 -10 -21 0 -39 -4 -39 -10 0 -5 -13 -10 -30 -10 -16 0 -30 -4 -30 -10 0 -5 -18 -10 -39 -10 -22 0 -43 -4 -46 -10 -3 -5 -17 -10 -30 -10 -13 0 -27 -4 -30 -10 -3 -5 -20 -10 -36 -10 -17 0 -32 -6 -35 -15 -4 -8 -19 -15 -34 -15 -16 0 -32 -4 -35 -10 -3 -5 -15 -10 -25 -10 -11 0 -35 -9 -55 -20 -20 -11 -47 -20 -60 -20 -14 0 -25 -4 -25 -10 0 -5 -9 -10 -20 -10 -11 0 -20 -4 -20 -10 0 -5 -12 -10 -27 -11 -16 0 -41 -9 -58 -19 -59 -37 -88 -50 -112 -50 -12 0 -23 -4 -23 -10 0 -5 -9 -10 -20 -10 -11 0 -20 -4 -20 -10 0 -5 -9 -10 -20 -10 -11 0 -20 -4 -20 -10 0 -5 -6 -10 -12 -10 -22 0 -154 -69 -173 -90 -10 -11 -26 -20 -37 -20 -10 0 -18 -4 -18 -10 0 -5 -9 -10 -20 -10 -11 0 -20 -4 -20 -10 0 -5 -9 -10 -20 -10 -11 0 -20 -4 -20 -10 0 -5 -8 -10 -17 -10 -9 0 -25 -7 -35 -17 -19 -17 -49 -36 -83 -52 -12 -5 -27 -16 -34 -25 -7 -9 -19 -16 -26 -16 -6 0 -20 -9 -30 -20 -10 -11 -25 -20 -34 -20 -9 0 -23 -9 -31 -20 -8 -11 -20 -20 -27 -20 -6 0 -27 -16 -46 -35 -19 -19 -40 -35 -46 -35 -7 0 -26 -13 -41 -30 -15 -16 -34 -30 -42 -30 -8 0 -29 -16 -48 -35 -19 -19 -39 -35 -44 -35 -6 0 -31 -21 -57 -46 -26 -25 -57 -51 -69 -58 -60 -30 -57 -33 145 -236 104 -104 194 -190 200 -190 6 0 217 -207 470 -460 253 -253 465 -460 472 -460 6 0 293 -281 637 -625 343 -344 629 -625 635 -625 6 0 454 -443 996 -985 542 -542 990 -985 995 -985 17 0 170 -156 170 -173 0 -9 7 -17 16 -17 9 0 283 -268 611 -595 327 -327 600 -595 606 -595 7 0 262 -250 567 -555 311 -311 563 -555 572 -555 10 0 18 7 18 16 0 9 14 29 30 44 17 15 30 35 30 43 0 8 16 29 35 46 19 17 35 37 35 46 0 8 9 20 20 27 11 7 20 18 20 24 0 17 29 70 45 84 8 7 15 20 15 29 0 9 9 22 19 28 20 13 51 67 51 90 0 7 5 13 10 13 6 0 10 8 10 18 0 10 9 24 20 32 11 8 20 19 20 26 0 13 42 98 60 119 7 8 9 15 5 15 -5 0 -2 8 6 18 22 27 39 60 39 77 0 8 5 15 10 15 6 0 10 9 10 20 0 11 5 20 10 20 6 0 10 9 10 20 0 11 5 20 10 20 6 0 10 6 10 13 0 15 41 99 59 120 6 8 9 21 6 29 -3 8 1 21 10 28 8 7 15 21 15 31 0 11 5 19 10 19 6 0 10 14 10 30 0 17 5 30 10 30 6 0 10 9 10 19 0 11 5 23 10 26 6 3 10 17 10 30 0 13 5 27 10 30 6 3 10 19 10 36 0 16 5 29 10 29 6 0 10 13 10 29 0 16 7 34 15 41 9 7 13 21 10 30 -3 9 1 23 10 30 8 7 15 27 15 46 0 18 5 36 10 39 6 3 10 19 10 36 0 16 5 29 10 29 6 0 10 18 10 40 0 26 -5 40 -13 40 -7 0 -48 34 -90 75 -43 41 -82 75 -87 75 -5 0 -59 50 -120 110 -61 61 -115 110 -121 110 -6 0 -62 52 -125 115 -63 63 -120 115 -127 115 -7 0 -55 43 -107 95 -52 52 -99 95 -105 95 -6 0 -60 50 -120 110 -60 61 -114 110 -120 110 -6 0 -53 43 -105 95 -52 52 -99 95 -105 95 -6 0 -57 47 -115 105 -58 58 -109 105 -115 105 -6 0 -50 38 -97 85 -48 47 -91 85 -97 85 -5 0 -48 38 -95 85 -47 47 -91 85 -98 85 -6 0 -44 34 -84 75 -40 41 -78 75 -86 75 -7 0 -51 39 -97 85 -46 47 -89 85 -95 85 -6 0 -49 38 -96 85 -47 47 -89 85 -95 85 -6 0 -40 29 -75 65 -35 36 -69 65 -75 65 -6 0 -48 38 -95 85 -47 47 -89 85 -95 85 -6 0 -44 34 -85 75 -41 41 -80 75 -86 75 -7 0 -51 38 -98 85 -47 47 -90 85 -96 85 -7 0 -40 29 -75 65 -35 36 -69 65 -76 65 -7 0 -50 38 -95 85 -46 47 -89 85 -96 85 -7 0 -51 38 -98 85 -47 47 -89 85 -95 85 -6 0 -40 29 -75 65 -35 36 -69 65 -75 65 -6 0 -44 34 -85 75 -41 41 -79 75 -85 75 -6 0 -48 38 -95 85 -47 47 -90 85 -97 85 -7 0 -45 34 -84 75 -40 41 -78 75 -86 75 -8 0 -42 29 -77 65 -34 36 -68 65 -75 65 -6 0 -41 29 -77 65 -36 36 -70 65 -75 65 -5 0 -37 27 -71 60 -35 33 -68 60 -73 60 -6 0 -40 29 -75 65 -35 36 -69 65 -75 65 -6 0 -35 25 -65 55 -30 30 -59 55 -65 55 -12 1 -105 88 -105 99 0 5 24 9 52 10 29 0 54 5 56 11 2 6 53 10 127 10 72 0 126 4 130 10 4 6 75 10 180 10 105 0 176 -4 180 -10 4 -6 57 -10 125 -10 68 0 121 -4 125 -10 3 -5 37 -10 74 -10 49 0 72 -4 81 -15 8 -10 31 -15 71 -15 33 0 59 -4 59 -10 0 -5 22 -10 49 -10 28 0 53 -4 56 -10 3 -5 24 -10 46 -10 21 0 39 -4 39 -10 0 -5 13 -10 29 -10 17 0 33 -4 36 -10 3 -5 21 -10 40 -10 19 0 37 -4 40 -10 3 -5 24 -10 45 -10 21 0 42 -4 45 -10 3 -5 17 -10 30 -10 13 0 26 -4 30 -9 8 -14 65 -41 86 -41 10 0 21 -4 24 -10 3 -5 19 -10 36 -10 16 0 29 -4 29 -10 0 -5 9 -10 20 -10 11 0 20 -4 20 -10 0 -5 9 -10 19 -10 11 0 23 -4 26 -10 3 -5 14 -10 24 -10 20 0 118 -47 127 -61 3 -5 14 -9 25 -9 10 0 19 -4 19 -10 0 -5 9 -10 20 -10 11 0 20 -4 20 -10 0 -5 6 -10 13 -10 18 0 75 -28 82 -41 4 -5 25 -18 48 -28 24 -11 51 -29 61 -40 11 -12 24 -21 31 -21 7 0 20 -9 30 -20 10 -11 25 -20 34 -20 9 0 23 -9 31 -20 8 -11 22 -20 32 -20 10 0 18 -4 18 -9 0 -5 16 -16 35 -25 20 -10 41 -26 48 -37 6 -10 19 -19 27 -19 9 0 34 -18 55 -40 21 -22 44 -40 50 -40 6 0 35 -25 65 -55 30 -30 59 -55 65 -55 5 0 255 -245 555 -545 300 -300 550 -545 555 -545 6 0 78 -67 160 -150 82 -82 155 -150 162 -150 6 0 68 -56 137 -125 68 -69 129 -125 136 -125 6 0 74 -63 150 -140 76 -77 144 -140 150 -140 7 0 75 -63 152 -140 77 -77 145 -140 152 -140 7 0 50 -38 95 -85 46 -47 85 -85 87 -85 2 0 4 72 4 160 0 100 -4 160 -10 160 -6 0 -10 50 -10 130 0 80 -4 130 -10 130 -6 0 -10 33 -10 79 0 44 -4 83 -10 86 -5 3 -10 32 -10 64 0 38 -5 63 -14 70 -9 8 -12 24 -9 49 4 27 1 42 -11 51 -11 9 -16 30 -16 62 0 26 -4 51 -10 54 -5 3 -10 21 -10 40 0 19 -4 37 -10 40 -5 3 -10 24 -10 46 0 21 -4 39 -10 39 -5 0 -10 18 -10 39 0 22 -4 43 -10 46 -5 3 -10 24 -10 46 0 21 -4 39 -10 39 -5 0 -10 13 -10 29 0 17 -4 33 -10 36 -5 3 -10 21 -10 39 0 19 -7 39 -16 47 -8 7 -13 21 -11 31 3 10 -1 25 -9 32 -8 8 -14 26 -14 40 0 14 -4 26 -10 26 -5 0 -10 11 -10 25 0 13 -9 40 -20 60 -11 20 -20 47 -20 60 0 14 -4 25 -10 25 -5 0 -10 14 -10 30 0 17 -4 30 -10 30 -5 0 -10 8 -10 19 0 10 -7 24 -15 31 -9 7 -13 21 -10 31 3 9 1 20 -4 23 -13 8 -41 65 -41 83 0 7 -4 13 -10 13 -5 0 -10 9 -10 20 0 11 -4 20 -10 20 -5 0 -10 9 -10 20 0 11 -4 20 -10 20 -5 0 -10 9 -10 20 0 11 -4 20 -10 20 -5 0 -10 8 -11 18 0 9 -9 31 -19 47 -32 52 -70 128 -70 142 0 7 -4 13 -10 13 -5 0 -10 9 -10 20 0 11 -4 20 -10 20 -5 0 -10 8 -10 18 0 10 -9 24 -20 32 -11 8 -20 19 -20 26 0 17 -29 70 -46 85 -8 7 -24 31 -34 54 -10 23 -26 48 -35 55 -8 7 -15 20 -15 29 0 9 -9 22 -20 29 -11 7 -20 19 -20 28 0 9 -11 25 -25 36 -14 11 -25 26 -25 35 0 8 -14 28 -30 43 -16 15 -30 33 -30 40 0 6 -13 25 -30 43 -16 18 -30 37 -30 43 0 7 -16 26 -35 43 -19 17 -35 36 -35 44 0 7 -18 31 -40 52 -22 21 -40 44 -40 50 0 6 -45 55 -100 110 -55 55 -100 104 -100 110 0 13 -222 235 -235 235 -6 0 -48 38 -95 85 -47 47 -89 85 -95 85 -6 0 -29 18 -50 40 -21 22 -44 40 -50 40 -6 0 -26 16 -45 35 -19 19 -39 35 -44 35 -6 0 -25 14 -43 30 -18 17 -38 30 -45 30 -7 0 -26 16 -43 35 -16 19 -37 35 -45 35 -9 0 -22 9 -30 20 -8 11 -21 20 -30 20 -9 0 -22 9 -30 20 -8 11 -22 20 -31 20 -9 0 -22 7 -29 15 -7 9 -32 25 -55 35 -23 10 -47 26 -54 34 -15 18 -68 46 -88 46 -7 0 -13 5 -13 10 0 6 -8 10 -18 10 -10 0 -24 9 -32 20 -8 11 -21 20 -30 21 -8 0 -28 9 -45 19 -50 31 -169 90 -183 90 -6 0 -12 5 -12 10 0 6 -9 10 -20 10 -11 0 -20 5 -20 10 0 6 -9 10 -20 10 -11 0 -20 5 -20 10 0 6 -9 10 -19 10 -11 0 -23 5 -26 10 -3 6 -17 10 -30 10 -13 0 -26 4 -29 9 -10 16 -109 61 -133 61 -13 0 -23 5 -23 10 0 6 -11 10 -25 10 -13 0 -40 9 -60 20 -20 11 -44 20 -55 20 -10 0 -22 5 -25 10 -3 6 -19 10 -35 10 -15 0 -30 7 -34 15 -3 9 -18 15 -35 15 -16 0 -33 5 -36 10 -3 6 -17 10 -30 10 -13 0 -27 5 -30 10 -3 6 -17 10 -30 10 -13 0 -27 5 -30 10 -3 6 -24 10 -46 10 -21 0 -39 5 -39 10 0 6 -18 10 -39 10 -22 0 -43 5 -46 10 -3 6 -24 10 -46 10 -21 0 -39 5 -39 10 0 6 -22 10 -48 10 -26 0 -53 5 -58 10 -6 6 -32 11 -58 12 -30 0 -50 6 -53 14 -3 9 -22 14 -53 14 -27 0 -52 5 -55 10 -3 6 -42 10 -85 10 -43 0 -82 5 -85 10 -3 6 -50 10 -105 10 -55 0 -102 4 -105 10 -4 6 -143 10 -385 10 -242 0 -381 -4 -385 -10z M1177 8252 c-15 -15 -27 -34 -27 -41 0 -7 -13 -26 -30 -41 -16 -15 -30 -34 -30 -42 0 -7 -9 -20 -20 -28 -11 -8 -20 -22 -20 -31 0 -10 -11 -26 -25 -37 -14 -11 -25 -26 -25 -34 0 -8 -9 -23 -20 -33 -11 -10 -20 -24 -20 -30 0 -7 -7 -18 -15 -25 -9 -7 -24 -32 -35 -54 -10 -23 -28 -50 -39 -60 -12 -11 -21 -27 -21 -38 0 -10 -4 -18 -10 -18 -5 0 -10 -8 -10 -18 0 -10 -9 -24 -20 -32 -11 -8 -20 -22 -20 -32 0 -10 -4 -18 -10 -18 -5 0 -10 -6 -10 -13 0 -14 -38 -90 -70 -142 -10 -16 -19 -38 -19 -47 -1 -10 -5 -18 -11 -18 -5 0 -10 -9 -10 -20 0 -11 -4 -20 -10 -20 -5 0 -10 -9 -10 -20 0 -11 -4 -20 -10 -20 -5 0 -10 -9 -10 -20 0 -11 -4 -20 -10 -20 -5 0 -10 -8 -10 -19 0 -10 -6 -24 -14 -31 -8 -6 -12 -18 -9 -26 3 -8 -1 -22 -8 -32 -26 -32 -39 -62 -39 -87 0 -14 -4 -25 -10 -25 -5 0 -10 -9 -10 -20 0 -11 -4 -20 -10 -20 -5 0 -10 -9 -10 -20 0 -11 -4 -20 -10 -20 -5 0 -10 -13 -10 -29 0 -17 -4 -33 -10 -36 -5 -3 -10 -19 -10 -36 0 -16 -4 -29 -10 -29 -5 0 -10 -12 -10 -26 0 -14 -7 -32 -15 -40 -8 -8 -12 -21 -8 -30 3 -8 -2 -23 -12 -34 -10 -11 -15 -26 -12 -34 3 -8 -1 -20 -9 -26 -8 -7 -14 -30 -14 -51 0 -22 -4 -39 -10 -39 -5 0 -10 -13 -10 -30 0 -16 -4 -30 -10 -30 -5 0 -10 -18 -10 -39 0 -22 -4 -43 -10 -46 -5 -3 -10 -24 -10 -46 0 -21 -4 -39 -10 -39 -5 0 -10 -18 -10 -39 0 -22 -4 -43 -10 -46 -5 -3 -10 -32 -10 -64 0 -42 -5 -62 -16 -72 -12 -9 -15 -24 -11 -51 3 -25 0 -41 -9 -49 -8 -7 -14 -31 -14 -60 0 -27 -4 -49 -10 -49 -6 0 -10 -35 -10 -85 0 -50 -4 -85 -10 -85 -6 0 -10 -45 -10 -114 0 -66 -4 -117 -10 -121 -14 -8 -14 -725 0 -725 6 0 10 -45 10 -114 0 -66 4 -117 10 -121 6 -3 10 -42 10 -85 0 -43 5 -82 10 -85 6 -3 10 -33 10 -65 0 -36 5 -60 12 -62 7 -3 11 -24 9 -59 -1 -40 2 -59 14 -69 10 -8 15 -29 15 -61 0 -27 5 -49 10 -49 6 0 10 -18 10 -39 0 -22 4 -43 10 -46 5 -3 10 -24 10 -46 0 -21 5 -39 10 -39 6 0 10 -18 10 -39 0 -22 5 -43 10 -46 6 -3 10 -17 10 -30 0 -13 5 -27 10 -30 6 -3 10 -22 10 -41 0 -20 7 -42 15 -50 8 -8 12 -21 8 -30 -3 -8 2 -23 11 -33 9 -10 14 -25 11 -33 -3 -8 1 -21 10 -28 8 -7 15 -23 15 -36 0 -12 4 -26 10 -29 6 -3 10 -15 10 -26 0 -10 5 -19 10 -19 6 0 10 -13 10 -30 0 -22 5 -30 18 -30 18 0 76 52 72 65 -1 4 25 36 59 71 34 36 61 69 61 74 0 5 29 38 65 74 36 35 65 70 65 76 0 7 29 41 65 76 36 35 65 69 65 75 0 6 29 41 65 77 36 36 65 70 65 76 0 7 22 34 50 61 28 27 50 54 50 60 0 6 29 40 65 75 36 35 65 69 65 75 0 6 29 40 65 75 36 35 65 70 65 76 0 7 29 40 65 75 36 34 65 69 65 77 0 8 29 42 65 76 36 34 65 67 65 74 0 7 27 40 60 72 33 32 60 65 60 72 0 8 18 32 40 53 l40 39 16 -22 c8 -12 21 -22 28 -22 7 0 38 -25 69 -55 30 -30 61 -55 67 -55 7 0 31 -20 54 -45 24 -25 48 -45 55 -45 7 0 34 -22 61 -50 27 -27 55 -50 63 -50 8 0 38 -25 66 -55 29 -30 58 -55 64 -55 7 0 37 -25 67 -55 30 -30 59 -55 65 -55 6 0 29 -18 50 -40 21 -22 44 -40 50 -40 6 0 35 -25 65 -55 30 -30 59 -55 65 -55 6 0 34 -23 63 -50 29 -28 56 -50 61 -50 5 0 34 -25 65 -55 30 -30 60 -55 66 -55 7 0 32 -20 57 -45 24 -25 49 -45 55 -45 5 0 27 -18 48 -40 21 -22 45 -40 52 -40 8 0 34 -20 58 -45 24 -25 49 -45 55 -45 6 0 33 -23 60 -50 27 -28 54 -50 60 -50 6 0 31 -20 55 -45 24 -25 49 -45 55 -45 6 0 24 -13 40 -30 16 -17 35 -30 43 -30 8 0 32 -20 54 -45 22 -25 47 -45 55 -45 8 0 32 -18 53 -40 21 -22 45 -40 53 -40 7 0 31 -20 53 -45 21 -24 46 -45 54 -45 9 0 34 -18 55 -40 21 -22 44 -40 50 -40 6 0 31 -20 55 -45 24 -25 49 -45 55 -45 6 0 24 -13 40 -30 16 -16 34 -30 40 -30 6 0 31 -20 55 -45 24 -25 50 -45 58 -45 8 0 27 -13 42 -30 15 -16 33 -30 39 -30 6 0 31 -20 54 -45 24 -25 49 -45 56 -45 7 0 26 -13 41 -30 15 -16 35 -30 43 -30 8 0 33 -20 56 -45 23 -25 47 -45 54 -45 7 0 31 -18 52 -40 21 -22 44 -40 50 -40 6 0 31 -20 55 -45 24 -25 49 -45 55 -45 6 0 29 -18 50 -40 21 -22 44 -40 50 -40 6 0 31 -20 55 -45 24 -25 50 -45 58 -45 8 0 27 -13 42 -30 15 -16 33 -30 39 -30 7 0 31 -20 55 -45 25 -25 49 -45 55 -45 6 0 34 -22 63 -50 29 -27 57 -50 63 -50 6 0 31 -20 55 -45 24 -25 49 -45 55 -45 14 0 72 -60 59 -61 -5 -1 -23 0 -40 1 -17 0 -36 -5 -42 -13 -7 -8 -34 -15 -69 -16 -32 -1 -59 -6 -61 -11 -2 -6 -81 -10 -198 -10 -137 0 -200 -4 -215 -13 -17 -9 -23 -9 -26 1 -3 9 -43 12 -153 12 -86 0 -150 4 -152 10 -1 5 -33 10 -70 11 -43 1 -72 7 -79 15 -7 9 -33 14 -70 14 -32 0 -61 5 -64 10 -3 6 -28 10 -56 10 -27 0 -49 5 -49 10 0 6 -22 10 -49 10 -28 0 -53 5 -56 10 -3 6 -17 10 -30 10 -13 0 -27 5 -30 10 -3 6 -24 10 -46 10 -21 0 -39 5 -39 10 0 6 -9 10 -19 10 -11 0 -23 5 -26 10 -3 6 -21 10 -40 10 -19 0 -36 4 -40 9 -9 16 -66 41 -92 41 -12 0 -23 5 -23 10 0 6 -11 10 -24 10 -13 0 -50 14 -81 30 -31 17 -68 30 -81 30 -13 0 -24 5 -24 10 0 6 -9 10 -20 10 -11 0 -20 5 -20 10 0 6 -9 10 -20 10 -11 0 -23 7 -26 15 -4 8 -15 15 -25 15 -10 0 -19 5 -19 10 0 6 -8 10 -19 10 -10 0 -24 7 -31 15 -7 8 -40 29 -74 45 -34 16 -70 38 -81 50 -10 11 -23 20 -30 20 -7 0 -20 9 -30 20 -10 11 -25 20 -34 20 -9 0 -23 9 -31 20 -8 11 -22 20 -32 20 -10 0 -18 4 -18 9 0 5 -15 16 -32 24 -18 9 -46 29 -62 46 -17 17 -35 31 -41 31 -6 0 -24 13 -40 30 -16 17 -34 30 -40 30 -6 0 -33 23 -60 51 -28 28 -58 54 -67 58 -23 9 -388 372 -388 386 0 6 -25 35 -55 65 -30 29 -52 56 -50 59 8 7 -27 41 -42 41 -17 0 -403 -384 -403 -400 0 -7 -83 -95 -185 -196 -102 -101 -185 -189 -185 -195 0 -7 -65 -77 -145 -157 -80 -80 -145 -150 -145 -157 0 -6 -11 -22 -25 -35 -25 -24 -33 -50 -15 -50 6 0 10 -7 10 -15 0 -8 20 -35 45 -59 25 -25 45 -50 45 -56 0 -6 25 -36 55 -66 30 -31 55 -60 55 -66 0 -5 43 -53 95 -106 52 -53 95 -101 95 -107 0 -14 132 -145 146 -145 6 0 58 -47 116 -105 58 -58 110 -105 116 -105 6 0 31 -20 55 -45 25 -25 50 -45 56 -45 6 0 30 -18 52 -40 23 -22 47 -40 54 -40 6 0 29 -20 51 -45 21 -24 46 -45 55 -45 8 0 28 -14 44 -30 16 -17 34 -30 40 -30 6 0 22 -11 35 -25 13 -14 29 -25 35 -25 7 0 20 -9 30 -20 10 -11 23 -20 30 -20 7 0 20 -9 30 -20 10 -11 26 -20 37 -20 10 0 18 -4 18 -10 0 -5 7 -10 16 -10 9 0 27 -11 40 -25 13 -14 30 -25 39 -25 8 0 15 -4 15 -10 0 -5 8 -10 19 -10 10 0 24 -7 31 -15 7 -8 49 -33 94 -55 46 -22 91 -49 101 -60 10 -11 26 -20 37 -20 10 0 18 -4 18 -10 0 -5 9 -10 20 -10 11 0 20 -4 20 -10 0 -5 9 -10 20 -10 11 0 20 -4 20 -10 0 -5 7 -10 15 -10 8 0 30 -9 50 -20 20 -11 42 -20 49 -20 17 0 74 -28 81 -41 4 -5 15 -9 26 -9 10 0 19 -4 19 -10 0 -5 14 -10 30 -10 17 0 30 -4 30 -10 0 -5 9 -10 19 -10 11 0 23 -4 26 -10 3 -5 17 -10 30 -10 13 0 27 -5 30 -10 3 -6 15 -10 26 -10 10 0 19 -4 19 -10 0 -5 14 -10 30 -10 17 0 30 -4 30 -10 0 -5 13 -10 29 -10 16 0 34 -7 41 -15 7 -9 19 -14 26 -11 6 2 20 -2 31 -9 10 -8 28 -15 40 -15 12 0 25 -4 28 -10 3 -5 19 -10 36 -10 16 0 29 -4 29 -10 0 -5 18 -10 39 -10 22 0 43 -4 46 -10 3 -5 19 -10 36 -10 16 0 29 -4 29 -10 0 -5 18 -10 39 -10 22 0 43 -4 46 -10 3 -5 26 -10 50 -10 24 0 47 -5 50 -10 3 -6 28 -10 54 -10 31 0 53 -5 61 -15 8 -10 31 -15 71 -15 33 0 59 -4 59 -10 0 -6 30 -10 69 -10 39 0 73 -5 76 -10 3 -6 42 -10 85 -10 43 0 82 -5 85 -10 8 -14 815 -14 815 0 0 6 36 10 89 10 50 0 93 5 96 10 3 6 37 10 75 10 38 0 72 5 75 10 3 6 32 10 64 10 37 0 63 5 70 13 6 8 30 14 53 15 23 1 47 7 52 12 6 6 27 10 48 10 21 0 38 5 38 10 0 6 18 10 39 10 22 0 43 5 46 10 3 6 24 10 46 10 21 0 39 5 39 10 0 6 14 10 30 10 17 0 30 5 30 10 0 6 18 10 39 10 22 0 43 5 46 10 3 6 17 10 30 10 13 0 27 5 30 10 3 6 20 10 36 10 17 0 32 6 35 15 4 8 19 15 34 15 16 0 32 5 35 10 3 5 17 10 30 10 13 0 27 5 30 10 3 5 19 10 36 10 16 0 29 5 29 10 0 6 9 10 20 10 11 0 20 5 20 10 0 6 12 10 28 11 15 0 50 14 77 29 104 59 150 80 172 80 13 0 23 5 23 10 0 6 9 10 20 10 11 0 20 5 20 10 0 6 6 10 13 10 18 0 75 28 83 41 3 6 16 15 27 20 12 5 36 18 52 28 17 11 38 20 48 20 9 1 17 6 17 11 0 6 9 10 20 10 11 0 20 5 20 10 0 6 9 10 20 10 11 0 20 5 20 10 0 6 8 10 18 10 11 0 27 9 37 20 10 11 23 20 30 20 6 0 22 11 35 25 13 14 29 25 35 25 7 0 20 9 30 20 10 11 23 20 30 20 7 0 20 9 30 20 10 11 25 20 34 20 9 0 23 9 31 20 8 11 20 20 27 20 8 0 29 16 47 35 19 19 40 35 46 35 6 0 29 18 50 40 21 22 45 40 53 40 8 0 29 16 46 35 17 19 36 35 43 35 8 0 43 29 78 65 35 36 70 65 77 65 7 0 13 7 13 15 0 16 -1775 1795 -1792 1795 -6 0 -346 335 -756 745 -410 410 -750 745 -756 745 -6 0 -286 275 -621 610 -335 336 -614 610 -620 610 -6 0 -255 245 -555 545 -300 300 -549 545 -555 545 -6 0 -244 234 -530 520 -286 286 -526 520 -532 520 -15 0 -82 70 -83 85 0 14 -72 85 -85 85 -5 0 -64 54 -130 120 l-121 120 -27 -28z"/></g></svg><h1><span class="ttl">SuperJLU</span><small class="sub" style="font-weight:500">吉大人的一站式服务</small> <small id="upd"></small></h1>
+<div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">◐</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">☀</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">☾</button></div>
+<button class="btn" id="refresh" title="用已保存会话从教务刷新" aria-label="刷新">⟳<span class="lbl"> 刷新</span></button></header>
+<main>
+<div id="sess" hidden></div><div id="offl" hidden></div>
+<div id="boot" class="card"><div class="state"><div class="spin"></div><b>正在读取本地数据…</b><div class="skel"></div><div class="skel" style="max-width:300px"></div></div></div>
+<section class="tab on" id="t-kb">
+ <div class="card" id="nextexam" hidden></div>
+ <div class="card kb">
+  <div class="row wk"><button class="btn ghost" id="prev">‹</button><div class="n" id="wkn">第 1 周</div><button class="btn ghost" id="next">›</button><span class="sp"></span><button class="btn" id="today">本周</button></div>
+  <div class="grid" id="grid"></div>
+ </div>
+</section>
+<section class="tab" id="t-cj">
+ <div class="card"><div class="gpa"><div><b id="g-gpa">-</b><span>自选方案绩点</span></div><div><b id="g-cr">-</b><span>计入学分</span></div><div><b id="g-n">-</b><span>计入课程</span></div></div>
+  <p class="sub" style="margin:10px 0 0">按学分加权平均：百分制 60 分记 1.0，每分 +0.1，90 分及以上 4.0；“通过”类不计入。各类官方口径（保研/综测）请勾选课程自行组合。</p></div>
+ <div class="card off-card" id="ogpa" hidden></div>
+ <div class="card">
+  <div class="row"><select id="scheme" style="flex:1"></select><button class="btn pri" id="saveas">保存为方案</button><button class="btn ghost" id="del">删除</button></div>
+  <div class="row" style="margin-top:8px"><select id="termf" style="flex:1"><option value="">全部学期</option></select><button class="btn ghost" id="all">全选</button><button class="btn ghost" id="none">清空</button></div><div class="sub" id="dirty" style="margin-top:6px"></div>
+ </div>
+ <div class="card" style="padding:4px 8px"><table><thead><tr><th style="width:30px"></th><th>课程</th><th class="n" style="text-align:right">学分</th><th class="n" style="text-align:right">成绩</th><th class="n" style="text-align:right">绩点</th></tr></thead><tbody id="gt"></tbody></table></div>
+</section>
+<section class="tab" id="t-xy"><div id="prog"></div></section>
+<section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
+ <div class="seg" id="rmode"><button class="on" data-m="date">按日期查询</button><button data-m="week">按周次查询</button></div>
+ <div class="rgrid">
+  <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
+  <label>教学楼<select id="rb"><option value="">全部</option></select></label>
+  <label>教室类型<select id="rt"><option value="">全部</option></select></label>
+  <label class="m-date">空闲日期<input type="date" id="rd"></label>
+  <label class="m-week" hidden>周次<input id="rw" placeholder="如 6 或 6-8"></label>
+  <label class="m-week" hidden>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+  <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
+  <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
+  <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
+ </div>
+ <details id="rmore"><summary>更多条件</summary><div class="rgrid" id="rextra"><p class="sub">加载中…</p></div></details>
+ <div class="row" style="margin-top:8px"><span style="flex:1"></span><button class="btn pri" id="rq">查询</button></div>
+ <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
+ <div class="card" id="rres" hidden></div></section>
+<section class="tab" id="t-ks"><div class="card"><h2>考试倒计时</h2><div id="exams"></div></div></section>
+<section class="tab" id="t-oa">
+ <div id="oa-list-v">
+ <div class="card"><div class="row"><h2 style="margin:0">通知 <span class="sub" id="oa-meta"></span></h2><span class="sp"></span><button class="btn" id="oa-ref" title="只取第 1 页">⟳ 更新</button></div>
+  <div class="seg" id="oa-ch" style="margin:12px 0 0;overflow-x:auto" hidden></div>
+  <div class="oaf" style="margin-top:12px"><input id="oa-kw" type="search" placeholder="搜索标题或发文单位（本地筛选）"><select id="oa-dept"><option value="">全部单位</option></select></div>
+  <p class="sub" style="margin:10px 0 0" id="oa-src">数据来自 OA（oa.jlu.edu.cn）和软件学院、计算机学院官网，只读、保存在本机。OA 校外访问需先连接 <code>vpn.jlu.edu.cn</code>。</p></div>
+ <div class="card" id="oa-box" style="padding:8px 14px"><div class="state"><div class="spin"></div><b>正在读取通知…</b></div></div>
+ <div class="card" id="oa-sub"><h2>关键词订阅</h2><div id="oa-sub-b"><p class="sub" style="margin:0">读取中…</p></div></div>
+ </div>
+ <div id="oa-detail-v" hidden></div>
+</section>
+<section class="tab" id="t-sz">
+ <div class="card" id="links"><h2>校园服务 <span class="sub">不常用但用得到的入口</span></h2><div id="links-b"><p class="sub" style="margin:0">读取中…</p></div></div>
+ <h2 style="margin:18px 4px 10px;font-size:14px;color:var(--sub)">设置</h2>
+ <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
+  <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
+ <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
+ <div class="card"><h2>账号</h2><p class="sub" id="lginfo">登录统一身份认证后才能刷新课表和成绩。</p><button class="btn pri" id="lgbtn" type="button">登录 / 重新登录</button></div>
+ <div class="card"><h2>导出</h2><p class="sub">导出 iCal 后可导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
+ <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用已保存的登录会话；会话失效时点下面的按钮在应用内重新登录。</p></div>
+</section>
+</main>
+<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>☰</b>更多</button></nav>
+<dialog id="login" aria-labelledby="lgt"><form method="dialog" id="lgf" autocomplete="on">
+ <h2 id="lgt" style="margin:0 0 4px">登录统一身份认证</h2><p class="sub" style="margin:0">账号是邮箱前缀（不是学号）。登录状态加密保存在本机，下次打开不用重登。</p>
+ <div id="lg1"><label for="lgu">账号</label><div id="lga" class="lga" hidden></div><input type="text" id="lgu" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="邮箱前缀">
+  <label for="lgp">密码</label><input type="password" id="lgp" autocomplete="current-password" placeholder="已记住的账号可留空">
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lgr" checked>记住我（会话失效时免输密码）</label></div>
+ <div id="lg2" hidden><p class="sub" id="lgh" style="margin:8px 0 0">点「发送微信验证码」，验证码会发到「智慧吉大」的「统一身份认证」消息里。</p>
+  <div id="lg3" hidden><label for="lgw">微信验证码（到「智慧吉大」查看「统一身份认证」消息）</label><input type="text" id="lgw" inputmode="numeric" autocomplete="one-time-code"></div></div>
+ <p class="err" id="lge" role="alert"></p>
+ <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="lgx">取消</button><span style="flex:1"></span><button type="submit" class="btn pri" id="lgo">登录</button></div>
+</form></dialog>
+<div id="toast"></div>
+<script>
+"use strict";
+const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LEVEL={"优秀":95,"良好":85,"中等":75,"及格":65,"不及格":0,"通过":null,"不通过":0};
+const COLORS=["#3b6fd4","#d4573b","#2e9e6a","#9b51e0","#d48a1e","#1f8fa8","#c2416f","#5b6bd6","#6b8e23","#b8572b"];
+let D=null, week=1, include=new Set(), current="__all__", dirty=false;
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2600)}
+function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
+async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});if(D&&((D.courses||[]).length||(D.grades||[]).length)&&!D.offline){D.offline=true;D.cached_at=D.cached_at||D.updated}try{renderSession();renderOffline()}catch(_){}}if(j&&j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j;if(!r.ok||j.ok===false)throw new Error(j.error||(r.status===401?"登录会话已过期":r.status));return j}
+function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
+function maxWeek(){return Math.max((D.calendar&&D.calendar.total_weeks)||16,...D.courses.flatMap(c=>c.weeks))}
+function color(name){let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;return COLORS[h%COLORS.length]}
+function renderGrid(){
+ $("#wkn").textContent=`第 ${week} 周`;
+ const g=$("#grid"),days=["一","二","三","四","五","六","日"];let html='<div></div>';
+ const fm=D.first_monday, now=new Date();
+ days.forEach((d,i)=>{let lab="周"+d,today=false;if(fm){const dd=new Date(fm+"T00:00:00");dd.setDate(dd.getDate()+(week-1)*7+i);lab+=`<br>${dd.getMonth()+1}/${dd.getDate()}`;today=dd.toDateString()===now.toDateString()}html+=`<div class="h${today?" today":""}">${lab}</div>`});
+ const cs=D.courses.filter(c=>c.weeks.includes(week));
+ const maxP=Math.max(11,...cs.map(c=>c.end));
+ for(let p=1;p<=maxP;p++){const pt=(D.periods||{})[p];html+=`<div class="p" style="grid-row:${p+1};grid-column:1;flex-direction:column">${p}${pt?`<em>${pt[0]}</em>`:""}</div>`;for(let d=1;d<=7;d++)html+=`<div class="cell" style="grid-row:${p+1};grid-column:${d+1}"></div>`}
+ for(const c of cs)html+=`<div class="cls" style="grid-row:${c.start+1}/${c.end+2};grid-column:${c.weekday+1};background:${color(c.name)}"><b>${esc(c.name)}</b><i>${esc(c.location)}</i></div>`;
+ g.innerHTML=html;
+ if(!D.courses.length)g.insertAdjacentHTML("afterend",'<p class="empty" id="noc">还没有课表数据，点右上角“刷新”或在终端运行 jlu-toolkit fetch</p>');
+}
+function schemeOptions(){const s=$("#scheme");s.innerHTML=`<option value="__all__">全部课程</option>`+Object.keys(D.schemes).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");s.value=current in D.schemes||current==="__all__"?current:"__all__"}
+function applyScheme(name){current=name;include=new Set(name==="__all__"?D.grades.map(g=>g.key):D.schemes[name]);dirty=false;renderGrades()}
+function renderGrades(){
+ const tf=$("#termf").value;let tot=0,pts=0,n=0;
+ for(const g of D.grades){if(!include.has(g.key))continue;const p=point(g.score);if(p===null)continue;tot+=g.credit;pts+=p*g.credit;n++}
+ $("#g-gpa").textContent=tot?(pts/tot).toFixed(3):"-";$("#g-cr").textContent=tot||"-";$("#g-n").textContent=n||"-";
+ $("#dirty").textContent=dirty?"● 有未保存的修改":"";
+ const rows=D.grades.filter(g=>!tf||g.term===tf).slice().sort((a,b)=>b.term.localeCompare(a.term));
+ let html="",last=null;
+ for(const g of rows){if(g.term!==last){html+=`<tr class="term"><td colspan="5">${esc(g.term||"未知学期")}</td></tr>`;last=g.term}
+  const on=include.has(g.key),p=point(g.score);
+  html+=`<tr class="${on?"":"off"}"><td><input type="checkbox" data-k="${esc(g.key)}" ${on?"checked":""}></td><td>${esc(g.name)}</td><td class="n">${g.credit}</td><td class="n">${esc(g.score)}</td><td class="n">${p===null?'<span class="chip">不计</span>':p.toFixed(1)}</td></tr>`}
+ $("#gt").innerHTML=html||'<tr><td colspan="5" class="empty">还没有成绩数据</td></tr>';
+}
+function cd(e){if(!e.start)return{cls:"",big:"?",sm:"待定"};const ms=new Date(e.start)-new Date();if(ms<0)return{cls:"past",big:"✓",sm:"已结束"};const d=Math.floor(ms/864e5);if(d>=1)return{cls:d<=3?"soon":"",big:d,sm:"天"};return{cls:"soon",big:Math.ceil(ms/36e5),sm:"小时"}}
+function fmtTime(e){if(!e.start)return"时间待定";const s=e.start.replace("T"," ");return s+(e.end?"–"+e.end.slice(11):"")}
+function renderExams(){
+ const L=D.exams.map(e=>{const c=cd(e);return`<div class="exam"><div class="cd ${c.cls}"><b>${c.big}</b><span>${c.sm}</span></div><div class="t"><b>${esc(e.name)}</b><span class="sub">${esc(fmtTime(e))}<br>${esc(e.location)}${e.seat?" · 座位 "+esc(e.seat):""}${e.kind?" · "+esc(e.kind):""}</span></div></div>`});
+ $("#exams").innerHTML=L.join("")||'<p class="empty">暂无考试安排数据（刷新后若教务已发布会显示在这里）</p>';
+ const nx=D.exams.find(e=>e.start&&new Date(e.end||e.start)>new Date()),box=$("#nextexam");
+ if(nx){const c=cd(nx);box.hidden=false;box.innerHTML=`<div class="exam" style="padding:0"><div class="cd ${c.cls}"><b>${c.big}</b><span>${c.sm}</span></div><div class="t"><span class="sub">下一场考试</span><b>${esc(nx.name)}</b><span class="sub">${esc(fmtTime(nx))} · ${esc(nx.location)}</span></div></div>`}else box.hidden=true;
+}
+function renderOfficial(){const o=D.official_gpa,box=$("#ogpa");if(o&&o.available===false){box.hidden=false;box.innerHTML=`<h3>教务官方统计</h3><p class="sub" style="margin:0">吉大教务暂未提供「学分绩点统计」接口；成绩里若含教务单科绩点，会显示其学分加权结果。</p>`;return}if(!o||!o.items||!o.items.length){box.hidden=true;return}box.hidden=false;
+ box.innerHTML=`<h3>教务官方统计 <span class="chip">只读</span></h3><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div><p class="sub" style="margin:8px 0 0">${o.source==="grades_jw_point"?"按教务单科绩点计算":"来自教务「学分绩点统计」"}${o.plan?" · "+esc(o.plan):""}</p>`}
+function num(v){return v==null?"-":(Math.round(v*100)/100)}
+function officialCard(){const o=D.official_gpa;if(!o||o.source!=="official"||!o.items)return"";return`<div class="card"><h2>教务官方 GPA <span class="chip">只读</span></h2><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div></div>`}
+let PF={st:"",tm:"",nt:""};
+function planCourses(){return(D.plan_courses&&D.plan_courses.courses)||[]}
+function pfOk(c){return(!PF.st||c.status===PF.st)&&(!PF.tm||(c.term||"")===PF.tm)&&(!PF.nt||(c.nature||c.category||"")===PF.nt)}
+function planFilters(){const cs=planCourses();if(!cs.length)return"";const u=k=>[...new Set(cs.map(k).filter(Boolean))].sort();const sel=(id,l,v,lab)=>`<label>${lab}<select id="${id}"><option value="">全部</option>${l.map(x=>`<option${x===v?" selected":""}>${esc(x)}</option>`).join("")}</select></label>`;
+ const n=s=>cs.filter(c=>c.status===s).length;return`<div class="card"><h2>培养方案课程 <span class="sub">${cs.length} 门 · 已修 ${n("已修")} · 在修 ${n("在修")} · 未修 ${n("未修")}</span></h2><div class="rgrid">${sel("pf-st",["已修","在修","未修","未通过"],PF.st,"状态")}${sel("pf-tm",u(c=>c.term),PF.tm,"修读学期")}${sel("pf-nt",u(c=>c.nature||c.category),PF.nt,"课程性质/类别")}</div></div>`}
+let PDEPT=false;
+function courseRows(cs){PDEPT=planCourses().some(c=>c.dept);const tag={"已修":"done","在修":"chip","未修":"miss","未通过":"miss"};return cs.filter(pfOk).map(c=>`<tr><td><span class="${tag[c.status]||"chip"}">${esc(c.status)}</span></td><td>${esc(c.code)}</td><td>${esc(c.name)}</td><td>${c.credit??""}</td><td>${esc(c.hours||"")}</td><td>${esc(c.nature||c.category||"")}</td><td>${esc(c.exam_type||"")}</td><td>${esc(c.term||"")}</td>${PDEPT?`<td>${esc(c.dept||"")}</td>`:""}<td>${esc(c.score||"")}</td></tr>`).join("")}
+function pch(){PDEPT=planCourses().some(c=>c.dept);return`<tr><th>状态</th><th>课程号</th><th>课程名</th><th>学分</th><th>学时</th><th>性质</th><th>考试类型</th><th>修读学期</th>${PDEPT?"<th>开课单位</th>":""}<th>成绩</th></tr>`}
+function groupCourses(g){const cs=g.courses||[];if(!cs.length)return"";const rows=courseRows(cs);const k=cs.filter(pfOk).length;return`<details class="gc"${PF.st||PF.tm||PF.nt?" open":""}><summary>课程 ${k}/${cs.length}</summary><div style="overflow-x:auto"><table class="rt"><thead>${pch()}</thead><tbody>${rows||'<tr><td colspan="10" class="sub">无符合筛选的课程</td></tr>'}</tbody></table></div></details>`}
+function ungrouped(){const c=D.completion,cs=planCourses();if(!cs.length)return"";const inG=new Set(((c&&c.groups)||[]).flatMap(g=>(g.courses||[]).map(x=>x.code+"|"+x.group_code)));const rest=cs.filter(x=>!inG.has(x.code+"|"+x.group_code));if(!rest.length)return"";return`<div class="card"><h2>${c&&c.groups&&c.groups.length?"未归入课组的课程":"全部课程"} <span class="sub">${rest.filter(pfOk).length} 门</span></h2><div style="overflow-x:auto"><table class="rt"><thead>${pch()}</thead><tbody>${courseRows(rest)}</tbody></table></div></div>`}
+const isDone=c=>(c.status_code||({"已修":"done"})[c.status])==="done";
+function doneCredits(n,seen=new Set()){if(seen.has(n.code))return 0;seen.add(n.code);return(n.courses||[]).filter(isDone).reduce((s,c)=>s+(+c.credit||0),0)+(n.children||[]).reduce((s,x)=>s+doneCredits(x,seen),0)}
+function fixEarned(n){const e=Math.max(+n.earned>0?+n.earned:0,Math.round(doneCredits(n)*100)/100);n.earned=e;if(n.required!=null)n.missing=Math.max(0,Math.round((n.required-e)*100)/100);(n.children||[]).forEach(fixEarned);return n}
+function nodeCount(n){return(n.courses||[]).length+(n.children||[]).reduce((s,x)=>s+nodeCount(x),0)}
+function treeNode(n,d){const p=n.required?Math.min(100,(n.earned||0)/n.required*100):0;const ok=n.required!=null&&!n.missing;const cs=n.courses||[];const k=cs.filter(pfOk).length;
+ const leaf=!(n.children||[]).length;return`<details class="tn"${d<1||(leaf&&cs.length<=3)?" open":""} style="margin-left:${Math.min(d,4)*10}px"><summary><b>${esc(n.name)}</b>${n.nature?` <span class="chip">${esc(n.nature)}</span>`:""} <span class="sub">${num(n.earned)}${n.required!=null?" / "+num(n.required):""} 学分${n.earned_source==="plan_courses"?" (按课程)":""} · ${nodeCount(n)} 门</span> ${ok?'<span class="done">✓</span>':n.missing?`<span class="miss">差 ${num(n.missing)}</span>`:""}</summary>${n.required?`<div class="bar"><i style="width:${p.toFixed(1)}%;${ok?"background:var(--ok)":""}"></i></div>`:""}${cs.length?`<div style="overflow-x:auto"><table class="rt"><thead>${pch()}</thead><tbody>${courseRows(cs)||'<tr><td colspan="10" class="sub">无符合筛选的课程</td></tr>'}</tbody></table></div>`:""}${(n.children||[]).map(ch=>treeNode(ch,d+1)).join("")}</details>`}
+function unmatchedCard(c){const u=c.unmatched||[];if(!u.length)return"";const R={substitute:"替代/认定课程（RDKCH/TDKCH）",kzh_not_in_tree:"课组号不在方案课组树中",no_kzh:"无课组号"};const by={};u.forEach(x=>(by[x.unmatched_reason]=by[x.unmatched_reason]||[]).push(x));
+ return`<div class="card"><h2>未归组课程 <span class="sub">${u.length} 门</span></h2>${Object.entries(by).map(([r,l])=>`<details><summary>${esc(R[r]||r)} · ${l.length} 门</summary><div style="overflow-x:auto"><table class="rt"><thead>${pch()}</thead><tbody>${courseRows(l)}</tbody></table></div></details>`).join("")}</div>`}
+function renderProgress(){const c=D.completion,box=$("#prog");
+ if(!c){box.innerHTML=officialCard()+'<div class="card"><p class="empty">还没有学业完成数据，点右上角“刷新”</p></div>';return}
+ const pct=c.required?Math.min(100,(c.earned||0)/c.required*100):0;
+ let h=officialCard()+`<div class="card"><h2>${esc(c.plan||"培养方案")}</h2><div class="row"><span class="big">${num(c.earned)}</span><span class="sub">/ ${num(c.required)} 学分</span><span class="sp"></span>${c.passed?'<span class="done">✓ 已满足毕业学分</span>':`<span class="miss">还差 ${num(c.missing)} 学分</span>`}</div><div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div><p class="sub" style="margin:0">${c.selected!=null?"已选（含在修）"+num(c.selected)+" 学分 · ":""}${c.calculated_at?"教务计算于 "+esc(c.calculated_at):""}</p></div>`;
+ const gs=c.groups||[];
+ if(c.tree&&c.tree.length){const st=c.tree_stats||{};h+=planFilters()+`<div class="card"><h2>课组树 <span class="sub">${st.groups||0} 个课组 · 课程已归组 ${st.matched||0}/${st.courses||0}</span></h2>${c.tree.map(n=>treeNode(fixEarned(n),0)).join("")}</div>`+unmatchedCard(c);box.innerHTML=h;return}
+ if(gs.length){const todo=gs.filter(g=>!g.passed&&(g.missing||0)>0);
+  h+=planFilters()+`<div class="card"><h2>各类课程 <span class="sub">${todo.length?todo.length+" 类未完成":"全部完成"}</span></h2>`+gs.map(g=>{const p=g.required?Math.min(100,(g.earned||0)/g.required*100):0;return`<div class="grp"><div class="row"><b>${esc(g.name)}</b>${g.nature?`<span class="chip">${esc(g.nature)}</span>`:""}</div><div class="bar"><i style="width:${p.toFixed(1)}%;${g.passed?"background:var(--ok)":""}"></i></div><div class="row sub"><span>${num(g.earned)} / ${num(g.required)} 学分${g.courses_done?" · "+g.courses_done+" 门":""}${g.earned_source==="derived"?' <span class="chip">按成绩推算</span>':""}</span><span class="sp"></span>${g.passed||!g.missing?'<span class="done">已完成</span>':`<span class="miss">差 ${num(g.missing)}</span>`}</div>${groupCourses(g)}</div>`}).join("")+`</div>`}
+ else h+='<div class="card"><p class="sub">教务未返回分类明细（课组），仅显示总学分。可运行 jlu-toolkit explore 帮助适配。</p></div>';
+ if(!gs.length)h+=planFilters();
+ box.innerHTML=h+ungrouped()}
+document.addEventListener("change",e=>{const id=e.target.id;if(id==="pf-st"||id==="pf-tm"||id==="pf-nt"){PF={st:$("#pf-st").value,tm:$("#pf-tm").value,nt:$("#pf-nt").value};renderProgress()}});
+function fmtCached(t){if(!t)return"未知时间";const d=new Date(typeof t==="number"?t*1000:t);if(isNaN(d))return esc(String(t));const p=n=>String(n).padStart(2,"0");return `${d.getMonth()+1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+function offlineBadge(j){return j&&j.offline===true?`<span class="offl" title="登录失效或网络不通，显示的是本机缓存">⏏ 离线数据 · 更新于 ${fmtCached(j.cached_at)}</span>`:""}
+function renderOffline(){const b=$("#offl");if(!b)return;const h=offlineBadge(D);b.hidden=!h;b.innerHTML=h}
+function renderAll(){try{renderOffline()}catch(_){}
+ $("#upd").textContent=D.updated?"更新于 "+D.updated.replace("T"," "):"";
+ $("#fm").value=D.first_monday||"";
+ const terms=[...new Set(D.grades.map(g=>g.term))].sort().reverse();const tf=$("#termf"),keep=tf.value;
+ tf.innerHTML='<option value="">全部学期</option>'+terms.map(t=>`<option>${esc(t)}</option>`).join("");tf.value=keep;
+ document.getElementById("noc")?.remove();renderGrid();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();renderOfficial();renderProgress();
+ const cal=D.calendar||{};$("#calinfo").innerHTML=D.first_monday?`第 1 周周一：<b>${esc(D.first_monday)}</b>（${D.first_monday_source==="manual"?"手动覆盖":"来自教务校历"}）${cal.term?" · "+esc(cal.term):""}${cal.total_weeks?" · 共 "+cal.total_weeks+" 周":""} · 今天第 ${weekOf(new Date())} 周`:"尚未读取校历：点右上角“刷新”自动获取开学日期。";
+}
+async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll()}
+function sessionInfo(d){const s=d&&d.session;if(!s&&!(d&&d.session_expired))return null;const exp=(d&&d.session_expired===true)||(s&&(s.expired===true||s.valid===false||/^(expired|invalid)$/i.test(String(s.status||s.state||""))));return exp?(s||{}):null}
+function renderSession(){const box=$("#sess"),s=sessionInfo(D);if(!s){box.hidden=true;box.innerHTML="";return}box.hidden=false;
+ box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>${D&&D.session_site?esc(SITEN(D.session_site))+" ":""}登录会话已过期，请重新登录</b><p class="sub">${s.message?esc(s.message)+" · ":""}点「重新登录」完成后会自动刷新。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div><button class="btn pri" type="button" onclick="openLogin()">重新登录</button></div>`}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0)});
+$("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
+$("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
+let tx=null;$("#grid").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
+$("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>60)(dx<0?$("#next"):$("#prev")).click();tx=null});
+$("#gt").onchange=e=>{const k=e.target.dataset.k;if(!k)return;e.target.checked?include.add(k):include.delete(k);dirty=true;renderGrades()};
+$("#scheme").onchange=e=>applyScheme(e.target.value);$("#termf").onchange=renderGrades;
+$("#all").onclick=()=>{D.grades.forEach(g=>include.add(g.key));dirty=true;renderGrades()};
+$("#none").onclick=()=>{include.clear();dirty=true;renderGrades()};
+$("#saveas").onclick=async()=>{const n=prompt("方案名称（如 保研、综测）",current==="__all__"?"":current);if(!n)return;try{D=await api("/api/schemes",{name:n,include:[...include]});current=n.trim();dirty=false;renderAll();toast("已保存方案："+current)}catch(e){toast(e.message)}};
+$("#del").onclick=async()=>{if(current==="__all__")return toast("“全部课程”不能删除");if(!confirm("删除方案 "+current+"？"))return;D=await api("/api/schemes/delete",{name:current});current="__all__";dirty=false;renderAll();toast("已删除")};
+$("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});await load();toast("已恢复为教务校历")};
+document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTheme(b.dataset.theme));window.__setTheme(localStorage.getItem("jlu-theme")||"system");
+$("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
+$("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
+$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.innerHTML='⟳<span class="lbl"> 刷新中…</span>';try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.innerHTML='⟳<span class="lbl"> 刷新</span>'}};
+(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);$("#rwd").value=String(new Date().getDay()||7)})();
+let RM="date",RR=[],RS={k:"name",d:1};
+document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>{RM=b.dataset.m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll(".m-date").forEach(e=>e.hidden=RM!=="date");document.querySelectorAll(".m-week").forEach(e=>e.hidden=RM!=="week")});
+const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
+async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
+// 六个校区固定（教务代码表 01–06，已与真实 campuses.json 核对），不再需要「加载」
+const CAMPUSES=[{code:"01",name:"前卫校区"},{code:"02",name:"南岭校区"},{code:"03",name:"新民校区"},{code:"04",name:"朝阳校区"},{code:"05",name:"南湖校区"},{code:"06",name:"和平校区"}];
+const RCKEY="superjlu.room.campus";
+function lsGet(k){try{return localStorage.getItem(k)}catch(_){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(_){}}
+function pickCampus(code){$("#rc").value=code;lsSet(RCKEY,code);document.querySelectorAll("#rcs button").forEach(b=>{const on=b.dataset.c===code;b.classList.toggle("on",on);b.setAttribute("aria-checked",on?"true":"false")});loadBuildings()}
+$("#rcs").innerHTML=CAMPUSES.map(c=>`<button type="button" role="radio" data-c="${esc(c.code)}">${esc(c.name.replace(/校区$/,""))}</button>`).join("");
+document.querySelectorAll("#rcs button").forEach(b=>b.onclick=()=>pickCampus(b.dataset.c));
+let RMETA=false;
+async function roomsInit(){const last=lsGet(RCKEY);pickCampus(CAMPUSES.some(c=>c.code===last)?last:CAMPUSES[0].code);if(RMETA)return;RMETA=true;try{const t=await api("/api/rooms/types",{});$("#rt").innerHTML=opts(t.types,"全部");const f=await api("/api/rooms/fields",{});$("#rextra").innerHTML=f.fields.map(x=>`<label>${esc(x.caption||x.name)}<input data-f="${esc(x.name)}" placeholder="${esc(x.name)}"></label>`).join("")||'<p class="sub">元数据中没有其它检索字段</p>'}catch(e){RMETA=false;toast(e.message)}}
+document.querySelector('nav button[data-t="js"]').addEventListener("click",()=>{if(!window.__rm){window.__rm=1;roomsInit()}});
+const RCOLS=[["campus","学校校区"],["building","教学楼"],["kind","教室类型"],["name","教室名称"],["free_date","空闲日期"],["free_periods","空闲节次"],["free_time","空闲时间"],["seats","上课座位数"],["exam_seats","考试座位数"]];
+function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats","exam_seats"].includes(k);const rs=[...RR].sort((a,b)=>{const x=a[RS.k],y=b[RS.k];return RS.d*(n(RS.k)?(+x||0)-(+y||0):String(x).localeCompare(String(y),"zh"))});
+ const head=j.mode==="week"?`第${esc(j.weeks)}周 周${"一二三四五六日"[j.weekday-1]}`:`${esc(j.date)} <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]}</span>`;
+ box.innerHTML=`<h2>${head} 第${j.periods[0]}-${j.periods[1]}节 <span class="sub">· ${rs.length} 间</span></h2>`+(rs.length?`<div style="overflow-x:auto"><table class="rt"><thead><tr>${RCOLS.map(([k,l])=>`<th data-k="${k}">${l}${RS.k===k?(RS.d>0?" ▲":" ▼"):""}</th>`).join("")}</tr></thead><tbody>${rs.map(r=>`<tr>${RCOLS.map(([k])=>`<td>${esc(r[k]||"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`:'<p class="empty">没有符合条件的空教室</p>');
+ box.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;RS=RS.k===k?{k,d:-RS.d}:{k,d:1};renderRooms(j)})}
+$("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
+ const j=await api("/api/rooms",{mode:RM,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
+let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null;
+function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
+function oaLink(u,label){return/^https?:\/\/(oa|csw|ccst)\.jlu\.edu\.cn\//.test(u||"")?`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`:""}
+function renderOA(){const box=$("#oa-box");queueMicrotask(()=>{if(OA&&OA.offline===true&&!box.querySelector(".offl"))box.insertAdjacentHTML("afterbegin",offlineBadge(OA))});if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">校外请先连接 vpn.jlu.edu.cn 再点“更新”。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
+ if(!OA)return;const all=OA.items||[];const ds=[...new Set(all.map(i=>i.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh"));const sel=$("#oa-dept");sel.innerHTML='<option value="">全部单位</option>'+ds.map(d=>`<option${d===OAQ.dept?" selected":""}>${esc(d)}</option>`).join("");
+ const hint=OA.source==="college"&&OA.status==="need_campus"?`<div class="state" style="padding:10px 4px"><b>需校园网</b>${esc(OA.hint||"")}</div>`:"";
+ $("#oa-meta").textContent=all.length?`${all.length} 条${OA.fetched_at?" · 更新于 "+String(OA.fetched_at).replace("T"," ").slice(0,16):""}`:"";
+ if(!all.length){box.innerHTML=hint||(OA.source==="college"?`<div class="state"><b>还没有消息</b>点右上角“更新”从学院官网取第一页。</div>`:`<div class="state"><b>还没有通知</b>点右上角“更新”从 OA 取第一页，或在终端运行 <code>jlu-toolkit oa notices</code>。</div>`);return}
+ const it=oaFilter(all,OAQ);if(!it.length){box.innerHTML=`<div class="state"><b>没有符合条件的通知</b>换个关键词或单位试试。</div>`;return}
+ box.innerHTML=hint+`<ul class="oal">${it.map(i=>`<li data-id="${esc(i.id)}" tabindex="0"><div class="tt">${i.top?'<span class="pin">置顶</span>':""}${esc(i.title)}<span class="mt">${esc(i.dept||"未知单位")} · ${esc(i.time||"")}</span></div><span class="ar">›</span></li>`).join("")}</ul>`;
+ box.querySelectorAll("li").forEach(li=>{li.onclick=()=>openOA(li.dataset.id);li.onkeydown=e=>{if(e.key==="Enter")openOA(li.dataset.id)}})}
+function renderOACh(){const box=$("#oa-ch"),l=OACHS||[];box.hidden=l.length<2;box.innerHTML=l.map(c=>`<button data-ch="${esc(c.id)}" class="${c.id===OACH?"on":""}">${esc(c.name||c.id)}</button>`).join("");box.querySelectorAll("button").forEach(b=>b.onclick=()=>{OACH=b.dataset.ch;OA=null;OAQ.dept="";renderOACh();$("#oa-box").innerHTML=`<div class="state"><div class="spin"></div><b>正在读取通知…</b></div>`;loadOA()})}
+async function loadOA(){OAERR="";if(!OACHS){try{OACHS=(await api("/api/oa/channels")).channels}catch(e){OACHS=[{id:"179577",name:"校内通知"}]}if(!OACHS.some(c=>c.id===OACH))OACH=(OACHS[0]||{id:"179577"}).id;renderOACh()}try{OA=await api("/api/oa/notices?category="+encodeURIComponent(OACH))}catch(e){OA=null;OAERR=e.message}renderOA()}
+function oaBack(){$("#oa-detail-v").hidden=true;$("#oa-list-v").hidden=false}
+async function openOA(id){const v=$("#oa-detail-v");$("#oa-list-v").hidden=true;v.hidden=false;v.innerHTML=`<div class="card"><div class="state"><div class="spin"></div><b>正在读取…</b></div></div>`;scrollTo(0,0);
+ let i;try{i=(await api("/api/oa/notice?id="+encodeURIComponent(id))).item}catch(e){v.innerHTML=`<div class="card"><button class="btn ghost" id="oa-back">‹ 返回</button><div class="state"><b>读取失败</b>${esc(e.message)}</div></div>`;$("#oa-back").onclick=oaBack;return}
+ const atts=i.attachments||[];
+ v.innerHTML=`<div class="card oad"><div class="row" style="margin-bottom:10px"><button class="btn ghost" id="oa-back">‹ 返回</button><span class="sp"></span>${oaLink(i.url,i.source==="college"?"打开原文 ↗":"在 OA 中打开 ↗")}</div><h2>${i.top?'<span class="pin">置顶</span>':""}${esc(i.title)}</h2><div class="sub">${esc(i.dept||"未知单位")} · ${esc(i.time||"")}</div>`+
+  (i.text?`<div class="body">${esc(i.text)}</div>`:`<div class="state" style="padding:28px 8px">${i.source==="college"?"<b>学院新闻只保存标题</b>点“打开原文”在新标签页查看。":"<b>本地没有正文</b>点“在 OA 中打开”查看原文（校外需先连接 vpn.jlu.edu.cn）。"}</div>`)+
+  (atts.length?`<h2 style="font-size:15px;margin-top:6px">附件 <span class="sub">${atts.length}</span></h2><div class="att">${atts.map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">📎 ${esc(a.name)}</a>`).join("")}</div>`:"")+`</div>`;
+ $("#oa-back").onclick=oaBack}
+$("#oa-kw").oninput=e=>{OAQ.kw=e.target.value;renderOA()};$("#oa-dept").onchange=e=>{OAQ.dept=e.target.value;renderOA()};
+$("#oa-ref").onclick=async()=>{const b=$("#oa-ref");b.disabled=true;b.textContent="更新中…";try{OA=await api("/api/oa/refresh",{category:OACH});OAERR="";renderOA();toast(OA.status==="need_campus"?"连不上学院官网，需校园网":"已更新第一页")}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="⟳ 更新"}};
+async function subReq(m,path,body){const r=await fetch(path,body?{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method:m});let j=null;try{j=await r.json()}catch(_){}if(r.status===404&&(!j||j.ok===undefined)){const e=new Error("NOAPI");e.noapi=true;throw e}if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||("HTTP "+r.status));return j}
+const OACHN=id=>((OACHS||[]).find(c=>c.id===id)||{}).name||id;
+async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 SuperJLU 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
+ const rules=j.rules||[],ms=(j.matches||[]).filter(m=>rules.some(r=>r.id===m.rule_id));
+ b.innerHTML=`<p class="sub" style="margin:0 0 10px">按关键词（标题匹配）和发文单位订阅，只在本机保存。</p><div class="oaf"><input id="sub-kw" type="text" placeholder="关键词，逗号分隔，如 讲座,补考"><input id="sub-dp" type="text" placeholder="发文单位（可选，逗号分隔）"><button class="btn pri" id="sub-add">添加</button></div>`+
+ (rules.length?`<ul class="oal" style="margin-top:8px">${rules.map(r=>`<li style="cursor:default"><div class="tt">${(r.keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join(" ")}<span class="mt">${(r.depts||[]).length?"单位："+esc(r.depts.join("、"))+" · ":""}${r.channel?esc(OACHN(r.channel)):"全部栏目"}</span></div><button class="btn ghost" data-del="${esc(r.id)}">删除</button></li>`).join("")}</ul>`:`<p class="sub" style="margin:12px 0 0">还没有订阅规则。</p>`)+
+ `<h2 style="font-size:15px;margin:16px 0 4px">最近命中</h2>`+(ms.length?`<ul class="oal">${ms.map(m=>{const n=m.notice||{};return`<li data-id="${esc(n.id)}"><div class="tt">${n.top?'<span class="pin">置顶</span>':""}${esc(n.title)}<span class="mt">命中「${esc((m.keywords_hit||[]).join("、"))}」 · ${esc(n.dept||"")} · ${esc(n.time||"")}</span></div><span class="ar">›</span></li>`}).join("")}</ul>`:`<p class="sub" style="margin:0">暂无命中。命中记录由后台检查生成，请在终端运行 <code>jlu-toolkit oa watch</code>。</p>`);
+ $("#sub-add").onclick=async()=>{const kw=$("#sub-kw").value.trim();if(!kw)return toast("请填写关键词");const dp=$("#sub-dp").value.split(/[,，、]/).map(x=>x.trim()).filter(Boolean);try{await subReq("POST","/api/oa/subscriptions",{keywords:kw,depts:dp,channel:OACH});toast("已添加订阅");loadSubs()}catch(e){toast(e.noapi?"当前版本还没有订阅功能，请更新":e.message)}};
+ b.querySelectorAll("[data-del]").forEach(x=>x.onclick=async()=>{if(!confirm("删除这条订阅？"))return;try{await subReq("DELETE","/api/oa/subscriptions/"+encodeURIComponent(x.dataset.del))}catch(e){if(!/404/.test(e.message)&&!e.noapi)return toast(e.message)}loadSubs()});
+ b.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>openOA(li.dataset.id))}
+document.querySelector('nav button[data-t="oa"]').addEventListener("click",()=>{if(!OA){loadOA().then(loadSubs)}});
+let SITES=null,LINKN={};const SITEN=id=>(SITES&&SITES[id]&&SITES[id].name)||LINKN[id]||id;
+const SST={ok:["已登录","done"],expired:["已过期","miss"],missing:["未登录","chip"],unknown:["未知","chip"]};
+async function loadSessions(){try{const r=await fetch("/api/sessions");if(!r.ok)return null;const j=await r.json();if(!j||j.ok===false||!Array.isArray(j.sites))return null;const m={};j.sites.forEach(s=>{if(s&&s.id)m[s.id]=s});return m}catch(_){return null}}
+function stBadge(s){if(!s)return"";const t=SST[s.state]||SST.unknown;return`<span class="${t[1]}" title="${esc(s.message||"")}">${t[0]}</span>`}
+const LKOK=u=>{try{const p=new URL(u);return p.protocol==="https:"&&/(^|\.)jlu\.edu\.cn$/.test(p.hostname)}catch(_){return false}};
+const lkA=(u,t,c)=>LKOK(u)?`<a class="btn ${c}" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:"";
+async function loadLinks(){const b=$("#links-b");let j;try{j=await api("/api/links")}catch(e){b.innerHTML=`<p class="sub" style="margin:0">读取失败：${esc(e.message)}</p>`;return}
+ const L=(j.links||[]).filter(x=>LKOK(x.url));L.forEach(x=>LINKN[x.id]=x.name);SITES=await loadSessions();const S=id=>SITES&&SITES[id];
+ L.forEach(x=>{const s=S(x.id);if(!x.vpn_url&&s&&typeof s.vpn_url==="string"&&LKOK(s.vpn_url))x.vpn_url=s.vpn_url});if(!L.length){b.innerHTML='<p class="sub" style="margin:0">没有可显示的入口。</p>';return}
+ b.innerHTML=`<div class="lgrid">${L.map(x=>`<div class="lk"><div class="hd"><span class="ic" aria-hidden="true">${esc(x.icon||"↗")}</span><b>${esc(x.name)}</b>${x.campus_only?'<span class="tag">校内网</span>':""}${stBadge(S(x.id))}</div>${S(x.id)&&S(x.id).checked_at?`<div class="lg">状态检查于 ${esc(String(S(x.id).checked_at).replace("T"," ").slice(0,16))}</div>`:""}<div class="sub">${esc(x.purpose||"")}</div>${x.login?`<div class="lg">🔑 ${esc(x.login)}</div>`:""}${x.campus_only&&!x.vpn_url?'<div class="lg">校外请先连接校园 VPN</div>':""}<div class="row">${x.sso_url&&/^\/api\/sso\/jump\?/.test(x.sso_url)?`<a class="btn pri" href="${esc(x.sso_url)}" target="_blank" rel="noopener" title="用已登录的统一认证直接进入">打开 ↗</a>`:lkA(x.url,"打开 ↗","pri")}${x.vpn_url?lkA(x.vpn_url,"经 VPN 打开 ↗","ghost"):""}</div></div>`).join("")}</div>`+
+ `<p class="sub" style="margin:12px 0 0">链接在新窗口打开，账号在对应网站登录，本工具不保存这些网站的密码。可在 <code>~/.config/jlu-toolkit/campus_links.json</code> 增改入口（仅 jlu.edu.cn）。${j.warning?" ⚠ "+esc(j.warning):""}</p>`}
+document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(!window.__lk){window.__lk=1;loadLinks()}});
+function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
+const _ra=renderAll;renderAll=function(){_ra();renderSession()};
+load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});
+// ---- 应用内登录（统一身份认证：账号密码 → 微信验证码；图形验证码由服务端自动识别，界面不显示） ----
+let LG={step:"pw"};
+function lgErr(m){$("#lge").textContent=m||""}
+function lgView(){$("#lg2").hidden=LG.step==="pw";$("#lg3").hidden=LG.step!=="code";$("#lgo").textContent=LG.step==="pw"?"登录":LG.step==="cap"?(LG.retry?"重新发送":"发送微信验证码"):"完成登录"}
+function lgAcc(list){const box=$("#lga");box.innerHTML="";LG.acc=list||[];const cur=$("#lgu").value.trim();box.hidden=!LG.acc.length;LG.acc.forEach(u=>{const s=document.createElement("span");if(u===cur)s.className="on";const b=document.createElement("button");b.type="button";b.textContent=u;b.onclick=()=>{$("#lgu").value=u;$("#lgp").value="";lgSync();$("#lgp").focus()};const x=document.createElement("button");x.type="button";x.className="x";x.textContent="×";x.title="删除该账号及其保存的密码";x.setAttribute("aria-label","删除账号 "+u);x.onclick=async()=>{if(!confirm("删除已保存的账号 "+u+"（连同密码）？"))return;try{const j=await (await fetch("/api/login/accounts/"+encodeURIComponent(u),{method:"DELETE"})).json();if($("#lgu").value.trim()===u)$("#lgu").value=j.accounts&&j.accounts[0]||"";lgAcc(j.accounts||[]);toast("已删除 "+u)}catch(_){toast("删除失败")}};s.append(b,x);box.append(s)});const a=document.createElement("button");a.type="button";a.className="add";a.textContent="＋ 其他账号";a.onclick=()=>{$("#lgu").value="";$("#lgp").value="";lgSync();$("#lgu").focus()};if(LG.acc.length)box.append(a)}
+function lgSync(){const u=$("#lgu").value.trim();const has=(LG.acc||[]).includes(u);$("#lgp").placeholder=has?"已保存密码，可留空":"密码";document.querySelectorAll("#lga span").forEach(s=>s.classList.toggle("on",s.firstChild.textContent===u))}
+$("#lgu").addEventListener("input",lgSync);
+async function openLogin(){LG={step:"pw"};lgErr("");$("#lgp").value="";$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username;lgAcc(j.accounts||(j.saved_username?[j.saved_username]:[]));lgSync()}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
+async function lgPost(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false)throw new Error(j.error||("HTTP "+r.status));return j}
+async function lgDone(){$("#login").close();toast("登录成功，正在刷新…");D=Object.assign(D||{},{session_expired:false,session:null});try{renderSession()}catch(_){}try{const j=await lgPost("/api/refresh",{});D=j;renderAll();toast("已刷新")}catch(e){toast("登录成功，刷新失败："+e.message)}}
+async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.disabled=true;try{
+ if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success")return lgDone();LG.step="cap";LG.retry=false}
+ else if(LG.step==="cap"){const j=await lgPost("/api/login/send_code",{});if(j.step==="code_sent"){LG.step="code";toast("微信验证码已发送")}else{LG.retry=true;lgErr(j.error||"发送失败，请重试")}}
+ else{const j=await lgPost("/api/login/verify",{wechat_code:$("#lgw").value.trim()});if(j.step==="success")return lgDone();lgErr(j.error||"验证码不正确")}
+}catch(e){lgErr(e.message);if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
+$("#lgf").addEventListener("submit",lgSubmit);
+$("#lgx").onclick=()=>{fetch("/api/login/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});$("#login").close()};
+$("#lgbtn").onclick=openLogin;
+</script></body></html>
+"""

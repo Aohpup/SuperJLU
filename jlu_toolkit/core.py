@@ -13,6 +13,7 @@ class Course:
 @dataclass
 class Grade:
     name: str; credit: float; score: str; term: str
+    jw_point: "float | None" = None  # 教务返回的单科绩点（若有）
 
 def parse_weeks(s):
     out = []
@@ -33,7 +34,12 @@ def load_courses(path):
 
 def load_grades(path):
     with open(path, encoding="utf-8-sig") as f:
-        return [Grade(r["课程"], float(r["学分"]), r["成绩"].strip(), r.get("学期","")) for r in csv.DictReader(f)]
+        out = []
+        for r in csv.DictReader(f):
+            jp = (r.get("教务绩点") or "").strip()
+            out.append(Grade(r["课程"], float(r["学分"]), r["成绩"].strip(), r.get("学期",""),
+                             float(jp) if jp else None))
+        return out
 
 LEVEL = {"优秀":95,"良好":85,"中等":75,"及格":65,"不及格":0,"通过":None,"不通过":0}
 
@@ -56,15 +62,20 @@ def gpa(grades, term=None):
 def courses_on(courses, week, weekday):
     return sorted([c for c in courses if week in c.weeks and c.weekday == weekday], key=lambda c: c.start)
 
-def to_ics(courses, first_monday):
+def to_ics(courses, first_monday, periods=None):
+    """periods: {节次: ("HH:MM","HH:MM")}；缺省用内置 PERIODS（教务节次时间可覆盖）。"""
+    P = dict(PERIODS)
+    if periods:
+        P.update({int(k): tuple(v) for k, v in periods.items()})
     d0 = dt.date.fromisoformat(first_monday)
-    stamp = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-    lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//JLU Toolkit//CN","X-WR-CALNAME:吉大课表",
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//SuperJLU//CN","X-WR-CALNAME:吉大课表",
              "X-WR-TIMEZONE:Asia/Shanghai"]
     for c in courses:
         for w in c.weeks:
             day = d0 + dt.timedelta(weeks=w-1, days=c.weekday-1)
-            s = PERIODS[c.start][0].replace(":",""); e = PERIODS[c.end][1].replace(":","")
+            if c.start not in P or c.end not in P: continue
+            s = P[c.start][0].replace(":",""); e = P[c.end][1].replace(":","")
             lines += ["BEGIN:VEVENT", f"UID:{uuid.uuid4()}@jlu-toolkit", f"DTSTAMP:{stamp}",
                       f"DTSTART;TZID=Asia/Shanghai:{day:%Y%m%d}T{s}00",
                       f"DTEND;TZID=Asia/Shanghai:{day:%Y%m%d}T{e}00",
