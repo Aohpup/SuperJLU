@@ -84,6 +84,10 @@ class FakeClient:
     def current_semester(self):
         return "2026-2027-1"
 
+    def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+        # 发现阶段：给空页面，避免依赖真实脚本
+        return 200, "<html></html>", url, b""
+
     def post_raw(self, path, fields, ref):
         self.posts.append((path, dict(fields)))
         r = self.routes.get(path)
@@ -118,7 +122,7 @@ def test_fetch_gpa_sends_xh_fields():
     fc = FakeClient(ROUTES)
     g = meta.fetch_official_gpa(fc)
     sent = dict(fc.posts)[meta.EP_GPA]
-    assert sent == {f"XH{i}": "20240001" for i in range(1, 7)}
+    assert all(sent[f"XH{i}"] == "20240001" for i in range(1, 7))
     assert g["items"][0]["value"] == "3.61"
 
 
@@ -247,3 +251,43 @@ def test_grade_jw_point_roundtrip(tmp_path):
 def test_summarize_msg_redacts_numbers():
     s = explore.summarize_json({"code": "1", "msg": "学号20240001无权限访问"})
     assert "20240001" not in s["msg"] and "无权限" in s["msg"]
+
+
+def test_emap_discover_cjcx_finds_gpa_action():
+    from jlu_toolkit import emap
+
+    class FC:
+        def enter_emap_app(self, app): pass
+        def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+            if "index.do" in url:
+                return 200, '<script src="../modules/cjcx/cjcx.js"></script>', url, b""
+            if url.endswith("/modules/cjcx/cjcx.js"):
+                return 200, 'getModel("modules/cjcx.do","cxzxfaxfjd"); $.post("./modules/cjcx/cxzxfaxfjd.do")', url, b""
+            return 404, "", url, b""
+        def post_raw(self, path, fields, ref):
+            if path.endswith("grpyfacx.do"):
+                return 200, json.dumps({"datas": {"grpyfacx": {"rows": [{"XH": "20240001"}]}}}), path
+            if path.endswith("/cjcx.do"):
+                return 200, json.dumps({"models": [
+                    {"name": "cxzxfaxfjd", "url": "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do",
+                     "controls": [{"name": "XH1"}, {"name": "XH2"}, {"name": "PPJDCX"}]},
+                    {"name": "xscjcx", "url": "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do",
+                     "controls": [{"name": "XNXQDM"}]},
+                ]}), path
+            if path.endswith("cxzxfaxfjd.do"):
+                return 200, json.dumps({"datas": {"cxzxfaxfjd": {"rows": [{"PPJDCX": "3.61", "JQPJF": "87"}]}}}), path
+            return 404, "", path
+
+    g = meta.fetch_official_gpa(FC())
+    assert g["source"] == "official" and [i["key"] for i in g["items"]] == ["PPJDCX", "JQPJF"]
+    rep = meta.probe_gpa(FC(), log=lambda s: None)
+    dumped = json.dumps(rep)
+    assert "3.61" not in dumped and "87" not in dumped
+    assert rep["hit"]["matched_labels"] == ["PPJDCX", "JQPJF"]
+    assert any(a["name"] == "cxzxfaxfjd" for a in rep["actions"])
+
+
+def test_gpaish_hint():
+    assert meta._gpaish("cxzxfaxfjd", "/x/cxzxfaxfjd.do", [])
+    assert meta._gpaish("", "/x/xspjxfjd.do", ["XH"])
+    assert not meta._gpaish("xscjcx", "/x/xscjcx.do", ["XNXQDM"])

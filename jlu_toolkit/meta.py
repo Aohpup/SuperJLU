@@ -16,6 +16,7 @@ import datetime as dt
 import json
 import re
 from collections import Counter
+import re
 from typing import Optional
 
 from . import jwxt
@@ -296,32 +297,143 @@ def gpa_from_jw_points(grades) -> Optional[dict]:
                       {"key": "JW_COUNT", "label": "含教务绩点的课程数", "value": str(n)}]}
 
 
+GPA_ACTION_HINT = re.compile(r"(xfjd|pjxfjd|pjxf|jqpjf|sspjf|gpa|jdtj|xftj|cxzxfa|cxpj|xspj)", re.I)
+
+
+def _xh_fields(xh: str, fields: list[str]) -> dict:
+    f = set(fields)
+    if any(k.startswith("XH") and k[2:].isdigit() for k in f):
+        return {k: xh for k in f if k.startswith("XH")}
+    if "XH" in f:
+        return {"XH": xh}
+    if any(k.startswith("XH") for k in f):
+        return {k: xh for k in f if k.startswith("XH")}
+    return {f"XH{i}": xh for i in range(1, 7)} | {"XH": xh}
+
+
+def _gpaish(name: str, url: str, fields: list[str]) -> bool:
+    blob = f"{name} {url} {' '.join(fields)}"
+    return bool(GPA_ACTION_HINT.search(blob))
+
+
+def probe_gpa(client, log=print) -> dict:
+    """扫描 cjcx 应用：动作/字段名列表 + 绩点候选试调用结果（无个人数值）。"""
+    from . import emap
+    app = emap.App("cjcx", "cjcx")
+    report = emap.explore_app(client, app)
+    actions = []
+    for m, info in report["meta"].items():
+        for a in info["actions"]:
+            url = app.abs(a["url"])
+            actions.append({"module": m, "name": a["name"], "url": url, "fields": a["fields"],
+                            "gpaish": _gpaish(a["name"], url, a["fields"])})
+    for u in report["action_urls"]:
+        if not any(a["url"] == u for a in actions):
+            actions.append({"module": "", "name": "", "url": u, "fields": [],
+                            "gpaish": _gpaish("", u, [])})
+    report["actions"] = actions
+    candidates = [a for a in actions if a["gpaish"]] + [
+        {"module": "guess", "name": n, "url": p, "fields": [], "gpaish": True}
+        for p, n in [(p, p.rsplit("/", 1)[-1]) for p, _ in GPA_CANDIDATES]
+        if not any(a["url"] == p for a in actions)]
+    # 去重
+    seen, uniq = set(), []
+    for a in candidates:
+        if a["url"] not in seen:
+            seen.add(a["url"]); uniq.append(a)
+    xh = _s(_plan_row(client).get("XH"))
+    report["has_xh"] = bool(xh)
+    tries = []
+    for a in uniq:
+        fields = _xh_fields(xh, a["fields"]) if xh else {}
+        item = {"url": a["url"], "name": a["name"], "param_names": sorted(fields)}
+        try:
+            code, text, _ = client.post_raw(a["url"], fields, APP_CJCX)
+            item["status"] = code
+            obj = json.loads(text) if text else {}
+            item["code"] = _s(obj.get("code"))[:8]
+            if isinstance(obj.get("msg"), str):
+                item["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
+            for name, blk in (obj.get("datas") or {}).items():
+                if isinstance(blk, dict) and isinstance(blk.get("rows"), list) and blk["rows"]:
+                    row = blk["rows"][0]
+                    item["datas_key"] = name
+                    item["fields"] = sorted(row.keys()) if isinstance(row, dict) else []
+                    item["matched_labels"] = [k for k, _ in GPA_FIELDS if isinstance(row, dict) and k in row]
+                    break
+                if isinstance(blk, dict) and any(k in blk for k, _ in GPA_FIELDS):
+                    item["datas_key"] = name
+                    item["fields"] = sorted(blk.keys())
+                    item["matched_labels"] = [k for k, _ in GPA_FIELDS if k in blk]
+                    break
+        except (json.JSONDecodeError, ValueError):
+            item["non_json"] = True
+        except jwxt.JwxtError as e:
+            item["error"] = type(e).__name__
+        tries.append(item)
+        log(f"[绩点] {a['url'].rsplit('/',1)[-1]} → status={item.get('status')} code={item.get('code')} match={item.get('matched_labels')}")
+    report["tries"] = tries
+    report["hit"] = next(({"url": t["url"], "matched_labels": t["matched_labels"], "datas_key": t.get("datas_key")}
+                          for t in tries if t.get("matched_labels")), None)
+    # 脱敏：去掉可能含学号的请求体
+    return {k: report[k] for k in ("discover", "meta", "meta_trace", "actions", "tries", "hit", "has_xh")}
+
+
+def _call_gpa_action(client, url: str, fields: list[str], xh: str) -> Optional[dict]:
+    data = _post(client, url, _xh_fields(xh, fields), APP_CJCX)
+    for blk in (data.get("datas") or {}).values():
+        if isinstance(blk, dict) and isinstance(blk.get("rows"), list) and blk["rows"]:
+            g = parse_official_gpa(blk["rows"][0])
+            if g["items"]:
+                g["source"] = "official"
+                g["endpoint"] = url
+                return g
+        if isinstance(blk, dict):
+            g = parse_official_gpa(blk)
+            if g["items"]:
+                g["source"] = "official"
+                g["endpoint"] = url
+                return g
+    return None
+
+
 def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
-    xh = xh or _s(_plan_row(client).get("XH"))
+    from . import emap
     tried = []
-    if xh:
-        client.enter_emap_app(APP_CJCX)
-        for path, style in GPA_CANDIDATES:
-            fields = {f"XH{i}": xh for i in range(1, 7)} if style == "XH1..6" else {"XH": xh}
-            try:
-                data = _post(client, path, fields, APP_CJCX)
-            except jwxt.LoginError:
-                raise
-            except jwxt.JwxtError as e:
-                tried.append(f"{path.rsplit('/', 1)[-1]}:{str(e)[-8:]}")
-                continue
-            for blk in (data.get("datas") or {}).values():
-                rows = blk.get("rows") if isinstance(blk, dict) else None
-                if rows:
-                    g = parse_official_gpa(rows[0])
-                    if g["items"]:
-                        g["source"] = path
+    xh = xh or _s(_plan_row(client).get("XH"))
+    client.enter_emap_app(APP_CJCX)
+    app = emap.App("cjcx", "cjcx")
+    try:
+        disc = emap.discover(client, app)
+        mm = emap.module_meta(client, app, disc.get("modules_seen", ["cjcx"]))
+        candidates = []
+        for m, info in mm["modules"].items():
+            for a in info["actions"]:
+                url = app.abs(a["url"])
+                if _gpaish(a["name"], url, a["fields"]):
+                    candidates.append((url, a["fields"]))
+        for path, _ in GPA_CANDIDATES:
+            if path not in {u for u, _ in candidates}:
+                candidates.append((path, []))
+        if xh:
+            for url, fields in candidates:
+                try:
+                    g = _call_gpa_action(client, url, fields, xh)
+                    if g:
                         return g
-            tried.append(f"{path.rsplit('/', 1)[-1]}:code={_s(data.get('code')) or 'empty'}")
+                    tried.append(f"{url.rsplit('/',1)[-1]}:empty")
+                except jwxt.LoginError:
+                    raise
+                except jwxt.JwxtError as e:
+                    tried.append(f"{url.rsplit('/',1)[-1]}:{str(e)[-12:]}")
+    except jwxt.LoginError:
+        raise
+    except jwxt.JwxtError as e:
+        tried.append(f"discover:{type(e).__name__}")
     alt = gpa_from_jw_points(grades)
     if alt:
         return alt
-    raise Unavailable("吉大教务未提供学分绩点统计接口（已尝试：" + "; ".join(tried) + "）")
+    raise Unavailable("未找到可用的官方绩点接口（已尝试：" + "; ".join(tried[:8]) + "）")
 
 
 def fetch_plan_courses(client, pyfadm: str, page_size: int = 500) -> list:

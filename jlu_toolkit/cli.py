@@ -17,9 +17,12 @@ def main():
     a.add_argument("--first-monday", required=True)
     a.add_argument("-o", default="schedule.ics")
 
-    b = sub.add_parser("gpa", help="计算绩点")
-    b.add_argument("csv")
+    b = sub.add_parser("gpa", help="计算绩点；或 --probe 扫描教务官方绩点接口")
+    b.add_argument("csv", nargs="?", help="成绩 CSV（本地计算时必填）")
     b.add_argument("--term")
+    b.add_argument("--probe", action="store_true", help="扫描 cjcx 应用的绩点/统计接口，只打印结构")
+    b.add_argument("-o", "--out", help="--probe 报告路径")
+    b.add_argument("--debug", action="store_true")
 
     c = sub.add_parser("today", help="查看某周某天的课")
     c.add_argument("csv")
@@ -136,7 +139,12 @@ def main():
         )
         print(f"已导出 {x.o}")
     elif x.cmd == "gpa":
-        print(json.dumps(core.gpa(core.load_grades(x.csv), x.term), ensure_ascii=False))
+        if x.probe:
+            _cmd_gpa_probe(x)
+        else:
+            if not x.csv:
+                print("请提供成绩 CSV，或使用 --probe", file=sys.stderr); sys.exit(2)
+            print(json.dumps(core.gpa(core.load_grades(x.csv), x.term), ensure_ascii=False))
     elif x.cmd == "today":
         for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
@@ -475,6 +483,39 @@ def _cmd_sync(x):
     print(json.dumps({"data_dir": str(root), **summary}, ensure_ascii=False, indent=1))
     bad = [k for k, v in summary.items() if isinstance(v, dict) and not v.get("ok")]
     sys.exit(2 if bad else 0)
+
+
+def _cmd_gpa_probe(x):
+    import tempfile
+    from pathlib import Path
+    from . import meta
+
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    if not client.load_session():
+        print("没有已保存的会话。请先运行 jlu-toolkit fetch --user 你的邮箱前缀 登录一次。", file=sys.stderr)
+        sys.exit(1)
+    print("扫描成绩应用（cjcx）中的绩点/统计接口…", file=sys.stderr)
+    try:
+        report = meta.probe_gpa(client, log=lambda m: print(m, file=sys.stderr))
+    except jwxt.JwxtError as e:
+        print(f"失败：{e}", file=sys.stderr); sys.exit(1)
+    client.save_session()
+    path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_gpa_probe.json"
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"报告：{path}", file=sys.stderr)
+    # 只打印动作名/字段名/试调用结构
+    print(json.dumps({
+        "modules": {m: {"via": v["via"], "actions": [{"name": a["name"], "url": a["url"], "fields": a["fields"]}
+                                                     for a in v["actions"]]}
+                    for m, v in report.get("meta", {}).items()},
+        "gpaish_actions": [a for a in report.get("actions", []) if a.get("gpaish")],
+        "tries": [{k: t.get(k) for k in ("url", "name", "param_names", "status", "code", "msg",
+                                         "datas_key", "fields", "matched_labels")} for t in report.get("tries", [])],
+        "hit": report.get("hit"),
+        "has_xh": report.get("has_xh"),
+        "discovered_do": (report.get("discover") or {}).get("do_paths"),
+        "modules_seen": (report.get("discover") or {}).get("modules_seen"),
+    }, ensure_ascii=False, indent=1))
 
 
 def _cmd_rooms(x):

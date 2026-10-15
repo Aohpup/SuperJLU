@@ -116,6 +116,14 @@ jlu-toolkit rooms --probe                             # 只读探测接口/参�
 - 周次、星期按教务校历自动推算
 - 网页「教室」页和 MCP 工具 `free_rooms` / `list_campuses` 用的是同一套逻辑
 
+## 官方绩点探测（`jlu-toolkit gpa --probe`）
+
+```bash
+jlu-toolkit gpa --probe
+```
+
+进入成绩应用 `cjcx`，扫描页面脚本与模块元数据，列出全部动作与字段名；对名称含绩点/学分统计特征的动作试调用，报告只含结构（状态码、字段名、匹配到的官方字段标签），不含绩点数值。
+
 ## 绩点说明
 
 `jlu-toolkit gpa`、`fetch` 输出的绩点目前是**全部课程的简单学分加权平均**：百分制 60 分记 1.0、每多 1 分 +0.1、90 分及以上 4.0；等级制按 优秀95/良好85/中等75/及格65 换算；「通过」类不计入。
@@ -153,7 +161,7 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 - [x] `explore` 只读探测 + 脱敏报告
 - [x] 教务校历自动识别开学日期/当前周、真实节次时间、官方学分绩点、学业完成（课组）进度
 - [~] 空教室：已实现 `jlu-toolkit rooms`、网页「教室」页和 MCP `free_rooms`；吉大的接口名/参数正通过 `rooms --probe` 实测确认
-- [ ] 官方「学分绩点统计」：吉大 `cxzxfaxfjd.do` 返回 code 404。目前改用教务单科绩点（若成绩接口提供）做学分加权；其他候选由 `explore` 继续探测
+- [~] 官方绩点：用与空教室相同的 EMAP 页面发现扫描 `cjcx` 应用，找含 jd/xfjd 等的动作；`jlu-toolkit gpa --probe` 输出动作/字段名。找到后 source=`official`，否则仍回退到教务单科绩点加权
 - [ ] 官方绩点口径（保研/综测）预设方案、不同学院规则可配置
 - [ ] MCP 接入考试与绩点方案；桌面托盘挂件
 
