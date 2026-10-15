@@ -26,9 +26,26 @@ jlu-toolkit rooms --campus 01 --field 字段名=值
 ```
 结果自动翻页取全；网页「教室」页支持两种模式、校区→教学楼联动、范围筛选、点表头排序。
 
+## 安装
+
+任选一种（推荐前两种：装在独立环境里，不污染系统 Python）：
+
+```bash
+# uv（https://docs.astral.sh/uv/）
+uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+# pipx
+pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+# 需要 MCP 时把 [captcha] 换成 [captcha,mcp]
+```
+
+**Windows 单文件版**：在 [Releases](https://github.com/Runa-Asahi/JLU-Toolkit/releases) 下载 `jlu-toolkit.exe`，
+用同目录的 `jlu-toolkit.exe.sha256` 校验（PowerShell：`Get-FileHash jlu-toolkit.exe`）。
+双击直接打开本地网页界面；在终端里用法与 `jlu-toolkit` 命令完全相同。
+
+升级：`uv tool upgrade jlu-toolkit` / `pipx upgrade jlu-toolkit`。查看版本：`jlu-toolkit --version`。
+
 ## 快速开始
 ```bash
-pip install git+https://github.com/Runa-Asahi/JLU-Toolkit
 jlu-toolkit ics examples/schedule.csv --first-monday 2026-09-07 -o 课表.ics
 jlu-toolkit gpa examples/grades.csv --term 2025-2026-1   # 简单学分加权，见下方「绩点说明」
 jlu-toolkit today examples/schedule.csv --week 3 --weekday 1
@@ -45,7 +62,29 @@ CSV 格式参考 `examples/`。周次支持 `1-16`、`1-15单`、`2-16双`、`1,
 登录流程：
 1. 提交邮箱前缀 + 密码（密码经页面同款 3DES：`rsa = strEnc(账号+密码+lt,"1","2","3")`）
 2. 若出现「二次认证」：下载图形验证码 → 输入后调用发送接口 → 在「智慧吉大」收取微信验证码 → 提交完成登录
-3. 会话 cookie 会保存到 `~/.config/jlu-toolkit/session.json`（权限 600），下次未过期可免登录
+3. 会话 cookie 登录成功后自动保存，下次未过期可免登录（存储方式见下）
+
+### 凭据与会话的存储（加密）
+
+- 有系统钥匙串时（Windows 凭据管理器 / macOS 钥匙串 / Linux Secret Service）：随机生成的密钥存进钥匙串，
+  会话和（可选保存的）密码用 AES-256-GCM 加密后写到 `~/.config/jlu-toolkit/session.enc`、`credentials.enc`。
+- 钥匙串不可用时（Termux、无桌面的服务器）：退回明文 `session.json` / `credentials.json`，权限 600，并在终端给出警告。
+  这种情况下**不建议** `--save-credentials`。设环境变量 `JLU_TOOLKIT_NO_KEYRING=1` 可强制用文件。
+- 旧版本留下的明文文件会在第一次读取时自动转成加密文件并删除明文。
+- 数据只存在你自己的电脑上，不会上传到任何服务器。
+
+### 会话过期
+
+智慧吉大的微信验证码无法也不应绕过，会话过期后需要你重新登录一次：
+
+```bash
+jlu-toolkit status           # 查看会话状态（不联网）；需要登录时退出码为 3
+jlu-toolkit status --check   # 访问教务一次，确认会话是否仍有效
+jlu-toolkit fetch --force-login
+```
+
+请求被教务重定向到登录页时，CLI 会提示「登录会话已过期，请重新登录」；MCP 有 `session_status` 工具；
+本地网页可读 `GET /api/session`（见下方「本地 API」）。本工具不会在后台定时访问教务来"保活"。
 
 ### 网络说明
 
@@ -85,9 +124,10 @@ jlu-toolkit exams exams.csv             # 离线查看考试倒计时
 
 ### Termux（Android）示例
 ```bash
-pkg install python git python-pillow
+pkg install python git python-pillow python-cryptography   # cryptography 用 pkg 的预编译包，免去在手机上编译
 termux-setup-storage
-pip install -U --force-reinstall "git+https://github.com/Runa-Asahi/JLU-Toolkit.git@feat/jwxt-http-fetch"
+pip install -U "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+# Termux 没有系统钥匙串：会话以 600 权限明文保存在 ~/.config/jlu-toolkit/，首次会打印一条警告，属正常
 jlu-toolkit fetch --probe
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login
 # 登录成功后会自动打开课表/成绩应用入口（避免接口 403）
@@ -188,3 +228,15 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 - [ ] MCP 接入考试与绩点方案；桌面托盘挂件
 
 欢迎 PR 和 ⭐！
+
+## 本地 API：会话状态
+
+`GET /api/session`（新增，只读本地记录，不访问教务）：
+
+```json
+{"state": "ok|expired|missing|unknown", "logged_in": true, "needs_login": false, "session_expired": false,
+ "message": "已登录", "checked_at": 1760000000, "saved_at": 1760000000, "storage": "keyring:WinVaultKeyring"}
+```
+
+`POST /api/*` 遇到会话过期时返回 HTTP 401 和 `{"ok": false, "error": "...请重新登录...", "session_expired": true}`；
+其它接口的返回结构不变。

@@ -33,6 +33,7 @@ from http.cookiejar import Cookie, CookieJar
 from pathlib import Path
 from typing import Iterable, Optional
 
+from . import secure_store
 from . import core
 from .des_tpass import strEnc
 from . import captcha_util
@@ -102,6 +103,13 @@ class NetworkError(JwxtError):
     """网络不可达（常见于校外访问不到 iedu）。"""
 
 
+class SessionExpiredError(LoginError):
+    """已保存的会话失效（教务把请求重定向到了 CAS 登录页）。需要重新走微信验证码登录。"""
+
+    def __init__(self, msg: str = "登录会话已过期，请重新登录：在终端运行 jlu-toolkit fetch --force-login"):
+        super().__init__(msg)
+
+
 class SecondFactorError(JwxtError):
     """二次认证（图形/微信验证码）失败。"""
 
@@ -157,26 +165,103 @@ def _chmod600(path: Path) -> None:
         pass
 
 
+def _secret(path: Path) -> "secure_store.SecretFile":
+    return secure_store.SecretFile(path.parent, path.stem)
+
+
 def save_credentials(username: str, password: str, path: Optional[Path] = None) -> Path:
+    """保存账号密码：优先系统钥匙串加密（见 secure_store），否则 0600 明文文件。"""
     path = path or default_cred_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"username": username, "password": password}, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    _chmod600(path)
-    return path
+    return _secret(path).save({"username": username, "password": password})
 
 
 def load_credentials(path: Optional[Path] = None) -> Optional[tuple[str, str]]:
     path = path or default_cred_path()
-    if not path.is_file():
+    data = _secret(path).load()
+    if not isinstance(data, dict):
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
     u, p = data.get("username"), data.get("password")
     if not u or not p:
         return None
     return str(u), str(p)
+
+
+# ---- 会话状态（给 Web UI / MCP 用；不含任何秘密） ----
+SESSION_OK = "ok"
+SESSION_EXPIRED = "expired"
+SESSION_MISSING = "missing"
+SESSION_UNKNOWN = "unknown"
+
+
+def session_status_path() -> Path:
+    return config_dir() / "session_status.json"
+
+
+def _write_session_status(state: str, reason: str = "") -> None:
+    try:
+        p = session_status_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        prev = {}
+        if p.is_file():
+            try:
+                prev = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                prev = {}
+        now = int(time.time())
+        obj = {"state": state, "checked_at": now, "reason": reason,
+               "saved_at": now if state == SESSION_OK else prev.get("saved_at")}
+        p.write_text(json.dumps(obj, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def mark_session_expired(reason: str = "") -> None:
+    _write_session_status(SESSION_EXPIRED, reason)
+
+
+def session_status() -> dict:
+    """返回 {state, logged_in, needs_login, message, checked_at, saved_at, storage}。
+
+    只读本地文件，不访问网络。state: ok / expired / missing / unknown。
+    """
+    has = _secret(default_session_path()).exists()
+    info: dict = {}
+    p = session_status_path()
+    if p.is_file():
+        try:
+            info = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            info = {}
+    if not has:
+        state = SESSION_MISSING
+    else:
+        state = info.get("state") or SESSION_UNKNOWN
+    msg = {
+        SESSION_OK: "已登录",
+        SESSION_EXPIRED: "登录已过期，请重新登录（终端运行 jlu-toolkit fetch --force-login）",
+        SESSION_MISSING: "尚未登录，请先在终端运行 jlu-toolkit fetch",
+        SESSION_UNKNOWN: "已保存会话，尚未验证是否有效",
+    }[state]
+    return {
+        "state": state,
+        "logged_in": state == SESSION_OK,
+        "needs_login": state in (SESSION_EXPIRED, SESSION_MISSING),
+        "session_expired": state == SESSION_EXPIRED,  # 与 Web UI（PR #6）约定的顶层字段
+        "message": msg,
+        "checked_at": info.get("checked_at"),
+        "saved_at": info.get("saved_at"),
+        "storage": secure_store.backend_name(),
+    }
+
+
+def looks_like_login_redirect(final_url: str, text: str = "") -> bool:
+    """响应是否落在了 CAS 登录页 / 二次认证页（= 会话失效）。"""
+    u = urllib.parse.urlparse(final_url or "")
+    if (u.hostname or "").startswith("cas.") and "/tpass/login" in (u.path or ""):
+        return True
+    head = (text or "")[:8192]
+    low = head.lower()
+    return 'id="loginform"' in low or "二次认证" in head or ("/tpass/login" in low and "password" in low)
 
 
 def parse_weeks_skzc(skzc: str) -> list[int]:
@@ -429,28 +514,28 @@ class JwxtClient:
             raise NetworkError(f"连接超时 {url}") from e
 
     def save_session(self, path: Optional[Path] = None) -> Path:
+        """保存 cookie（加密存储见 secure_store），并把会话状态记为 ok。"""
         path = path or default_session_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps({"cookies": jar_to_list(self.jar)}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        _chmod600(path)
-        return path
+        out = _secret(path).save({"cookies": jar_to_list(self.jar)})
+        if path == default_session_path():
+            _write_session_status(SESSION_OK)
+        return out
 
     def load_session(self, path: Optional[Path] = None) -> bool:
         path = path or default_session_path()
-        if not path.is_file():
+        try:
+            data = _secret(path).load()
+        except secure_store.SecureStoreError:
             return False
-        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return False
         self.jar = jar_from_list(data.get("cookies") or [])
         self._rebuild_opener()
         return True
 
     def clear_session_file(self, path: Optional[Path] = None) -> None:
         path = path or default_session_path()
-        if path.is_file():
-            path.unlink()
+        _secret(path).delete()
 
     def session_alive(self) -> bool:
         """探测已保存会话是否还能访问教务（不落在 CAS 登录页）。"""
@@ -459,14 +544,11 @@ class JwxtClient:
         except NetworkError:
             return False
         host = urllib.parse.urlparse(final).hostname or ""
-        if host != IEDU_HOST or code not in (200, 302):
-            return False
-        low = text[:8192].lower()
-        if 'id="loginform"' in low or ("/tpass/login" in low and "password" in low):
-            return False
-        if "二次认证" in text:
+        if host != IEDU_HOST or code not in (200, 302) or looks_like_login_redirect(final, text):
+            mark_session_expired("session_alive")
             return False
         self._logged_in = True
+        _write_session_status(SESSION_OK)
         return True
 
     def fetch_login_page(self, service: str = CAS_SERVICE) -> tuple[str, str, str, str]:
@@ -968,13 +1050,17 @@ class JwxtClient:
                 "已按 JLU_schedule 流程在请求前打开 *default/index.do；"
                 "若仍失败请 --force-login，并加 --debug 查看 cookie_names。"
             )
+        if looks_like_login_redirect(final, text if code != 200 or not text.lstrip().startswith("{") else ""):
+            mark_session_expired(path)
+            raise SessionExpiredError()
         if code != 200:
             raise JwxtError(f"{path} HTTP {code}")
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
             if "loginForm" in text or "/tpass/login" in text or "二次认证" in text:
-                raise LoginError("会话已失效，请重新登录") from e
+                mark_session_expired(path)
+                raise SessionExpiredError() from e
             raise JwxtError(f"{path} 返回非 JSON") from e
 
     def current_semester(self) -> Optional[str]:
@@ -1062,6 +1148,8 @@ class JwxtClient:
             },
         )
         self._dbg(step="emap_post_raw", path=path, status=code, final_url=_redact_url(final))
+        if looks_like_login_redirect(final, "" if text.lstrip().startswith("{") else text):
+            mark_session_expired(path)  # 只记状态，不改变本函数「不抛异常」的约定
         return code, text, final
 
     def fetch_exams(self, xnxqdm: Optional[str] = None) -> list:
