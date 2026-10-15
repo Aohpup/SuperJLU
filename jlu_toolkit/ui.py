@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import core, exams as ex, jwxt
+from .web_login import LoginFlow
 from .ui_page import PAGE
 
 ALLOWED_HOSTS = ("127.0.0.1", "localhost")
@@ -413,7 +414,9 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
     return r
 
 
-def make_handler(store: Store):
+def make_handler(store: Store, login: Optional[LoginFlow] = None):
+    login = login or LoginFlow()
+
     class H(BaseHTTPRequestHandler):
         server_version = "JLUToolkitUI"
 
@@ -496,6 +499,9 @@ def make_handler(store: Store):
                     return self._json({"ok": False, "error": str(e)}, 400)
             if path == "/api/links":
                 return self._json(campus_links_api())
+            if path == "/api/login":
+                return self._json({"ok": True, "saved_username": login.saved_username(),
+                                   "session": jwxt.session_status()})
             if path == "/api/data":
                 return self._json(store.snapshot())
             if path == "/api/ics":
@@ -530,6 +536,17 @@ def make_handler(store: Store):
                     return self._json({"ok": True, **room_fields_api(store)})
                 elif self.path == "/api/rooms/campuses":
                     return self._json({"ok": True, **campuses_api(store)})
+                elif self.path == "/api/login/start":
+                    return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
+                                                                 body.get("remember", True) is not False)})
+                elif self.path == "/api/login/captcha":
+                    return self._json({"ok": True, **login.captcha()})
+                elif self.path == "/api/login/send_code":
+                    return self._json({"ok": True, **login.send_code(body.get("captcha", ""))})
+                elif self.path == "/api/login/verify":
+                    return self._json({"ok": True, **login.verify(body.get("captcha", ""), body.get("wechat_code", ""))})
+                elif self.path == "/api/login/cancel":
+                    return self._json({"ok": True, **login.cancel()})
                 elif self.path == "/api/oa/refresh":
                     try:
                         return self._json(oa_refresh_api(store, body))

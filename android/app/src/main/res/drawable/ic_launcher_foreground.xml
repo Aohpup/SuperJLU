@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 盾形底 -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,26 L78,34 L78,54 C78,68 67,78 54,84 C41,78 30,68 30,54 L30,34 Z" />
+    <!-- 字母 J -->
+    <path android:fillColor="#00000000" android:strokeColor="#0B4EA2" android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M60,40 L60,58 C60,64 56,67 51,67 C47,67 44,65 43,61" />
+    <!-- 金色星点 -->
+    <path android:fillColor="#F2B705"
+        android:pathData="M44,38 L45.6,42 L49.8,42.2 L46.5,44.8 L47.6,48.9 L44,46.6 L40.4,48.9 L41.5,44.8 L38.2,42.2 L42.4,42 Z" />
+</vector>
