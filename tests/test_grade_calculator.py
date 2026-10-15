@@ -215,3 +215,7 @@ def test_automatic_grade_sync_is_throttled(tmp_path, monkeypatch):
 
 def test_import_size_limit_is_5mb():
     assert calc.MAX_UPLOAD_BYTES == 5 * 1024 * 1024
+
+
+def test_failing_grade_is_55_everywhere():
+    assert core.LEVEL["不及格"] == 55 == calc.GRADE_VALUES["不及格"]
