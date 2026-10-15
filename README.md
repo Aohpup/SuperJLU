@@ -1,10 +1,51 @@
-# SuperJLU —— 吉大人的一站式服务
+<p align="center">
+  <img src="assets/brand/superjlu-wordmark.png" alt="SuperJLU" width="420">
+</p>
 
-> 原名 JLU Toolkit。为兼容，Python 包名仍为 `jlu_toolkit`，命令行仍是 `jlu-toolkit`（新增等价别名 `superjlu`），配置目录不变。
+<p align="center"><b>SuperJLU —— 吉大人的一站式服务</b></p>
 
-吉大课表和成绩的本地小工具：导入文件后可以计算绩点、导出 iCal 日历（手机和电脑日历都能订阅，课前 15 分钟提醒），还提供 **MCP 接口**，让 Claude、Cursor 等 AI 助手直接回答"我明天有什么课""这学期绩点多少"。
+<p align="center">课表 · 成绩 · 绩点 · 考试 · 空教室 · 培养方案 · OA 与学院通知 · 校园站点一键直达</p>
 
-> 🔒 **隐私**：课表/成绩默认只在你自己的电脑上读取和计算。可选的「教务拉取」会用你的统一身份认证账号直接向学校服务器发 HTTPS 请求，**凭据与会话只存在本机**（chmod 600），不经过任何第三方。
+> 原名 JLU Toolkit。为兼容，Python 包名仍为 `jlu_toolkit`，命令行仍是 `jlu-toolkit`（等价别名 `superjlu`），配置目录不变。
+
+> 🔒 **隐私**：所有数据只在你自己的设备上处理。登录统一身份认证时直接用 HTTPS 连学校服务器，账号和会话加密保存在本机（Windows 凭据管理器 / Android Keystore），不经过任何第三方。
+
+## 下载安装
+
+到 [Releases](https://github.com/Runa-Asahi/JLU-Toolkit/releases/latest) 下载最新版：
+
+| 平台 | 文件 | 用法 |
+| --- | --- | --- |
+| Windows | `SuperJLU.exe` | 双击即可：后台启动服务并自动打开浏览器界面，托盘图标可重新打开或退出；已在运行时再双击只会打开现有界面。 |
+| Android | `jlu-toolkit.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
+| 命令行 / 开发者 | pip | 见下方。 |
+
+每个文件都附带 `.sha256` 校验值（PowerShell：`Get-FileHash 文件名`）。
+
+```bash
+# 推荐装在独立环境里（uv 或 pipx 二选一）
+uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+# 需要 MCP 时把 [captcha] 换成 [captcha,mcp]
+
+jlu-toolkit ui --open        # 打开网页界面
+```
+
+升级：`uv tool upgrade jlu-toolkit` / `pipx upgrade jlu-toolkit`。查看版本：`jlu-toolkit --version`。
+
+## 功能
+
+- **一次登录，长期有效**：账号 + 密码 → 微信验证码，图形验证码全自动识别；登录状态加密保存，过期时用统一认证自动续登。
+- **课表与成绩**：从教务自动同步，并缓存在本地，断网或登录失效时也能查看；导出 iCal 日历（课前 15 分钟提醒）。
+- **绩点与培养方案**：学分加权绩点、官方绩点、各课组已修/在修/未修课程。
+- **考试安排**、**空教室查询**（六个校区直接选，按日期/周次、节次、座位数筛选）。
+- **通知聚合**：吉大 OA 校内通知 + 软件学院、计算机学院官网通知，支持搜索和关键词订阅提醒。
+- **校园站点直达**：教务、学在吉大一键免登跳转；校园卡缴费、选课、图书馆、VPN 一键打开，校外自动给出 VPN 地址。
+- **AI 助手接入（MCP）**：让 Claude、Cursor 等直接回答「我明天有什么课」「这学期绩点多少」。
+
+## 详细文档
+
+以下为命令行与接口的详细说明。
 
 #### 培养方案课程明细（0.3.13）
 
@@ -27,24 +68,6 @@ jlu-toolkit rooms --campus 01 --weeks 6-8 --weekday 3 --periods 1-2
 jlu-toolkit rooms --campus 01 --field 字段名=值
 ```
 结果自动翻页取全；网页「教室」页支持两种模式、校区→教学楼联动、范围筛选、点表头排序。
-
-## 安装
-
-任选一种（推荐前两种：装在独立环境里，不污染系统 Python）：
-
-```bash
-# uv（https://docs.astral.sh/uv/）
-uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
-# pipx
-pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
-# 需要 MCP 时把 [captcha] 换成 [captcha,mcp]
-```
-
-**Windows 单文件版**：在 [Releases](https://github.com/Runa-Asahi/JLU-Toolkit/releases) 下载 `jlu-toolkit.exe`，
-用同目录的 `jlu-toolkit.exe.sha256` 校验（PowerShell：`Get-FileHash jlu-toolkit.exe`）。
-双击直接打开本地网页界面；在终端里用法与 `jlu-toolkit` 命令完全相同。
-
-升级：`uv tool upgrade jlu-toolkit` / `pipx upgrade jlu-toolkit`。查看版本：`jlu-toolkit --version`。
 
 ## 快速开始
 ```bash
