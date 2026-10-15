@@ -240,3 +240,28 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 
 `POST /api/*` 遇到会话过期时返回 HTTP 401 和 `{"ok": false, "error": "...请重新登录...", "session_expired": true}`；
 其它接口的返回结构不变。
+
+## OA 校内通知（只读，实验性）
+
+吉大 OA（`oa.jlu.edu.cn`，万户 ezOFFICE）仅校园网/VPN 可达。本工具只发 GET，绝不做审批/表单操作。
+
+```
+jlu-toolkit oa --probe                 # ASCII 计数：登录页字段名、匿名/会话访问、行数、分页、栏目数、详情结构
+jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
+```
+
+- 列表：`PortalInformation!jldxList.action?channelId=<栏目>&startPage=<页>`（179577 = 校内通知）
+- 详情：`PortalInformation!getInformation.action?id=<id>&channelId=<栏目>`
+- 存储：`data/oa_notices.json` → `{updated, channels:{id:name}, channels_items:{id:[item]}}`
+- MCP：`oa_notices(category, keyword, limit, refresh)`
+
+### 拟议 /api 形状（供 Web UI，后端尚未实现）
+
+`GET /api/oa/notices?category=&keyword=&limit=` →
+
+```json
+{"ok": true, "channel": "179577", "channel_name": "校内通知", "count": 2, "fetched_at": "2026-10-15T09:00:00",
+ "items": [{"id": "123", "title": "...", "time": "2026-10-01 08:05", "dept": "...", "top": true, "url": "https://oa.jlu.edu.cn/..."}]}
+```
+
+`GET /api/oa/channels` → `{"channels": [{"id": "179577", "name": "校内通知"}]}`；出错 `{"ok": false, "error": "...", "login_needed": true}`。

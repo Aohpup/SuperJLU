@@ -188,6 +188,16 @@ def _main():
     pp.add_argument("-o", "--out", help="--probe 报告路径")
     pp.add_argument("--debug", action="store_true")
 
+    oa = sub.add_parser("oa", help="吉大 OA 校内通知（只读；需校园网/VPN）")
+    oa.add_argument("action", nargs="?", default="notices", choices=["notices"], help="notices：列出通知")
+    oa.add_argument("--probe", action="store_true", help="只读探测认证方式/列表/分页/详情（ASCII 计数，无标题）")
+    oa.add_argument("--category", default="", help="栏目 channelId 或名称（默认 179577 校内通知）")
+    oa.add_argument("--keyword", default="", help="标题/单位关键字（本地过滤）")
+    oa.add_argument("--limit", type=int, default=30)
+    oa.add_argument("--pages", type=int, default=5, help="最多翻页数")
+    oa.add_argument("--json", action="store_true", help="ASCII JSON 输出")
+    oa.add_argument("--debug", action="store_true")
+
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
@@ -232,6 +242,8 @@ def _main():
         _cmd_plan(x)
     elif x.cmd == "sync":
         _cmd_sync(x)
+    elif x.cmd == "oa":
+        _cmd_oa(x)
     elif x.cmd == "rooms":
         _cmd_rooms(x)
 
@@ -805,3 +817,38 @@ def _cmd_ui(x):
 
 if __name__ == "__main__":
     main()
+
+
+def _cmd_oa(x):
+    from . import oa, ui
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    has = bool(client.load_session())
+    try:
+        if x.probe:
+            rep = {"saved_session": has, **oa.probe(client, anon_client=jwxt.JwxtClient())}
+            print(json.dumps(rep, indent=1))
+            if has:
+                client.save_session()
+            return
+        store = ui.Store(ui.data_dir())
+        known = {}
+        try:
+            known = json.loads(store.p("oa_notices.json").read_text(encoding="utf-8")).get("channels", {})
+        except (OSError, ValueError):
+            pass
+        ch = oa.resolve_category(x.category, known)
+        res = oa.fetch_notices(client, ch, x.keyword, max(1, x.limit), max(1, x.pages))
+        oa.save(store.root if hasattr(store, "root") else ui.data_dir(), res)
+        if has:
+            client.save_session()
+    except (jwxt.JwxtError, ValueError) as e:
+        _json_err(x, e)
+        print(f"OA: {e}", file=sys.stderr)
+        sys.exit(2)
+    if x.json:
+        res.pop("channels", None)
+        print(json.dumps(res))
+        return
+    print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
+    for i in res["items"]:
+        print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")

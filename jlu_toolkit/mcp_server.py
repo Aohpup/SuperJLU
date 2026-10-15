@@ -70,6 +70,29 @@ def main():
         return jwxt.session_status()
 
     @mcp.tool()
+    def oa_notices(category: str = "", keyword: str = "", limit: int = 20, refresh: bool = False) -> dict:
+        """吉大 OA 校内通知（只读）。category：栏目 channelId 或名称（默认校内通知）；keyword：标题/单位关键字。
+        refresh=true 时联网抓取（需校园网/VPN），否则读本地 oa_notices.json。"""
+        import json as _j
+        from . import jwxt, oa, ui
+        root = ui.data_dir()
+        f = root / "oa_notices.json"
+        try:
+            known = _j.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+            ch = oa.resolve_category(category, known.get("channels", {}))
+            if refresh or not f.exists():
+                c = jwxt.JwxtClient()
+                c.load_session()
+                oa.save(root, oa.fetch_notices(c, ch, keyword, limit))
+                known = _j.loads(f.read_text(encoding="utf-8"))
+        except (jwxt.JwxtError, ValueError) as e:
+            return {"error": str(e)}
+        items = known.get("channels_items", {}).get(ch, [])
+        if keyword:
+            items = [i for i in items if keyword in i.get("title", "") or keyword in i.get("dept", "")]
+        return {"channel": ch, "updated": known.get("updated"), "count": len(items[:limit]), "items": items[:limit]}
+
+    @mcp.tool()
     def list_campuses() -> list:
         """列出空教室查询可用的校区代码。"""
         from . import ui
