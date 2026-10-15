@@ -28,20 +28,22 @@ APP_XYWCCX = "https://iedu.jlu.edu.cn/jwapp/sys/xywccx/*default/index.do"
 EP_CALENDAR = "/jwapp/sys/wdkb/modules/xskcb/cxxljc.do"
 EP_PERIODS = "/jwapp/sys/wdkb/modules/jshkcb/jc.do"
 EP_GPA = "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"
-# 吉大实测 cxzxfaxfjd 返回 {"code":"404"}；依次尝试候选（探测用，均为只读查询）
+# 吉大成绩页真实官方绩点（浏览器 DevTools）：rxylgpacx / rxylgpacxcx.do
+EP_GPA_RXYL = "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx/rxylgpacxcx.do"
+EP_GPA_RXYL_ALT = "/jwapp/sys/cjcx/modules/rxylgpacx/rxylgpacxcx.do"
 EP_GPA_JLU = "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do"
 EP_GPA_TERM = "/jwapp/sys/cjcx/modules/cjcx/cxsfwfcsj.do"
 EP_GPA_TERM_ALT = "/jwapp/sys/cjcx/modules/cjcx/cxcjcxsfkf.do"
 GPA_CANDIDATES = [
-    (EP_GPA_JLU, "XH"),          # 吉大实测：平均绩点 / 加权平均分 / 必修 GPA
+    (EP_GPA_RXYL, "XH"),
+    (EP_GPA_RXYL_ALT, "XH"),
+    (EP_GPA_JLU, "XH"),
     (EP_GPA_TERM, "XH"),
     (EP_GPA_TERM_ALT, "XH"),
     (EP_GPA, "XH1..6"),
     (EP_GPA, "XH"),
-    ("/jwapp/sys/cjcx/modules/cjcx/cxxsjdtj.do", "XH"),
-    ("/jwapp/sys/cjcx/modules/cjcx/cxpjxfjd.do", "XH"),
-    ("/jwapp/sys/cjcx/modules/cjcx/xspjxfjd.do", "XH"),
 ]
+RXYL_MODULE = "rxylgpacx"
 EP_PLAN_COURSES = "/jwapp/sys/jwpubapp/modules/pyfa/kzkccx.do"
 
 
@@ -157,12 +159,29 @@ def parse_periods(rows: list) -> dict:
     return dict(sorted(out.items(), key=lambda kv: int(kv[0])))
 
 
-def parse_official_gpa(row: dict) -> dict:
-    items = []
+_CODE_FIELD = __import__("re").compile(r"^[A-Z][A-Z0-9_]{1,30}$")
+
+
+def parse_official_gpa(row: dict, captions: Optional[dict] = None) -> dict:
+    """captions: 元数据字段名→中文；优先于内置 GPA_FIELDS。跳过学号等标识字段。"""
+    skip = {"XH", "WID", "XNXQDM", "XNXQ", "XN", "XQ", "PYFADM", "TJLX"}
+    known = dict(GPA_FIELDS)
+    caps = captions or {}
+    items, seen = [], set()
     for k, label in GPA_FIELDS:
         v = _s(row.get(k))
         if v:
-            items.append({"key": k, "label": label, "value": v})
+            items.append({"key": k, "label": caps.get(k) or label, "value": v})
+            seen.add(k)
+    for k, v in row.items():
+        if k in seen or k in skip or not isinstance(k, str) or not _CODE_FIELD.match(k):
+            continue
+        val = _s(v)
+        if not val:
+            continue
+        if k in caps or re.search(r"(JD|GPA|PJF|XF|JDF|HD|XK)", k, re.I):
+            items.append({"key": k, "label": caps.get(k) or known.get(k) or k, "value": val})
+            seen.add(k)
     return {"plan": _s(row.get("PYFAMC")), "items": items}
 
 
@@ -316,7 +335,7 @@ def gpa_from_jw_points(grades) -> Optional[dict]:
                       {"key": "JW_COUNT", "label": "含教务绩点的课程数", "value": str(n)}]}
 
 
-GPA_ACTION_HINT = re.compile(r"(pjjd|spjjd|xfjd|pjxfjd|pjxf|jqpjf|sspjf|gpa|jdtj|xftj|cxzxfa|cxpj|xspj|sfwfcsj|cjcxsfkf)", re.I)
+GPA_ACTION_HINT = re.compile(r"(rxylgpa|pjjd|spjjd|xfjd|pjxfjd|pjxf|jqpjf|sspjf|gpa|jdtj|xftj|cxzxfa|cxpj|xspj|sfwfcsj|cjcxsfkf)", re.I)
 
 
 def _xh_fields(xh: str, fields: list[str], term: str = "") -> dict:
@@ -372,7 +391,10 @@ def response_shape(obj, max_paths: int = 40) -> dict:
 
 
 def extract_gpa_payload(obj) -> Optional[dict]:
-    """从任意常见 EMAP 形状中取出含官方绩点字段的一行/一块。"""
+    """从任意常见 EMAP 形状中取出含官方绩点字段的一行/一块。
+
+    非空 rows[0] 一律返回（字段标签交给 parse_official_gpa + captions）。
+    """
     if not isinstance(obj, dict):
         return None
     # 1) datas.<name>.rows[0]
@@ -380,13 +402,11 @@ def extract_gpa_payload(obj) -> Optional[dict]:
         if isinstance(blk, dict):
             rows = blk.get("rows")
             if isinstance(rows, list) and rows and isinstance(rows[0], dict):
-                if any(k in rows[0] for k, _ in GPA_FIELDS):
-                    return rows[0]
+                return rows[0]
             if any(k in blk for k, _ in GPA_FIELDS):
                 return blk
         if isinstance(blk, list) and blk and isinstance(blk[0], dict):
-            if any(k in blk[0] for k, _ in GPA_FIELDS):
-                return blk[0]
+            return blk[0]
     # 2) datas 本身是 list
     if isinstance(obj.get("datas"), list) and obj["datas"] and isinstance(obj["datas"][0], dict):
         if any(k in obj["datas"][0] for k, _ in GPA_FIELDS):
@@ -465,27 +485,37 @@ def probe_gpa(client, log=print) -> dict:
     from . import emap
     app = emap.App("cjcx", "cjcx")
     report = emap.explore_app(client, app)
+    extra = emap.module_meta(client, app, [RXYL_MODULE])
+    report["meta"].update(extra["modules"])
+    report.setdefault("meta_trace", []).extend(extra.get("trace") or [])
+    captions = {}
+    for info in report["meta"].values():
+        captions.update(info.get("captions") or {})
+        for a in info.get("actions") or []:
+            captions.update(a.get("captions") or {})
+    report["captions"] = dict(captions)
     actions = []
     for m, info in report["meta"].items():
         for a in info["actions"]:
             url = app.abs(a["url"])
             actions.append({"module": m, "name": a["name"], "url": url, "fields": a["fields"],
-                            "gpaish": _gpaish(a["name"], url, a["fields"])})
+                            "gpaish": _gpaish(a["name"], url, a["fields"]) or "rxylgpacx" in url})
     for u in report["action_urls"]:
         if not any(a["url"] == u for a in actions):
             actions.append({"module": "", "name": "", "url": u, "fields": [],
                             "gpaish": _gpaish("", u, [])})
     report["actions"] = actions
     candidates = [a for a in actions if a["gpaish"]] + [
-        {"module": "guess", "name": n, "url": p, "fields": [], "gpaish": True}
+        {"module": "guess", "name": n, "url": p,
+         "fields": list(captions) if "rxylgpacx" in p else [], "gpaish": True}
         for p, n in [(p, p.rsplit("/", 1)[-1]) for p, _ in GPA_CANDIDATES]
         if not any(a["url"] == p for a in actions)]
-    # 去重 + 优先 cxxspjjdxx
     seen, uniq = set(), []
     for a in candidates:
         if a["url"] not in seen:
             seen.add(a["url"]); uniq.append(a)
-    uniq.sort(key=lambda a: (0 if "cxxspjjdxx" in a["url"] else 1 if ("cxsfwfcsj" in a["url"] or "cxcjcxsfkf" in a["url"]) else 2, a["url"]))
+    uniq.sort(key=lambda a: (0 if "rxylgpacx" in a["url"] else 1 if "cxxspjjdxx" in a["url"]
+                             else 2 if ("cxsfwfcsj" in a["url"] or "cxcjcxsfkf" in a["url"]) else 3, a["url"]))
     plan = _plan_row(client)
     xh = _s(plan.get("XH"))
     term = ""
@@ -499,7 +529,7 @@ def probe_gpa(client, log=print) -> dict:
     # 优先动作多试几种参数；其它动作只试 XH / meta_fields
     for a in uniq:
         variants = _param_variants(xh, a["fields"], term)
-        if "cxxspjjdxx" not in a["url"] and "cxsfwfcsj" not in a["url"] and "cxcjcxsfkf" not in a["url"]:
+        if not any(s in a["url"] for s in ("rxylgpacx", "cxxspjjdxx", "cxsfwfcsj", "cxcjcxsfkf")):
             variants = [v for v in variants if v[0] in ("POST:XH", "POST:meta_fields", "POST:XH1..6", "POST:empty")][:3]
         for vname, method, form in variants:
             item = {"url": a["url"], "name": a["name"] or a["url"].rsplit("/", 1)[-1],
@@ -515,8 +545,10 @@ def probe_gpa(client, log=print) -> dict:
                             item["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
                     payload = extract_gpa_payload(obj) if isinstance(obj, dict) else None
                     if payload:
-                        item["matched_labels"] = [k for k, _ in GPA_FIELDS if k in payload]
+                        g = parse_official_gpa(payload, captions)
+                        item["matched_labels"] = [i["key"] for i in g["items"]]
                         item["payload_fields"] = sorted(payload.keys())[:40]
+                        item["field_captions"] = {i["key"]: i["label"] for i in g["items"]}
                 else:
                     item["non_json_bytes"] = len(obj or "")
             except jwxt.JwxtError as e:
@@ -537,10 +569,11 @@ def probe_gpa(client, log=print) -> dict:
     report["hit"] = next(({"url": t["url"], "variant": t["variant"], "matched_labels": t["matched_labels"]}
                           for t in tries if t.get("matched_labels")), None)
     # 脱敏：去掉可能含学号的请求体
-    return {k: report[k] for k in ("discover", "meta", "meta_trace", "actions", "tries", "hit", "has_xh")}
+    return {k: report[k] for k in ("discover", "meta", "meta_trace", "actions", "tries", "hit", "has_xh", "captions")}
 
 
-def _call_gpa_action(client, url: str, fields: list[str], xh: str, term: str = "") -> Optional[dict]:
+def _call_gpa_action(client, url: str, fields: list[str], xh: str, term: str = "",
+                     captions: Optional[dict] = None) -> Optional[dict]:
     for vname, method, form in _param_variants(xh, fields, term):
         try:
             code, obj = _request_json(client, url, method, form)
@@ -551,7 +584,7 @@ def _call_gpa_action(client, url: str, fields: list[str], xh: str, term: str = "
         payload = extract_gpa_payload(obj)
         if not payload:
             continue
-        g = parse_official_gpa(payload)
+        g = parse_official_gpa(payload, captions)
         if g["items"]:
             g["source"] = "official"
             g["endpoint"] = url
@@ -573,29 +606,33 @@ def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
     app = emap.App("cjcx", "cjcx")
     try:
         disc = emap.discover(client, app)
-        mm = emap.module_meta(client, app, disc.get("modules_seen", ["cjcx"]))
-        candidates = []
+        mods = list(dict.fromkeys([RXYL_MODULE] + disc.get("modules_seen", ["cjcx"])))
+        mm = emap.module_meta(client, app, mods)
+        captions, candidates = {}, []
         for m, info in mm["modules"].items():
+            captions.update(info.get("captions") or {})
             for a in info["actions"]:
+                captions.update(a.get("captions") or {})
                 url = app.abs(a["url"])
-                if _gpaish(a["name"], url, a["fields"]):
+                if _gpaish(a["name"], url, a["fields"]) or "rxylgpacx" in url:
                     candidates.append((url, a["fields"]))
         for path, _ in GPA_CANDIDATES:
             if path not in {u for u, _ in candidates}:
-                candidates.append((path, []))
-        # 吉大成绩页官方「平均绩点」优先
+                candidates.append((path, list(captions) if "rxylgpacx" in path else []))
         def _rank(item):
             u = item[0]
-            if "cxxspjjdxx" in u:
+            if "rxylgpacx" in u:
                 return 0
-            if "cxsfwfcsj" in u or "cxcjcxsfkf" in u:
+            if "cxxspjjdxx" in u:
                 return 1
-            return 2
+            if "cxsfwfcsj" in u or "cxcjcxsfkf" in u:
+                return 2
+            return 3
         candidates.sort(key=_rank)
         if xh:
             for url, fields in candidates:
                 try:
-                    g = _call_gpa_action(client, url, fields, xh, term)
+                    g = _call_gpa_action(client, url, fields, xh, term, captions)
                     if g:
                         return g
                     tried.append(f"{url.rsplit('/',1)[-1]}:empty")

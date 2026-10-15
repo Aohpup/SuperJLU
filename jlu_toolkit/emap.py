@@ -110,7 +110,10 @@ def _try(client, app: App, method: str, path: str, form: dict):
 
 
 def parse_models(obj) -> list[dict]:
-    """EMAP 元数据里每个模型/动作 → {name, url, fields}（只取名字）。"""
+    """EMAP 元数据里每个模型/动作 → {name, url, fields, captions}。
+
+    captions: {字段名: 中文标题}，来自 control.caption / title / label（代码层，非个人数据）。
+    """
     out = []
 
     def walk(x):
@@ -118,10 +121,19 @@ def parse_models(obj) -> list[dict]:
             url = x.get("url")
             ctrls = x.get("controls") or x.get("fields") or x.get("items")
             if isinstance(url, str) and url.endswith(".do") and "code" not in url.lower():
-                names = sorted({c.get("name") for c in ctrls if isinstance(c, dict)
-                                and isinstance(c.get("name"), str) and _CODE.match(c["name"])}) \
-                    if isinstance(ctrls, list) else []
-                out.append({"name": str(x.get("name") or "")[:40], "url": url, "fields": names})
+                names, captions = [], {}
+                if isinstance(ctrls, list):
+                    for c in ctrls:
+                        if not isinstance(c, dict):
+                            continue
+                        n = c.get("name")
+                        if isinstance(n, str) and _CODE.match(n):
+                            names.append(n)
+                            cap = c.get("caption") or c.get("title") or c.get("label") or c.get("JSONParam")
+                            if isinstance(cap, str) and cap.strip() and not re.search(r"\d{6,}", cap):
+                                captions[n] = cap.strip()[:40]
+                out.append({"name": str(x.get("name") or "")[:40], "url": url,
+                            "fields": sorted(set(names)), "captions": captions})
             for v in x.values():
                 walk(v)
         elif isinstance(x, list):
@@ -132,32 +144,52 @@ def parse_models(obj) -> list[dict]:
     return out
 
 
+def parse_captions(obj) -> dict:
+    """整份元数据里所有字段名 → caption（后者覆盖前者）。"""
+    caps = {}
+    for a in parse_models(obj):
+        caps.update(a.get("captions") or {})
+    return caps
+
+
+
 def module_meta(client, app: App, modules) -> dict:
-    """对每个模块尝试 4 种元数据取法；返回 {modules:{m:{via, actions:[{name,url,fields}]}}, trace}。"""
+    """对每个模块尝试 4 种元数据取法；返回 {modules:{m:{via, actions, captions}}, trace}。"""
     res, trace = {}, []
-    for m in modules:
-        path = app.base + m + ".do"
-        for method, p, form in (("POST", path, {}), ("GET", path + "?*json=1", {}),
-                                ("POST", path, {"*json": "1"}), ("GET", path, {})):
-            code, obj = _try(client, app, method, p, form)
-            rec = {"module": m, "method": method, "path": p, "form_keys": sorted(form), "status": code}
-            if isinstance(obj, dict):
-                rec["keys"] = sorted(obj)[:15]
-                if isinstance(obj.get("code"), (str, int)):
-                    rec["code"] = str(obj["code"])[:8]
-                if isinstance(obj.get("msg"), str):
-                    rec["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
-            trace.append(rec)
-            if isinstance(obj, (dict, list)):
-                models = parse_models(obj)
-                flat = parse_meta(obj)
-                if models or flat["actions"]:
-                    known = {x["url"] for x in models}
-                    models += [{"name": "", "url": a, "fields": []} for a in flat["actions"] if a not in known]
-                    res[m] = {"via": f"{method} {p[len(app.base):]}" + (" *json" if form else ""),
-                              "actions": models, "all_fields": flat["fields"]}
-                    break
+    for mname in modules:
+        paths = list(dict.fromkeys([
+            app.base + mname + ".do",
+            app.base + app.route + "/" + mname + ".do",
+        ]))
+        found = False
+        for path in paths:
+            if found:
+                break
+            for method, pth, form in (("GET", path + "?*json=1", {}), ("POST", path, {}),
+                                      ("POST", path, {"*json": "1"}), ("GET", path, {})):
+                code, obj = _try(client, app, method, pth, form)
+                rec = {"module": mname, "method": method, "path": pth, "form_keys": sorted(form), "status": code}
+                if isinstance(obj, dict):
+                    rec["keys"] = sorted(obj)[:15]
+                    if isinstance(obj.get("code"), (str, int)):
+                        rec["code"] = str(obj["code"])[:8]
+                    if isinstance(obj.get("msg"), str):
+                        rec["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
+                trace.append(rec)
+                if isinstance(obj, (dict, list)):
+                    models = parse_models(obj)
+                    flat = parse_meta(obj)
+                    caps = parse_captions(obj)
+                    if models or flat["actions"] or caps:
+                        known = {x["url"] for x in models}
+                        models += [{"name": "", "url": a, "fields": [], "captions": {}}
+                                   for a in flat["actions"] if a not in known]
+                        res[mname] = {"via": f"{method} {pth[len(app.root):]}" + (" *json" if form else ""),
+                                      "actions": models, "all_fields": flat["fields"], "captions": caps}
+                        found = True
+                        break
     return {"modules": res, "trace": trace}
+
 
 
 def explore_app(client, app: App) -> dict:
