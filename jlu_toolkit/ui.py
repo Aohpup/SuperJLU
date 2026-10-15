@@ -64,6 +64,16 @@ class Store:
     def settings(self) -> dict:
         return self._json("settings.json", {})
 
+    def calendar(self) -> dict:
+        return self._json("calendar.json", {})
+
+    def periods(self) -> dict:
+        return self._json("periods.json", {})
+
+    def first_monday(self) -> Optional[str]:
+        """手动覆盖优先，否则用教务校历。"""
+        return self.settings().get("first_monday") or self.calendar().get("first_monday") or None
+
     def save_scheme(self, name: str, keys: list[str]) -> None:
         name = (name or "").strip()[:40]
         if not name:
@@ -81,6 +91,12 @@ class Store:
 
     def save_settings(self, upd: dict) -> None:
         fm = upd.get("first_monday")
+        if fm == "":
+            with self.lock:
+                s = self.settings()
+                s.pop("first_monday", None)
+                self._write_json("settings.json", s)
+            return
         if fm:
             d = dt.date.fromisoformat(fm)
             if d.weekday() != 0:
@@ -101,6 +117,13 @@ class Store:
             "exams": [e.to_dict() for e in ex.upcoming(self.exams(), dt.datetime(1970, 1, 1))],
             "schemes": self.schemes(),
             "settings": self.settings(),
+            "calendar": self.calendar(),
+            "periods": self.periods(),
+            "first_monday": self.first_monday(),
+            "first_monday_source": ("manual" if self.settings().get("first_monday")
+                                    else "calendar" if self.calendar().get("first_monday") else None),
+            "official_gpa": self._json("official_gpa.json", None),
+            "completion": self._json("completion.json", None),
             "gpa_all": core.gpa(gs),
             "updated": (dt.datetime.fromtimestamp(max(mtimes)).isoformat(timespec="minutes")
                         if mtimes else None),
@@ -108,25 +131,13 @@ class Store:
 
 
 def refresh_from_jwxt(store: Store) -> dict:
-    """用已保存会话拉取；不做交互登录。"""
+    """用已保存会话拉取全部数据；不做交互登录。"""
+    from .sync import sync_all
+
     client = jwxt.JwxtClient()
     if not client.load_session():
         raise jwxt.LoginError("没有已保存的会话，请先在终端运行 jlu-toolkit fetch 登录一次")
-    result = {}
-    courses = client.fetch_schedule()
-    jwxt.export_courses_csv(courses, str(store.p("schedule.csv")))
-    result["courses"] = len(courses)
-    grades = client.fetch_grades()
-    jwxt.export_grades_csv(grades, str(store.p("grades.csv")))
-    result["grades"] = len(grades)
-    try:
-        exs = client.fetch_exams()
-        ex.export_exams_csv(exs, str(store.p("exams.csv")))
-        result["exams"] = len(exs)
-    except jwxt.JwxtError as e:
-        result["exams_error"] = str(e)
-    client.save_session()
-    return result
+    return sync_all(client, store.root)
 
 
 def make_handler(store: Store):
@@ -170,10 +181,10 @@ def make_handler(store: Store):
             if path == "/api/data":
                 return self._json(store.snapshot())
             if path == "/api/ics":
-                fm = store.settings().get("first_monday")
+                fm = store.first_monday()
                 if not fm:
-                    return self._json({"error": "请先设置第一周周一日期"}, 400)
-                body = core.to_ics(store.courses(), fm).encode()
+                    return self._json({"error": "缺少开学日期：请先刷新（自动读取校历）或在设置里手动填写"}, 400)
+                body = core.to_ics(store.courses(), fm, store.periods() or None).encode()
                 return self._send(200, body, "text/calendar; charset=utf-8",
                                   {"Content-Disposition": 'attachment; filename="jlu-schedule.ics"'})
             self._send(404, b"not found", "text/plain")
@@ -208,7 +219,10 @@ def seed_demo(root: Path) -> None:
         src = ex_dir / n
         if src.exists():
             shutil.copy(src, root / n)
-    (root / "settings.json").write_text('{"first_monday": "2026-09-07"}', encoding="utf-8")
+    for n in ("calendar.json", "periods.json", "official_gpa.json", "completion.json"):
+        src = ex_dir / n
+        if src.exists():
+            shutil.copy(src, root / n)
     store = Store(root)
     keys = [f"{g.term}|{g.name}" for g in store.grades()
             if not g.name.startswith(("体育", "军事", "创新"))]

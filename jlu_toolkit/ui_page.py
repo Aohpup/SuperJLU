@@ -14,7 +14,7 @@ body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK
 header{position:sticky;top:0;z-index:5;background:var(--pri);color:#fff;padding:14px 16px 12px;display:flex;align-items:center;gap:10px}
 header h1{font-size:18px;margin:0;flex:1;font-weight:650;letter-spacing:.5px}
 header small{opacity:.8;font-size:12px}
-.btn{border:0;border-radius:10px;padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;background:var(--pri2);color:var(--pri);font-weight:600}
+.btn{text-decoration:none;display:inline-block;border:0;border-radius:10px;padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;background:var(--pri2);color:var(--pri);font-weight:600}
 .btn.pri{background:var(--pri);color:#fff}.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
 header .btn{background:rgba(255,255,255,.18);color:#fff}
 main{max-width:980px;margin:0 auto;padding:12px}
@@ -33,7 +33,15 @@ nav button.on{color:var(--pri);font-weight:650}
 .card.kb{padding:12px 8px}
 .grid .h{font-size:11px;line-height:1.3;color:var(--sub);text-align:center;padding:2px 0}
 .grid .h.today{color:var(--pri);font-weight:700}
-.grid .p{font-size:11px;color:var(--sub);text-align:center;display:flex;align-items:center;justify-content:center}
+.grid .p{font-size:11px;color:var(--sub);text-align:center;display:flex;align-items:center;justify-content:center;line-height:1.15}
+.grid .p em{font-style:normal;font-size:8.5px;opacity:.8}
+@media(min-width:640px){.grid .p em{font-size:10px}}
+.off-card h3{font-size:14px;margin:0 0 8px}.ogpa{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 12px}
+.ogpa div{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:4px 0;font-size:13.5px}.ogpa b{color:var(--pri)}
+.bar{height:10px;border-radius:99px;background:var(--bg);overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--pri);border-radius:99px}
+.grp{padding:10px 0;border-bottom:1px solid var(--line)}.grp:last-child{border:0}
+.grp .row b{flex:1}.miss{color:var(--bad);font-weight:650;font-size:13px}.done{color:var(--ok);font-weight:650;font-size:13px}
+.big{font-size:28px;font-weight:750;color:var(--pri)}
 .cell{min-height:46px;border-radius:8px;background:var(--bg)}
 .cls{border-radius:7px;padding:3px 3px;font-size:10.5px;line-height:1.3;color:#fff;overflow:hidden;word-break:break-all}
 .cls b{display:block;font-size:11px;font-weight:650}
@@ -74,22 +82,25 @@ select,input[type=text],input[type=date]{font:inherit;padding:7px 9px;border-rad
  </div>
 </section>
 <section class="tab" id="t-cj">
- <div class="card"><div class="gpa"><div><b id="g-gpa">-</b><span>当前方案绩点</span></div><div><b id="g-cr">-</b><span>计入学分</span></div><div><b id="g-n">-</b><span>计入课程</span></div></div>
+ <div class="card"><div class="gpa"><div><b id="g-gpa">-</b><span>自选方案绩点</span></div><div><b id="g-cr">-</b><span>计入学分</span></div><div><b id="g-n">-</b><span>计入课程</span></div></div>
   <p class="sub" style="margin:10px 0 0">按学分加权平均：百分制 60 分记 1.0，每分 +0.1，90 分及以上 4.0；“通过”类不计入。各类官方口径（保研/综测）请勾选课程自行组合。</p></div>
+ <div class="card off-card" id="ogpa" hidden></div>
  <div class="card">
   <div class="row"><select id="scheme" style="flex:1"></select><button class="btn pri" id="saveas">保存为方案</button><button class="btn ghost" id="del">删除</button></div>
   <div class="row" style="margin-top:8px"><select id="termf" style="flex:1"><option value="">全部学期</option></select><button class="btn ghost" id="all">全选</button><button class="btn ghost" id="none">清空</button></div><div class="sub" id="dirty" style="margin-top:6px"></div>
  </div>
  <div class="card" style="padding:4px 8px"><table><thead><tr><th style="width:30px"></th><th>课程</th><th class="n" style="text-align:right">学分</th><th class="n" style="text-align:right">成绩</th><th class="n" style="text-align:right">绩点</th></tr></thead><tbody id="gt"></tbody></table></div>
 </section>
+<section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-ks"><div class="card"><h2>考试倒计时</h2><div id="exams"></div></div></section>
 <section class="tab" id="t-sz">
- <div class="card"><h2>学期设置</h2><div class="row"><label class="sub">第 1 周周一</label><input type="date" id="fm"><button class="btn pri" id="savefm">保存</button></div></div>
+ <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
+  <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
  <div class="card"><h2>导出</h2><p class="sub">导出 iCal 后可导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用终端登录时保存的会话；会话失效时请在终端运行 <code>jlu-toolkit fetch --force-login</code>。</p></div>
 </section>
 </main>
-<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="sz"><b>⚙</b>设置</button></nav>
+<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="sz"><b>⚙</b>设置</button></nav>
 <div id="toast"></div>
 <script>
 "use strict";
@@ -100,17 +111,17 @@ let D=null, week=1, include=new Set(), current="__all__", dirty=false;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2600)}
 function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
 async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(!r.ok||j.ok===false)throw new Error(j.error||r.status);return j}
-function weekOf(date){const fm=D.settings.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
-function maxWeek(){return Math.max(16,...D.courses.flatMap(c=>c.weeks))}
+function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
+function maxWeek(){return Math.max((D.calendar&&D.calendar.total_weeks)||16,...D.courses.flatMap(c=>c.weeks))}
 function color(name){let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;return COLORS[h%COLORS.length]}
 function renderGrid(){
  $("#wkn").textContent=`第 ${week} 周`;
  const g=$("#grid"),days=["一","二","三","四","五","六","日"];let html='<div></div>';
- const fm=D.settings.first_monday, now=new Date();
+ const fm=D.first_monday, now=new Date();
  days.forEach((d,i)=>{let lab="周"+d,today=false;if(fm){const dd=new Date(fm+"T00:00:00");dd.setDate(dd.getDate()+(week-1)*7+i);lab+=`<br>${dd.getMonth()+1}/${dd.getDate()}`;today=dd.toDateString()===now.toDateString()}html+=`<div class="h${today?" today":""}">${lab}</div>`});
  const cs=D.courses.filter(c=>c.weeks.includes(week));
  const maxP=Math.max(11,...cs.map(c=>c.end));
- for(let p=1;p<=maxP;p++){html+=`<div class="p" style="grid-row:${p+1};grid-column:1">${p}</div>`;for(let d=1;d<=7;d++)html+=`<div class="cell" style="grid-row:${p+1};grid-column:${d+1}"></div>`}
+ for(let p=1;p<=maxP;p++){const pt=(D.periods||{})[p];html+=`<div class="p" style="grid-row:${p+1};grid-column:1;flex-direction:column">${p}${pt?`<em>${pt[0]}</em>`:""}</div>`;for(let d=1;d<=7;d++)html+=`<div class="cell" style="grid-row:${p+1};grid-column:${d+1}"></div>`}
  for(const c of cs)html+=`<div class="cls" style="grid-row:${c.start+1}/${c.end+2};grid-column:${c.weekday+1};background:${color(c.name)}"><b>${esc(c.name)}</b><i>${esc(c.location)}</i></div>`;
  g.innerHTML=html;
  if(!D.courses.length)g.insertAdjacentHTML("afterend",'<p class="empty" id="noc">还没有课表数据，点右上角“刷新”或在终端运行 jlu-toolkit fetch</p>');
@@ -137,12 +148,25 @@ function renderExams(){
  const nx=D.exams.find(e=>e.start&&new Date(e.end||e.start)>new Date()),box=$("#nextexam");
  if(nx){const c=cd(nx);box.hidden=false;box.innerHTML=`<div class="exam" style="padding:0"><div class="cd ${c.cls}"><b>${c.big}</b><span>${c.sm}</span></div><div class="t"><span class="sub">下一场考试</span><b>${esc(nx.name)}</b><span class="sub">${esc(fmtTime(nx))} · ${esc(nx.location)}</span></div></div>`}else box.hidden=true;
 }
+function renderOfficial(){const o=D.official_gpa,box=$("#ogpa");if(!o||!o.items||!o.items.length){box.hidden=true;return}box.hidden=false;
+ box.innerHTML=`<h3>教务官方统计 <span class="chip">只读</span></h3><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div><p class="sub" style="margin:8px 0 0">来自教务「学分绩点统计」${o.plan?" · "+esc(o.plan):""}</p>`}
+function num(v){return v==null?"-":(Math.round(v*100)/100)}
+function renderProgress(){const c=D.completion,box=$("#prog");
+ if(!c){box.innerHTML='<div class="card"><p class="empty">还没有学业完成数据，点右上角“刷新”</p></div>';return}
+ const pct=c.required?Math.min(100,(c.earned||0)/c.required*100):0;
+ let h=`<div class="card"><h2>${esc(c.plan||"培养方案")}</h2><div class="row"><span class="big">${num(c.earned)}</span><span class="sub">/ ${num(c.required)} 学分</span><span class="sp"></span>${c.passed?'<span class="done">✓ 已满足毕业学分</span>':`<span class="miss">还差 ${num(c.missing)} 学分</span>`}</div><div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div><p class="sub" style="margin:0">${c.selected!=null?"已选（含在修）"+num(c.selected)+" 学分 · ":""}${c.calculated_at?"教务计算于 "+esc(c.calculated_at):""}</p></div>`;
+ const gs=c.groups||[];
+ if(gs.length){const todo=gs.filter(g=>!g.passed&&(g.missing||0)>0);
+  h+=`<div class="card"><h2>各类课程 <span class="sub">${todo.length?todo.length+" 类未完成":"全部完成"}</span></h2>`+gs.map(g=>{const p=g.required?Math.min(100,(g.earned||0)/g.required*100):0;return`<div class="grp"><div class="row"><b>${esc(g.name)}</b>${g.nature?`<span class="chip">${esc(g.nature)}</span>`:""}</div><div class="bar"><i style="width:${p.toFixed(1)}%;${g.passed?"background:var(--ok)":""}"></i></div><div class="row sub"><span>${num(g.earned)} / ${num(g.required)} 学分${g.courses_done?" · "+g.courses_done+" 门":""}</span><span class="sp"></span>${g.passed||!g.missing?'<span class="done">已完成</span>':`<span class="miss">差 ${num(g.missing)}</span>`}</div></div>`}).join("")+`</div>`}
+ else h+='<div class="card"><p class="sub">教务未返回分类明细（课组），仅显示总学分。可运行 jlu-toolkit explore 帮助适配。</p></div>';
+ box.innerHTML=h}
 function renderAll(){
  $("#upd").textContent=D.updated?"更新于 "+D.updated.replace("T"," "):"";
- $("#fm").value=D.settings.first_monday||"";
+ $("#fm").value=D.first_monday||"";
  const terms=[...new Set(D.grades.map(g=>g.term))].sort().reverse();const tf=$("#termf"),keep=tf.value;
  tf.innerHTML='<option value="">全部学期</option>'+terms.map(t=>`<option>${esc(t)}</option>`).join("");tf.value=keep;
- document.getElementById("noc")?.remove();renderGrid();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();
+ document.getElementById("noc")?.remove();renderGrid();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();renderOfficial();renderProgress();
+ const cal=D.calendar||{};$("#calinfo").innerHTML=D.first_monday?`第 1 周周一：<b>${esc(D.first_monday)}</b>（${D.first_monday_source==="manual"?"手动覆盖":"来自教务校历"}）${cal.term?" · "+esc(cal.term):""}${cal.total_weeks?" · 共 "+cal.total_weeks+" 周":""} · 今天第 ${weekOf(new Date())} 周`:"尚未读取校历：点右上角“刷新”自动获取开学日期。";
 }
 async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll()}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0)});
@@ -156,9 +180,10 @@ $("#all").onclick=()=>{D.grades.forEach(g=>include.add(g.key));dirty=true;render
 $("#none").onclick=()=>{include.clear();dirty=true;renderGrades()};
 $("#saveas").onclick=async()=>{const n=prompt("方案名称（如 保研、综测）",current==="__all__"?"":current);if(!n)return;try{D=await api("/api/schemes",{name:n,include:[...include]});current=n.trim();dirty=false;renderAll();toast("已保存方案："+current)}catch(e){toast(e.message)}};
 $("#del").onclick=async()=>{if(current==="__all__")return toast("“全部课程”不能删除");if(!confirm("删除方案 "+current+"？"))return;D=await api("/api/schemes/delete",{name:current});current="__all__";dirty=false;renderAll();toast("已删除")};
+$("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});await load();toast("已恢复为教务校历")};
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
-$("#ics").onclick=e=>{if(!D.settings.first_monday){e.preventDefault();toast("请先设置第 1 周周一")}};
-$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.textContent="刷新中…";try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result;toast(`课表 ${r.courses} 门 · 成绩 ${r.grades} 条`+(r.exams!=null?` · 考试 ${r.exams} 场`:""))}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.textContent="⟳ 刷新"}};
+$("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
+$("#refresh").onclick=async()=>{const b=$("#refresh");b.disabled=true;b.textContent="刷新中…";try{const j=await api("/api/refresh",{});D=j;renderAll();const r=j.result,c=k=>r[k]&&r[k].ok?(r[k].count??"✓"):"✗";toast(`课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`)}catch(e){toast("刷新失败："+e.message)}finally{b.disabled=false;b.textContent="⟳ 刷新"}};
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 load().then(fromHash).catch(e=>toast("加载失败："+e.message));
 </script></body></html>

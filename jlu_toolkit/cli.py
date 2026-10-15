@@ -103,6 +103,14 @@ def main():
     ex_p.add_argument("-o", "--out", help="报告路径（默认 Termux 下载目录或当前目录 jlu_explore_report.json）")
     ex_p.add_argument("--debug", action="store_true")
 
+    sy = sub.add_parser(
+        "sync",
+        help="用已保存会话同步全部数据到本地数据目录（课表/成绩/考试/校历/节次/官方绩点/学业完成）；非交互",
+    )
+    sy.add_argument("--term", help="学期代码；默认当前学期")
+    sy.add_argument("--data-dir", help="数据目录（默认 ~/.config/jlu-toolkit/data）")
+    sy.add_argument("--debug", action="store_true")
+
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
@@ -128,6 +136,8 @@ def main():
         _cmd_explore(x)
     elif x.cmd == "ui":
         _cmd_ui(x)
+    elif x.cmd == "sync":
+        _cmd_sync(x)
 
 
 def _prompt(msg: str) -> str:
@@ -427,6 +437,30 @@ def _cmd_explore(x):
 
     path = explore.write_report(report, Path(x.out) if x.out else None)
     print(f"脱敏报告已写入：{path}\n（只含状态码/键名/行数/字段名，可以直接粘贴给开发者）")
+
+
+def _cmd_sync(x):
+    from pathlib import Path
+
+    from . import sync, ui
+
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    if not client.load_session():
+        print("没有已保存的会话。请先运行 jlu-toolkit fetch --user 你的邮箱前缀 登录一次。", file=sys.stderr)
+        sys.exit(1)
+    root = Path(x.data_dir).expanduser() if x.data_dir else ui.data_dir()
+    try:
+        summary = sync.sync_all(client, root, x.term)
+    except jwxt.LoginError as e:
+        print(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login", file=sys.stderr)
+        sys.exit(1)
+    except jwxt.NetworkError as e:
+        print(f"网络错误：{e}", file=sys.stderr)
+        sys.exit(1)
+    # 摘要不含个人数值（绩点/学分/成绩只写本地文件）
+    print(json.dumps({"data_dir": str(root), **summary}, ensure_ascii=False, indent=1))
+    bad = [k for k, v in summary.items() if isinstance(v, dict) and not v.get("ok")]
+    sys.exit(2 if bad else 0)
 
 
 def _cmd_ui(x):

@@ -1,0 +1,7 @@
+{"plan": "计算机科学与技术（示例）", "items": [
+ {"key": "PPJDCX", "label": "平均学分绩点（初修）", "value": "3.612"},
+ {"key": "PPJDZG", "label": "平均学分绩点（最高）", "value": "3.640"},
+ {"key": "BXKPPJD", "label": "必修课平均学分绩点", "value": "3.701"},
+ {"key": "JQPJF", "label": "加权平均分", "value": "87.35"},
+ {"key": "BXKHDXF", "label": "必修课已获学分", "value": "42"},
+ {"key": "XXKHDXF", "label": "选修课已获学分", "value": "9"}]}

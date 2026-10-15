@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,7 +36,8 @@ class Probe:
     label: str
     app: str  # 应用名（拼 *default/index.do）
     path: Optional[str] = None  # 为空则只 GET 入口
-    form: Callable[[str], dict] = field(default=lambda term: {})
+    form: Callable[..., dict] = field(default=lambda term, ctx=None: {})
+    needs: tuple = ()  # 需要的上下文键（如 XH），缺失则跳过
 
 
 def _term_parts(term: str) -> tuple[str, str]:
@@ -51,40 +53,61 @@ PROBES: list[Probe] = [
     Probe("当前学期(wdkb)", "wdkb", "/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do"),
     Probe("当前学期(考试应用)", "studentWdksapApp", "/jwapp/sys/studentWdksapApp/modules/wdksap/dqxnxq.do"),
     Probe("学期校历", "wdkb", "/jwapp/sys/wdkb/modules/xskcb/cxxljc.do",
-          lambda t: dict(zip(("XN", "XQ"), _term_parts(t)))),
+          lambda t, c=None: dict(zip(("XN", "XQ"), _term_parts(t)))),
     Probe("当前周次", "wdkb", "/jwapp/sys/wdkb/modules/jshkcb/dqzc.do",
-          lambda t: {"XNXQDM": t, "RQ": dt.date.today().isoformat()}),
-    Probe("节次时间", "wdkb", "/jwapp/sys/wdkb/modules/jshkcb/jc.do", lambda t: {"XNXQDM": t}),
+          lambda t, c=None: dict(zip(("XN", "XQ"), _term_parts(t)), RQ=dt.date.today().isoformat())),
+    Probe("节次时间", "wdkb", "/jwapp/sys/wdkb/modules/jshkcb/jc.do", lambda t, c=None: {"XNXQDM": t}),
     Probe("学期列表(jwpubapp)", "wdkb", "/jwapp/sys/jwpubapp/modules/bb/cxjwggbbdqxnxq.do"),
     # 考试
     Probe("考试安排 cxxsksap", "studentWdksapApp",
           "/jwapp/sys/studentWdksapApp/WdksapController/cxxsksap.do",
-          lambda t: {"requestParamStr": json.dumps({"XNXQDM": t, "*order": "-KSRQ,-KSSJMS"})}),
+          lambda t, c=None: {"requestParamStr": json.dumps({"XNXQDM": t, "*order": "-KSRQ,-KSSJMS"})}),
     Probe("考试安排 wdksap", "studentWdksapApp",
           "/jwapp/sys/studentWdksapApp/modules/wdksap/wdksap.do",
-          lambda t: {"XNXQDM": t, "*order": "-KSRQ,-KSSJMS"}),
+          lambda t, c=None: {"XNXQDM": t, "*order": "-KSRQ,-KSSJMS"}),
     # 成绩扩展
-    Probe("学分绩点统计", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"),
+    Probe("学分绩点统计(无学号)", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"),
     # 空教室 / 教室
     Probe("教室列表(kcbcx)", "kcbcx", "/jwapp/sys/kcbcx/modules/jskcb/jscx.do",
-          lambda t: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
     Probe("教室列表(kcbcxby)", "kcbcxby", "/jwapp/sys/kcbcxby/modules/jskcb/jscx.do",
-          lambda t: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
     Probe("空教室入口(kxjas)", "kxjas"),
     Probe("空教室入口(kxjscx)", "kxjscx"),
     # 培养方案 / 学业
     Probe("个人培养方案", "xsfacx", "/jwapp/sys/xsfacx/modules/pyfacxepg/grpyfacx.do"),
     Probe("学业完成情况", "xywccx", "/jwapp/sys/xywccx/modules/xywccx/cxxsscfa.do",
-          lambda t: {"SCLBDM": "04", "*order": "-CZSJ"}),
+          lambda t, c=None: {"SCLBDM": "04", "*order": "-CZSJ"}),
     Probe("学业预警", "xyyj", "/jwapp/sys/xyyj/modules/xsxyyjjg/cxxsyjpcjg.do"),
+    # v2：需要学号/方案代码的接口（值只在内存中使用，不写入报告）
+    Probe("学分绩点统计(XH1..6)", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do",
+          lambda t, c=None: {f"XH{i}": c["XH"] for i in range(1, 7)}, needs=("XH",)),
+    Probe("学业完成课组明细", "xywccx", "/jwapp/sys/xywccx/modules/xywccx/cxscfakz.do",
+          lambda t, c=None: {"XH": c["XH"], "PYFADM": c["PYFADM"], "BYNJDM": c.get("BYNJDM") or "-",
+                             "SCLBDM": c.get("SCLBDM") or "04"}, needs=("XH", "PYFADM")),
+    Probe("培养方案课程列表", "xsfacx", "/jwapp/sys/jwpubapp/modules/pyfa/kzkccx.do",
+          lambda t, c=None: {"PYFADM": c["PYFADM"], "pageSize": "5", "pageNumber": "1"}, needs=("PYFADM",)),
+    # v2：空教室候选（只读查询；真实路径以 discover 结果为准）
+    Probe("空教室 kxjscx/cxkxjs", "kxjscx", "/jwapp/sys/kxjscx/modules/kxjscx/cxkxjs.do",
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+    Probe("空教室 kxjscx/kxjscx", "kxjscx", "/jwapp/sys/kxjscx/modules/kxjscx/kxjscx.do",
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+    Probe("空教室 kxjscx/jscx", "kxjscx", "/jwapp/sys/kxjscx/modules/kxjscx/jscx.do",
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+    Probe("空教室 kxjas/kxjascx", "kxjas", "/jwapp/sys/kxjas/modules/kxjas/kxjascx.do",
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+    Probe("空教室 kxjas/cxkxjas", "kxjas", "/jwapp/sys/kxjas/modules/kxjas/cxkxjas.do",
+          lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
+    Probe("代码表 校区", "kxjscx", "/jwapp/code/83a986fc-e677-400e-99a4-c7bb39c2ca35.do"),
+    Probe("代码表 教学楼", "kxjscx", "/jwapp/code/82101c45-a7d3-414d-988b-24744db9f5ea.do"),
     # 个人信息
     Probe("学生基本信息", "xsjbxxgl", "/jwapp/sys/xsjbxxgl/modules/xsjbxx/cxxsjbxxlb.do"),
     # 选课结果（只看入口，不碰选课接口）
     Probe("选课应用入口(xsxkapp)", "xsxkapp"),
     Probe("选课结果入口(xkjgcx)", "xkjgcx"),
     # 课表变动（只读）
-    Probe("调课记录", "wdkb", "/jwapp/sys/wdkb/modules/jshkcb/cxztdkjl.do", lambda t: {"XNXQDM": t}),
-    Probe("未排课程", "wdkb", "/jwapp/sys/wdkb/modules/xskcb/xswpkc.do", lambda t: {"XNXQDM": t}),
+    Probe("调课记录", "wdkb", "/jwapp/sys/wdkb/modules/jshkcb/cxztdkjl.do", lambda t, c=None: {"XNXQDM": t}),
+    Probe("未排课程", "wdkb", "/jwapp/sys/wdkb/modules/xskcb/xswpkc.do", lambda t, c=None: {"XNXQDM": t}),
 ]
 
 
@@ -156,6 +179,7 @@ def run_explore(client: "jwxt.JwxtClient", term: Optional[str] = None,
     report["term_detected"] = term
     term = term or ""
 
+    ctx: dict = {}  # 学号/方案代码等：只在内存中，绝不写入报告
     entered: set[str] = set()
     for pr in PROBES:
         entry = APP.format(pr.app)
@@ -177,12 +201,20 @@ def run_explore(client: "jwxt.JwxtClient", term: Optional[str] = None,
             continue
         _assert_read_only(pr.path)
         item: dict = {"label": pr.label, "path": pr.path}
+        missing = [k for k in pr.needs if not ctx.get(k)]
+        if missing:
+            item["skipped"] = "缺少上下文：" + ",".join(missing)
+            report["probes"].append(item)
+            log(f"[跳过] {pr.label}: {item['skipped']}")
+            continue
         try:
-            code, text, final = client.post_raw(pr.path, pr.form(term), entry)
+            code, text, final = client.post_raw(pr.path, pr.form(term, ctx), entry)
             item["status"] = code
             item["final"] = _path_only(final)
             try:
-                item["json"] = summarize_json(json.loads(text))
+                parsed = json.loads(text)
+                _capture_ctx(parsed, ctx)
+                item["json"] = summarize_json(parsed)
             except (json.JSONDecodeError, ValueError):
                 item["non_json_bytes"] = len(text or "")
                 item["looks_like_login"] = "loginForm" in (text or "")
@@ -194,7 +226,84 @@ def run_explore(client: "jwxt.JwxtClient", term: Optional[str] = None,
             if "rows" in b:
                 rows += f" {name}={b['rows']}行"
         log(f"[查询] {pr.label}: HTTP {item.get('status', item.get('error'))}{rows}")
+    report["context_found"] = sorted(ctx.keys())  # 只列键名
+    report["discover"] = {app: discover_app(client, app) for app in DISCOVER_APPS}
+    for app, d in report["discover"].items():
+        log(f"[发现] {app}: {len(d.get('do_paths', []))} 个 .do 路径")
     return report
+
+
+CTX_KEYS = ("XH", "PYFADM", "BYNJDM", "SCLBDM")
+
+
+def _capture_ctx(parsed, ctx: dict) -> None:
+    for blk in ((parsed or {}).get("datas") or {}).values() if isinstance(parsed, dict) else ():
+        rows = blk.get("rows") if isinstance(blk, dict) else None
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            for k in CTX_KEYS:
+                v = rows[0].get(k)
+                if v not in (None, "") and k not in ctx:
+                    ctx[k] = str(v)
+
+
+DISCOVER_APPS = ("kxjscx", "kxjas")
+_DO_RE = re.compile(r"""["'(]((?:/jwapp/sys/|\./|modules/|[\w-]+/)[\w/*.-]*?\.do)\b""")
+_SRC_RE = re.compile(r"""(?:src|href)\s*=\s*["']([^"'#?]+\.(?:js|json))""", re.I)
+
+
+def extract_do_paths(text: str) -> list[str]:
+    """从应用前端代码中提取 *.do 路径（代码，不是个人数据）。"""
+    found = {m.group(1) for m in _DO_RE.finditer(text or "")}
+    return sorted(p for p in found if len(p) < 160)
+
+
+def discover_app(client, app: str, max_files: int = 12) -> dict:
+    """只读：GET 应用入口 HTML 及其同应用 JS/JSON，提取接口路径。"""
+    base = f"https://iedu.jlu.edu.cn/jwapp/sys/{app}/"
+    out: dict = {"files": 0, "do_paths": []}
+    try:
+        code, html, final, _ = client._request(APP.format(app), headers={"Referer": jwxt.IEDU_PORTAL})
+    except Exception as e:  # noqa: BLE001
+        return {"error": type(e).__name__}
+    paths = set(extract_do_paths(html))
+    srcs = []
+    for s in _SRC_RE.findall(html or ""):
+        url = urllib.parse.urljoin(final or base, s)
+        if f"/jwapp/sys/{app}/" in url and url not in srcs:
+            srcs.append(url)
+    # EMAP 约定的配置/路由文件
+    for extra in ("config.json", "public/js/routes.js", "routes.js", "index.js", "pages/index.js"):
+        u = base + extra
+        if u not in srcs:
+            srcs.append(u)
+    files_ok = []
+    for u in srcs[:max_files]:
+        try:
+            c, txt, _, _ = client._request(u, headers={"Referer": APP.format(app)})
+        except Exception:  # noqa: BLE001
+            continue
+        if c == 200 and txt:
+            files_ok.append(urllib.parse.urlparse(u).path)
+            paths.update(extract_do_paths(txt))
+            # 次级：同应用 JS 里引用的其他 js（一层）
+            for s in re.findall(r"""["']([\w./-]+\.js)["']""", txt)[:20]:
+                v = urllib.parse.urljoin(u, s)
+                if f"/jwapp/sys/{app}/" in v and v not in srcs and len(srcs) < max_files * 2:
+                    srcs.append(v)
+    # 尝试 EMAP 模块元数据（*.do 不带动作名），只提取其中的 .do 字符串
+    for mp in sorted(p for p in paths if re.search(r"modules/[\w]+\.do$", p))[:6]:
+        full = mp if mp.startswith("/") else f"/jwapp/sys/{app}/" + mp.lstrip("./")
+        try:
+            c, txt, _ = client.post_raw(full, {}, APP.format(app))
+            if c == 200:
+                paths.update(extract_do_paths(txt))
+                out.setdefault("meta_ok", []).append(full)
+        except Exception:  # noqa: BLE001
+            pass
+    out["files"] = len(files_ok)
+    out["file_paths"] = files_ok
+    out["do_paths"] = sorted(paths)
+    return out
 
 
 def default_report_path() -> Path:
