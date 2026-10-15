@@ -122,7 +122,9 @@ def sync(client, channel: str = oa.DEFAULT_CHANNEL, root: Optional[Path] = None)
         raise jwxt.LoginError("OA 列表不可访问（需校园网/VPN 或登录）")
     items = oa.parse_list(html)["items"]
     for i in items:
-        i["channel"] = i.get("channel") or channel
+        # 以请求的栏目为准：详情链接里的 channelId 可能是子栏目，避免规则按栏目过滤时漏掉
+        i["link_channel"] = i.get("channel", "")
+        i["channel"] = channel
     st = _load(r / SEEN_FILE, {"seen": {}})
     seen_map = st.setdefault("seen", {})
     first = channel not in seen_map

@@ -843,9 +843,15 @@ def _cmd_oa_sub(x):
             else:
                 rules = osub.list_rules()
                 if x.json:
-                    print(json.dumps({"rules": rules}))
+                    print(json.dumps({"rules": rules, "matches": osub.recent_matches(x.limit if getattr(x, "limit", 0) else 20)}, ensure_ascii=False))
                 for r in [] if x.json else rules:
                     print(f"{r['id']}  {'/'.join(r['keywords'])}" + (f"  单位：{'/'.join(r['depts'])}" if r["depts"] else ""))
+                if not x.json:
+                    ms = osub.recent_matches(5)
+                    if ms:
+                        print(f"最近命中 {len(ms)} 条：")
+                    for m in ms:
+                        print(f"  {m['matched_at']}  {m['notice'].get('title','')}  关键词：{'/'.join(m['keywords_hit'])}")
                 if not rules and not x.json:
                     print("暂无订阅；用 jlu-toolkit oa subscribe add -k 讲座,奖学金 添加")
         except ValueError as e:

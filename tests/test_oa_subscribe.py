@@ -135,3 +135,17 @@ def test_cli_subscribe(tmp_path, monkeypatch, capsys):
     assert osub.list_rules(tmp_path) == []
     with pytest.raises(SystemExit):
         cli.main(["oa", "subscribe", "remove", "zzz"])
+
+
+def test_list_json_includes_matches(tmp_path, monkeypatch, capsys):
+    from jlu_toolkit import oa_subscribe as osub, cli
+    monkeypatch.setattr(osub, "_root", lambda root=None: tmp_path)
+    r = osub.add_rule("通知")
+    osub.record_matches([{"id": "1", "title": "放假通知", "dept": "校办", "channel": "179577"}])
+    rc = None
+    try:
+        cli.main(["oa", "subscribe", "list", "--json"])
+    except SystemExit as e:
+        rc = e.code
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert rc in (None, 0) and out["rules"][0]["id"] == r["id"] and len(out["matches"]) == 1
