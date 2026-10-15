@@ -602,10 +602,10 @@ def _cmd_plan(x):
             if x.probe:
                 rep, _ = pl.explore(client, log=err)
                 path = Path(x.out) if x.out else Path(tempfile.gettempdir()) / "jlu_plan_probe.json"
-                path.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
+                path.write_text(json.dumps(rep, indent=1), encoding="ascii")
                 client.save_session()
-                err(f"探测报告：{path}")
-                calls = [c for c in rep["calls"] if c.get("rows")]
+                err(f"probe report: {path}")
+                calls = rep["calls_with_rows"]
                 print(json.dumps({"best": rep["best"], "apps": {k: {"entered": v.get("entered"),
                                   "modules": sorted(v.get("modules") or {})} for k, v in rep["apps"].items()},
                                   "calls_total": len(rep["calls"]), "calls_with_rows": calls}))

@@ -22,6 +22,7 @@ KNOWN = (
 )
 _HINT = re.compile(r"(kc|kz|fa|wc|xx|cx)", re.I)
 _SKIP = re.compile(r"(save|add|del|update|xg|bc|sc[a-z]*sq|tj[a-z]*sq|submit|export|dc)", re.I)
+MAX_TOTAL = 2000  # 超过即视为未过滤（全校数据），拒绝且绝不翻页
 COURSE_KEYS = ("KCH", "KCM", "KCDM", "KCMC")
 DONE_KEYS = ("ZCJ", "CJ", "XSZCJMC", "SFTG", "TGZT", "XDZT", "XDZTDM", "WCZT", "SFXD", "SFWC", "CJDM")
 
@@ -72,9 +73,13 @@ def _post(client, app: emap.App, path: str, form: dict):
         return code, None
 
 
-def _variants(ctx: dict):
+def _variants(ctx: dict, path: str = ""):
     base = {"pageSize": "10", "pageNumber": "1"}
-    yield "page", dict(base)
+    if ctx.get("PYFADM"):
+        yield "page+qsPYFADM", {**base, "querySetting": json.dumps(
+            [{"name": "PYFADM", "value": ctx["PYFADM"], "linkOpt": "AND", "builder": "equal"}])}
+    if "kzkccx" not in path:  # 全校方案课程表：绝不无过滤调用
+        yield "page", dict(base)
     if ctx.get("PYFADM"):
         yield "page+PYFADM", {**base, "PYFADM": ctx["PYFADM"]}
     if ctx.get("XH"):
@@ -95,6 +100,17 @@ def _context(client) -> dict:
         pass
     try:
         client.enter_emap_app(meta.APP_XYWCCX)
+        for act in ("cxxsjbxx", "cxscfa"):
+            obj = meta._post(client, f"/jwapp/sys/xywccx/modules/xywccx/{act}.do",
+                             {"pageSize": "10", "pageNumber": "1"}, meta.APP_XYWCCX)
+            hit = _rows_any(obj)
+            if hit and hit[1] and isinstance(hit[1][0], dict):
+                for k in ("XH", "PYFADM", "BYNJDM", "SCLBDM"):
+                    if _s(hit[1][0].get(k)):
+                        ctx.setdefault(k, _s(hit[1][0].get(k)))
+    except jwxt.JwxtError:
+        pass
+    try:
         rows = meta._rows(meta._post(client, meta.EP_COMPLETION, {"SCLBDM": "04", "*order": "-CZSJ"},
                                      meta.APP_XYWCCX), "cxxsscfa")
         if rows:
@@ -151,9 +167,9 @@ def explore(client, log=lambda s: None) -> tuple[dict, dict]:
         ra: dict = {}
         rep["apps"][name] = ra
         acts = _actions(client, app, ra)
-        log(f"[{name}] 进入={ra.get('entered')} 模块={ra.get('modules_seen')} 候选动作={len(acts)}")
+        log(f"[{name}] entered={ra.get('entered')} modules={ra.get('modules_seen')} candidates={len(acts)}")
         for path, caps in acts[:40]:
-            for vname, form in _variants(ctx):
+            for vname, form in _variants(ctx, path):
                 code, obj = _post(client, app, path, form)
                 rec = {"app": name, "action": path.split("/sys/", 1)[-1], "variant": vname, "status": code}
                 if isinstance(obj, dict):
@@ -168,17 +184,26 @@ def explore(client, log=lambda s: None) -> tuple[dict, dict]:
                                     "captions": {f: caps[f] for f in flds if f in caps}})
                 rep["calls"].append(rec)
                 if rec.get("rows"):
+                    tot = int(rec.get("total") or rec["rows"])
+                    if tot > MAX_TOTAL:
+                        rec["rejected"] = "unfiltered_total_over_%d" % MAX_TOTAL
                     log(f"  {rec['action']} [{vname}] rows={rec['rows']} total={rec.get('total')} "
-                        f"fields={len(rec['fields'])}{' 课程' if _is_course(rec['fields']) else ''}")
+                        f"fields={len(rec['fields'])}{' course' if _is_course(rec['fields']) else ''}"
+                        f"{' REJECTED' if rec.get('rejected') else ''}")
+                    if rec.get("rejected"):
+                        continue  # 试下一个（带过滤的）变体
                     if _is_course(rec["fields"]):
-                        kind = "done" if set(rec["fields"]) & set(DONE_KEYS) and name == "xywccx" else "plan"
-                        score = (int(rec.get("total") or rec["rows"]), len(rec["fields"]))
+                        # 学生本人方案（xywccx，带 XH/PYFADM）优先
+                        kind = "plan"
+                        score = (name == "xywccx", "XH" in form or "PYFADM" in form or "querySetting" in form,
+                                 tot, len(rec["fields"]))
                         if kind not in best or score > best[kind]["score"]:
                             best[kind] = {"app": name, "route": route, "path": path, "form": form,
-                                          "variant": vname, "captions": caps, "score": score}
+                                          "variant": vname, "captions": caps, "score": score, "total": tot}
                     break
     rep["best"] = {k: {"app": v["app"], "action": v["path"].split("/sys/", 1)[-1], "variant": v["variant"],
-                       "total": v["score"][0]} for k, v in best.items()}
+                       "total": v["total"]} for k, v in best.items()}
+    rep["calls_with_rows"] = [c for c in rep["calls"] if c.get("rows")]
     return rep, best
 
 
@@ -192,6 +217,8 @@ def fetch_all(client, b: dict, page_size: int = 200, max_pages: int = 30) -> lis
         hit = _rows_any(obj) if code == 200 else None
         if not hit or not hit[1]:
             break
+        if hit[2] is not None and int(hit[2]) > MAX_TOTAL:
+            raise jwxt.JwxtError(f"refused: unfiltered source total {hit[2]} > {MAX_TOTAL}")
         out += [r for r in hit[1] if isinstance(r, dict)]
         total = hit[2]
         if (total is not None and len(out) >= int(total)) or len(hit[1]) < page_size:
@@ -271,7 +298,7 @@ def merge(plan: list, done: list, grades=None, courses_now=None) -> list:
 
 
 def _cache_path():
-    return jwxt.config_dir() / "data" / "plan_profile.json"
+    return jwxt.config_dir() / "data" / "plan_profile2.json"
 
 
 def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) -> dict:
@@ -282,7 +309,8 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
             best = json.loads(cp.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, ValueError):
             best = {}
-    if "plan" not in best:
+    if "plan" not in best or "kzkccx" in best["plan"].get("path", "") and not any(
+            k in best["plan"].get("form", {}) for k in ("PYFADM", "querySetting")):
         _, found = explore(client)
         best = {k: {kk: v[kk] for kk in ("app", "route", "path", "form", "captions")} for k, v in found.items()}
         if not best:
@@ -300,7 +328,7 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
                     b["form"][k] = ctx[k]
     plan = normalize(fetch_all(client, best["plan"]), best["plan"].get("captions") or {}) if "plan" in best else []
     done = []
-    if "done" in best:
+    if "done" in best and best["done"]["path"] != best["plan"]["path"]:
         try:
             done = normalize(fetch_all(client, best["done"]), best["done"].get("captions") or {})
         except jwxt.JwxtError:

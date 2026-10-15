@@ -49,3 +49,31 @@ def test_explore_report_has_no_values(monkeypatch):
     s = json.dumps(rep, ensure_ascii=False)
     assert "SECRET" not in s and "S123456" not in s
     assert best["plan"]["app"] in ("xsfacx", "jwpubapp")
+
+
+def test_rejects_unfiltered_and_prefers_student_plan(monkeypatch):
+    big = {"code": "0", "datas": {"kzkccx": {"rows": [{"KCH": "x", "KCM": "y"}], "totalSize": 239471}}}
+    mine = {"code": "0", "datas": {"cxscfakzkc": {"rows": [{"KCH": "x", "KCM": "y", "XF": 2}], "totalSize": 254}}}
+    seen = []
+
+    class FC:
+        def enter_emap_app(self, *_): pass
+        def post_raw(self, path, form, ref):
+            seen.append((path.rsplit("/", 1)[-1], sorted(form)))
+            if path.endswith("kzkccx.do"):
+                return 200, json.dumps(big), ""
+            if path.endswith("cxscfakzkc.do") and "XH" in form and "PYFADM" in form:
+                return 200, json.dumps(mine), ""
+            return 403, "", ""
+    monkeypatch.setattr(plan, "_context", lambda c: {"XH": "S1", "PYFADM": "P1"})
+    monkeypatch.setattr(emap, "discover", lambda c, a: {"modules_seen": [a.route], "do_paths": []})
+    monkeypatch.setattr(emap, "module_meta", lambda c, a, m: {"modules": {}, "trace": []})
+    rep, best = plan.explore(FC())
+    assert best["plan"]["path"].endswith("cxscfakzkc.do") and best["plan"]["total"] == 254
+    assert not any(n == "kzkccx.do" and f == ["pageNumber", "pageSize"] for n, f in seen)
+    assert any(c.get("rejected") for c in rep["calls_with_rows"])
+    import pytest
+    from jlu_toolkit import jwxt
+    with pytest.raises(jwxt.JwxtError):
+        plan.fetch_all(FC(), {"app": "xsfacx", "route": "xsfacx", "path": "/jwapp/sys/xsfacx/modules/pyfacxepg/kzkccx.do",
+                              "form": {"PYFADM": "P1"}})
