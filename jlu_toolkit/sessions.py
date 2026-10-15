@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib
 import json
 import time
+import urllib.parse
 from dataclasses import asdict, dataclass
 from typing import Callable, Dict, List, Optional
 
@@ -33,15 +34,22 @@ class Site:
     vpn: bool = True       # 校外能否经 vpn.jlu.edu.cn 访问
     captcha: bool = False  # 登录需要验证码（不保存密码，除非用户明确保存）
     readonly: bool = True  # 本工具只读
+    optional_login: bool = False  # 不登录也能用基本功能（登录只为个人中心）
+    service: str = ""      # CAS service URL（refresh_via_cas 用；空 = 尚未探明，不刷新）
 
 
 SITES: Dict[str, Site] = {s.id: s for s in (
-    Site("jwxt", "教务系统", "iedu.jlu.edu.cn", "cas"),
-    Site("pay", "校园缴费", "ip.jlu.edu.cn", "cas"),
-    Site("xsxk", "选课系统", "icourses.jlu.edu.cn", "cas"),
+    Site("jwxt", "教务系统", "iedu.jlu.edu.cn", "cas", service=jwxt.CAS_SERVICE),
+    # 以下认证方式来自露娜的探测（PR #18）
+    Site("pay", "校园缴费", "ip.jlu.edu.cn", "own", captcha=True),      # 卡号+密码+验证码
+    Site("xsxk", "选课系统", "icourses.jlu.edu.cn", "own", captcha=True),  # AES 加密密码+验证码，token 头鉴权
+    # 邮箱+密码+验证码；课程中心入口可能走 CAS，尚未确认
     Site("ilearn", "学在吉大", "ilearntec.jlu.edu.cn", "own", captcha=True),
     Site("vpn", "WebVPN", "vpn.jlu.edu.cn", "cas", vpn=False),
-    Site("lib", "图书馆", "lib.jlu.edu.cn", "none"),
+    # 首页无需登录；个人中心走 CAS（optional_login：没登录也算可用）
+    Site("lib", "图书馆", "lib.jlu.edu.cn", "cas", optional_login=True),
+    # 统一认证本身：保存登录后 CAS 主机上的全部 cookie（含 TGC 类长期票据），用于静默换票
+    Site("cas", "统一认证", "cas.jlu.edu.cn", "cas"),
 )}
 
 MESSAGES = {OK: "已登录", EXPIRED: "登录已过期，请重新登录", MISSING: "尚未登录", UNKNOWN: "已保存会话，尚未验证"}
@@ -154,11 +162,15 @@ def status(site_id: str) -> dict:
         has = _secret(site_id).exists()
         state = (info.get("state") or UNKNOWN) if has else MISSING
         checked, reason = info.get("checked_at"), info.get("reason", "") if has else ""
+    optional = s.auth == "none" or s.optional_login
     if s.auth == "none" and state == MISSING:
         state = OK  # 无需登录的站点
-    msg = MESSAGES[state] if s.auth != "none" else "无需登录"
+    msg = "无需登录" if s.auth == "none" else MESSAGES[state]
+    if s.optional_login and state == MISSING:
+        msg = "未登录（基本功能无需登录，个人中心需统一认证）"
     return {"id": s.id, "name": s.name, "host": s.host, "auth": s.auth, "vpn": s.vpn, "captcha": s.captcha,
-            "state": state, "checked_at": checked, "needs_login": state in (EXPIRED, MISSING),
+            "state": state, "checked_at": checked, "needs_login": state in (EXPIRED, MISSING) and not (optional and state == MISSING),
+            "optional_login": optional,
             "message": msg + (f"（{reason}）" if reason and state != OK else ""),
             "has_check": find_check(site_id) is not None}
 
@@ -227,3 +239,96 @@ def vpn_url(url: str) -> str:
 
 def site_dict(s: Site) -> dict:
     return asdict(s)
+
+
+# ───────── CAS 单点登录持久化 ─────────
+
+def _is_cas_cookie(d: dict) -> bool:
+    dom = (d.get("domain") or "").lstrip(".").lower()
+    return dom == SITES["cas"].host
+
+
+def save_cas_from_jar(jar) -> int:
+    """把 jar 中 CAS 主机的全部 cookie 加密保存为站点 'cas'；返回保存条数（0 = 没有，不覆盖旧值）。"""
+    cs = [d for d in jwxt.jar_to_list(jar) if _is_cas_cookie(d)]
+    if cs:
+        save_cookies("cas", cs)
+    return len(cs)
+
+
+def migrate_cas_from_jwxt(jar=None) -> int:
+    """一次性透明迁移：站点 'cas' 为空时，从教务会话（jar 或已保存的 session）抽出 CAS 主机 cookie。
+
+    #20 之前登录的 session.enc 往往已含 cas.jlu.edu.cn 的 cookie，但没有单独的 session-cas；
+    幂等：已有 cas 会话则返回 0，不覆盖。按 domain 过滤，不假定 cookie 名。
+    """
+    existing = load_cookies("cas")
+    if existing:
+        return 0
+    if jar is None:
+        try:
+            data = _secret("jwxt").load()
+        except secure_store.SecureStoreError:
+            data = None
+        items = (data or {}).get("cookies") if isinstance(data, dict) else None
+        if not items:
+            return 0
+        jar = jwxt.jar_from_list(items)
+    return save_cas_from_jar(jar)
+
+
+def refresh_via_cas(site_id: str, c: Optional[jwxt.JwxtClient] = None) -> bool:
+    """站点会话过期时，用已保存的 CAS cookie 对该站 service 换票，成功则保存新会话。
+
+    只适用于 auth == "cas" 且已知 service 的站点。CAS 落到登录页 → 标记 'cas' 过期，返回 False
+    （UI 应显示应用内登录）。不提交任何密码/验证码。
+    """
+    s = site(site_id)
+    if s.auth != "cas" or not s.service or site_id == "cas":
+        return False
+    c = c or client(site_id)
+    # #20 之前的教务会话里可能已有 CAS cookie，先迁到站点 cas
+    migrate_cas_from_jwxt(c.jar if any(True for _ in c.jar) else None)
+    cas = load_cookies("cas")
+    if not cas:
+        return False
+    if getattr(c, "_cas_refreshing", False):
+        return False
+    c._cas_refreshing = True
+    try:
+        for ck in jwxt.jar_from_list(cas):
+            c.jar.set_cookie(ck)
+        url = f"{jwxt.CAS_LOGIN}?service={urllib.parse.quote(s.service, safe='')}"
+        try:
+            code, html, final, _ = c._request(url, headers={"Accept": "text/html,*/*"})
+        except jwxt.NetworkError:
+            return False
+        host = (urllib.parse.urlparse(final or "").hostname or "").lower()
+        if jwxt.looks_like_login_redirect(final, html) or host == SITES["cas"].host:
+            mark_expired("cas", "统一认证登录已失效")
+            return False
+        if host != s.host or code >= 400:
+            return False
+        if site_id == "jwxt":
+            c.save_session()  # 同时更新 'cas'
+        else:
+            save_cookies(site_id, jwxt.jar_to_list(c.jar))
+            save_cas_from_jar(c.jar)
+        return True
+    finally:
+        c._cas_refreshing = False
+
+
+def keepalive() -> dict:
+    """一次轻量 GET 刷新教务会话（供 App 前台定时调用，约 15 分钟一次；本模块不做后台循环）。
+
+    返回 {ok, alive, refreshed_via_cas, session}；alive=False 且 session.session_expired=True 表示需重新登录。
+    """
+    c = jwxt.JwxtClient()
+    if not c.load_session():
+        return {"ok": True, "alive": False, "refreshed_via_cas": False, "session": jwxt.session_status()}
+    alive = c.session_alive()
+    if alive:
+        c.save_session()
+    return {"ok": True, "alive": alive, "refreshed_via_cas": bool(getattr(c, "_cas_refreshed", False)),
+            "session": jwxt.session_status()}

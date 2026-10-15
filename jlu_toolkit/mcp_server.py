@@ -57,9 +57,10 @@ def main():
         from . import ui
         from .cli import filter_plan
         f = ui.Store(ui.data_dir()).p("plan_courses.json")
-        if not f.exists():
+        from . import secure_store
+        p = secure_store.load_json(f)
+        if p is None:
             return {"error": "尚无 plan_courses.json，请先运行 jlu-toolkit sync"}
-        p = _j.loads(f.read_text(encoding="utf-8"))
         cs = filter_plan(p.get("courses", []), status, term, nature)
         return {"count": len(cs), "courses": cs}
 
