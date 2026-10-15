@@ -1,15 +1,18 @@
-## SuperJLU v1.0.1
+## SuperJLU v1.0.2
 
-v1.0.0 的修复版，建议全部用户升级。Android 可以直接覆盖安装，不会丢数据。
+建议全部用户升级。Android 可以直接覆盖安装，不会丢数据。
+
+### 新功能
+- **成绩加权分析**（感谢 [@Aohpup](https://github.com/Aohpup)）：教务成绩为主数据源，支持保研 / 奖学金 / 全部课程模板、自定义模板、搜索筛选排序、可选 Excel/CSV 成绩单导入（#44 → #45）。
 
 ### 修复
-- **Android 登录**：输入验证码时报错「Read-only file system（Errno 30）」的问题修好了。之前验证码图片会被写到只读的根目录，现在会自动改存到可写的目录（#39、#41）。
-- **Windows 版 SuperJLU.exe**：默认使用文档中写的端口 `127.0.0.1:8765`，只有被占用时才换别的端口；再次双击时更容易找到已经在运行的窗口（#38）。
-- **README**：更正了 apk 文件名和下载说明（#37）。
+- **Android 启动偶发失败**：`Python already started` 导致启动页报错，现在启动已串行化（#47）。
+- **不及格分数口径**：成绩页模板与 CLI 统一按 55 分计算（#46）。
+- **成绩导入**：上限 5 MB；导入文件损坏时退回教务成绩；自动同步加了 10 分钟间隔（#45）。
 
 ### 下载
 - **Windows**：`SuperJLU.exe`，单文件，双击即可运行。
-- **Android**：`SuperJLU-1.0.1.apk`（已签名，包名 `cn.superjlu.app`）
+- **Android**：`SuperJLU-1.0.2.apk`（已签名，包名 `cn.superjlu.app`）
 - 每个文件都附带 `.sha256` 校验文件。
 
 完整功能介绍见 [v1.0.0](https://github.com/Runa-Asahi/SuperJLU/releases/tag/v1.0.0)。
