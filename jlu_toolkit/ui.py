@@ -418,7 +418,7 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
     login = login or LoginFlow()
 
     class H(BaseHTTPRequestHandler):
-        server_version = "JLUToolkitUI"
+        server_version = "SuperJLU-UI"
 
         def log_message(self, fmt, *args):  # 安静
             pass
@@ -599,7 +599,7 @@ def serve(port: int = 8765, root: Optional[Path] = None, open_browser: bool = Fa
     store = Store(root or data_dir())
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(store))
     url = f"http://127.0.0.1:{httpd.server_address[1]}/"
-    print(f"JLU Toolkit 界面已启动：{url}\n数据目录：{store.root}\n按 Ctrl+C 退出。", flush=True)
+    print(f"SuperJLU 界面已启动：{url}\n数据目录：{store.root}\n按 Ctrl+C 退出。", flush=True)
     if open_browser:
         import webbrowser
         try:

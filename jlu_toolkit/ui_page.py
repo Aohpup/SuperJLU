@@ -7,7 +7,7 @@ PAGE = r"""<!doctype html>
 <meta name="theme-color" id="tc-l" content="#f6f7f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" id="tc-d" content="#0e0f12" media="(prefers-color-scheme: dark)">
 <script>/* 首帧前应用主题，避免闪烁 */(function(){var t;try{t=localStorage.getItem("jlu-theme")}catch(e){}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))})};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)})();</script>
-<title>JLU Toolkit</title>
+<title>SuperJLU · 吉大人的一站式服务</title>
 <style>
 /* ===== 设计变量：柔和中性底色 + 单一沉稳强调色 ===== */
 :root{--pri:#3b5bdb;--pri-h:#3249c0;--pri2:#edf1ff;--bg:#f6f7f9;--card:#fff;--card2:#fafbfc;--txt:#16181d;--sub:#6b7280;--line:#e8eaee;--ok:#16a34a;--ok2:#e9f7ee;--warn:#c2710c;--warn2:#fff4e5;--bad:#dc2626;--bad2:#fdeeee;--r:18px;--r-sm:12px;--sh:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);color-scheme:light}
@@ -132,7 +132,7 @@ dialog#login .cap{display:flex;gap:8px;align-items:center}dialog#login .cap img{
 dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
 </style></head>
 <body>
-<header><span class="logo" aria-hidden="true">J</span><h1>JLU Toolkit <small id="upd"></small></h1>
+<header><span class="logo" aria-hidden="true">S</span><h1>SuperJLU <small class="sub" style="font-weight:500">吉大人的一站式服务</small> <small id="upd"></small></h1>
 <div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">◐</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">☀</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">☾</button></div>
 <button class="btn" id="refresh" title="用已保存会话从教务刷新">⟳ 刷新</button></header>
 <main>
@@ -357,7 +357,7 @@ $("#oa-kw").oninput=e=>{OAQ.kw=e.target.value;renderOA()};$("#oa-dept").onchange
 $("#oa-ref").onclick=async()=>{const b=$("#oa-ref");b.disabled=true;b.textContent="更新中…";try{OA=await api("/api/oa/refresh",{category:OACH});OAERR="";renderOA();toast("已更新 OA 第一页")}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="⟳ 更新"}};
 async function subReq(m,path,body){const r=await fetch(path,body?{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method:m});let j=null;try{j=await r.json()}catch(_){}if(r.status===404&&(!j||j.ok===undefined)){const e=new Error("NOAPI");e.noapi=true;throw e}if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||("HTTP "+r.status));return j}
 const OACHN=id=>((OACHS||[]).find(c=>c.id===id)||{}).name||id;
-async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 JLU Toolkit 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
+async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 SuperJLU 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
  const rules=j.rules||[],ms=(j.matches||[]).filter(m=>rules.some(r=>r.id===m.rule_id));
  b.innerHTML=`<p class="sub" style="margin:0 0 10px">按关键词（标题匹配）和发文单位订阅，只在本机保存。</p><div class="oaf"><input id="sub-kw" type="text" placeholder="关键词，逗号分隔，如 讲座,补考"><input id="sub-dp" type="text" placeholder="发文单位（可选，逗号分隔）"><button class="btn pri" id="sub-add">添加</button></div>`+
  (rules.length?`<ul class="oal" style="margin-top:8px">${rules.map(r=>`<li style="cursor:default"><div class="tt">${(r.keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join(" ")}<span class="mt">${(r.depts||[]).length?"单位："+esc(r.depts.join("、"))+" · ":""}${r.channel?esc(OACHN(r.channel)):"全部栏目"}</span></div><button class="btn ghost" data-del="${esc(r.id)}">删除</button></li>`).join("")}</ul>`:`<p class="sub" style="margin:12px 0 0">还没有订阅规则。</p>`)+
