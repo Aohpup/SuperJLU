@@ -846,7 +846,8 @@ def _cmd_oa(x):
         except (OSError, ValueError):
             pass
         ch = oa.resolve_category(x.category, known)
-        res = oa.fetch_notices(client, ch, x.keyword, max(1, x.limit), max(1, x.pages))
+        res = oa.fetch_notices(client, ch, x.keyword, max(1, x.limit), max(1, x.pages),
+                               channel_filter=bool(x.category))
         oa.save(store.root if hasattr(store, "root") else ui.data_dir(), res)
         if has:
             client.save_session()

@@ -253,7 +253,8 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 - 列表：`PortalInformation!jldxList.action?channelId=<栏目>&startPage=<页>`（179577 = 校内通知）
 - 详情：`PortalInformation!getInformation.action?id=<id>&channelId=<栏目>`
 - 存储：`data/oa_notices.json` → `{updated, channels:{id:name}, channels_items:{id:[item]}}`
-- 关键字：门户搜索（`searchId`/`searchnr`）实测服务端**不过滤**（任意关键字都返回同一页）。`--keyword` 因此在本地跨页过滤标题/单位（最多 `--pages` 页，默认 5 页≈150 条）；输出 JSON 的 `search` 为 `local`。`oa --probe` 的 `search_variants` 会检查每个变体（与未过滤第 1 页的 id 重叠数、标题命中数、罕见词 `zzqx9` 行数），若某变体确实过滤则自动改用服务端搜索（`search: server`）。
+- 关键字：默认用服务端搜索 `GET jldxList.action?searchId=<UTF-8 关键字>`（**不带 channelId**；PC 实测带 channelId 会忽略关键字，GBK 中文返回 0）。服务端检索跨全部栏目且可能命中正文，所以结果标题不一定含关键字。指定 `--category` 时按条目链接中的 channelId 本地筛选（`channel_filtered: true`），可能因此变少；不指定时结果可能来自任意栏目。`search` 字段为 `server`；若服务端搜索不可用（`oa._search_pref = ()`）则退回本地跨页过滤标题/单位（`search: local`）。
+- `oa --probe` 的 `search_variants`：每个变体给出 ascii/cjk/罕见词 `zzqx9` 的行数、与未过滤第 1 页的 id 重叠数、标题命中数；`filters` 判定 = 罕见词 0 行 且 ascii 命中率 ≥ 80% 且 ascii 重叠 < 行数。
 - MCP：`oa_notices(category, keyword, limit, refresh)`
 
 ### 拟议 /api 形状（供 Web UI，后端尚未实现）

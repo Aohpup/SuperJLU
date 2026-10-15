@@ -228,23 +228,23 @@ def search_variants(client, keywords=("2025", "通知")) -> dict:
                           "hits": sum(1 for i in items if kw in i["title"] or kw in i["dept"])}
             except jwxt.NetworkError:
                 row[k] = {"rows": -1}
-        cjk, rare = row["cjk"], row["rare"]
-        row["filters"] = (rare.get("rows") == 0 and cjk.get("rows", 0) > 0
-                          and cjk.get("hits") == cjk.get("rows")
-                          and (cjk.get("overlap", 0) < cjk["rows"] or not base))
+        asc, rare = row["ascii"], row["rare"]
+        n = asc.get("rows", 0)
+        row["filters"] = bool(rare.get("rows") == 0 and n > 0 and asc.get("hits", 0) >= 0.8 * n
+                              and (asc.get("overlap", 0) < n or not base))
         out[v[0]] = row
     out["base_rows"] = len(base)
     return out
 
 
+# PC 实测（2026-10）：GET/POST searchId UTF-8 且不带 channelId 时服务端按关键字检索（跨全部栏目，
+# 可能命中正文）；带 channelId 时忽略关键字；GBK 中文返回 0。
+DEFAULT_SEARCH = ("get_searchId_utf8", "GET", "searchId", "utf-8", False)
+
+
 def pick_search(client) -> Optional[tuple]:
-    """仅当某变体通过过滤检查才用服务端搜索；否则返回 None → 本地跨页过滤。"""
-    global _search_pref
-    if _search_pref is None:
-        res = search_variants(client)
-        ok = [v for v in SEARCH_VARIANTS if res[v[0]]["filters"]]
-        _search_pref = ok[0] if ok else ()
-    return _search_pref or None
+    """默认使用 DEFAULT_SEARCH；_search_pref 可被设为 () 以强制本地过滤。"""
+    return DEFAULT_SEARCH if _search_pref is None else (_search_pref or None)
 
 
 # ───────────────────────── 栏目发现 ─────────────────────────
@@ -302,8 +302,18 @@ def reach(client) -> dict:
     return info
 
 
+def _select(items, keyword, variant, channel, channel_filter):
+    if keyword and not variant:
+        items = [i for i in items if keyword in i["title"] or keyword in i["dept"]]
+    if channel_filter and variant:
+        items = [i for i in items if not i["channel"] or i["channel"] == channel]
+    return items
+
+
 def fetch_notices(client, channel: str = DEFAULT_CHANNEL, keyword: str = "", limit: int = 30,
-                  max_pages: int = 5) -> dict:
+                  max_pages: int = 5, channel_filter: bool = False) -> dict:
+    """keyword 走服务端搜索（跨栏目，可能匹配正文，不再按标题二次过滤）；
+    channel_filter=True 时按条目链接中的 channelId 本地筛到指定栏目。"""
     items: list = []
     channels: dict = {}
     variant = pick_search(client) if keyword else None
@@ -322,15 +332,11 @@ def fetch_notices(client, channel: str = DEFAULT_CHANNEL, keyword: str = "", lim
         if not new:
             break
         items += new
-        if keyword:
-            if len([i for i in items if keyword in i["title"] or keyword in i["dept"]]) >= limit:
-                break
-        elif len(items) >= limit:
+        if len(_select(items, keyword, variant, channel, channel_filter)) >= limit:
             break
-    if keyword:
-        items = [i for i in items if keyword in i["title"] or keyword in i["dept"]]
+    items = _select(items, keyword, variant, channel, channel_filter)
     return {"search": "server" if variant else ("local" if keyword else "none"),
-            "pages_scanned": page, "channel": channel, "channel_name": channels.get(channel) or KNOWN_CHANNELS.get(channel, ""),
+            "pages_scanned": page, "channel_filtered": bool(channel_filter and variant), "channel": channel, "channel_name": channels.get(channel) or KNOWN_CHANNELS.get(channel, ""),
             "fetched_at": dt.datetime.now().isoformat(timespec="seconds"), "count": min(len(items), limit),
             "items": items[:limit], "channels": channels}
 

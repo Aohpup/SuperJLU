@@ -83,7 +83,7 @@ def main():
             if refresh or not f.exists():
                 c = jwxt.JwxtClient()
                 c.load_session()
-                oa.save(root, oa.fetch_notices(c, ch, keyword, limit))
+                oa.save(root, oa.fetch_notices(c, ch, keyword, limit, channel_filter=bool(category)))
                 known = _j.loads(f.read_text(encoding="utf-8"))
         except (jwxt.JwxtError, ValueError) as e:
             return {"error": str(e)}
