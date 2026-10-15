@@ -14,7 +14,8 @@ if not os.path.isfile(ICON):
 hidden = (collect_submodules("jlu_toolkit") + collect_submodules("keyring.backends")
           + collect_submodules("PIL")  # 验证码识别（captcha / captcha_solver）与托盘图标
           + ["keyring.backends.Windows", "win32ctypes.core", "win32ctypes.pywin32.win32cred",
-             "pystray._win32", "cryptography.hazmat.primitives.ciphers.aead"])
+             "pystray._win32", "cryptography.hazmat.primitives.ciphers.aead",
+             "openpyxl", "xlrd"])  # 成绩单导入（函数内延迟 import）
 datas = collect_data_files("jlu_toolkit")  # 含 data/digit_templates.bin（验证码模板）、demo、campus_links
 datas += [(ICON, os.path.join("assets", "brand"))]
 binaries = []

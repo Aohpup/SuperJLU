@@ -52,7 +52,7 @@ COLUMN_ALIASES = {
     "学年学期": ("学年学期", "学期", "开课学期", "修读学期", "修读时间", "学期名称", "semester", "term", "academicterm"),
     "学年": ("学年", "学年度", "academic year", "academicyear", "year"),
 }
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
 @dataclass(frozen=True)

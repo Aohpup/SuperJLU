@@ -79,7 +79,13 @@ class Store:
     def grade_records(self, source: str = "jwxt") -> list[dict]:
         from . import grade_calculator as calc
         imported = self._json("imported_grades.json", None) if source == "import" else None
-        grades = [core.Grade(**g) for g in imported["grades"]] if imported else self.grades()
+        try:
+            grades = [core.Grade(**g) for g in imported["grades"]] if imported else None
+        except (TypeError, KeyError, ValueError):
+            imported = None  # 导入文件损坏或格式过旧：退回教务成绩，不让 /api/data 整体 500
+            grades = None
+        if grades is None:
+            grades = self.grades()
         plan = self._json("plan_courses.json", {}) or {}
         occurrences = {}
         records = []
@@ -119,7 +125,7 @@ class Store:
         except (ValueError, binascii.Error) as e:
             raise ValueError("成绩单编码无效") from e
         if len(data) > calc.MAX_UPLOAD_BYTES:
-            raise ValueError("成绩单超过 25 MB")
+            raise ValueError("成绩单超过 5 MB")
         courses = calc.courses_from_bytes(filename, data)
         grades = [core.Grade(c.name, c.credit, c.grade, c.term,
                             c.gpa if c.gpa_valid else None, c.nature).__dict__ for c in courses]
@@ -198,6 +204,12 @@ class Store:
     def snapshot(self, source: str = "jwxt") -> dict:
         gs = self.grades()
         saved_import = self._json("imported_grades.json", None)
+        try:
+            if not isinstance(saved_import, dict):
+                raise TypeError
+            [core.Grade(**g) for g in saved_import["grades"]]
+        except (TypeError, KeyError, ValueError):
+            saved_import = None  # 损坏或过旧的导入文件当作不存在
         imported = saved_import if source == "import" else None
         mtimes = [self.p(n).stat().st_mtime for n in ("schedule.csv", "grades.csv", "exams.csv")
                   if self.p(n).exists()]
@@ -206,7 +218,7 @@ class Store:
             "grades": self.grade_records(source),
             "grade_source": "import" if imported else "jwxt",
             "has_imported_grades": saved_import is not None,
-            "grade_filename": imported["filename"] if imported else None,
+            "grade_filename": imported.get("filename") if imported else None,
             "grade_notes": imported.get("notes", []) if imported else [],
             "exams": [e.to_dict() for e in ex.upcoming(self.exams(), dt.datetime(1970, 1, 1))],
             "schemes": self.schemes(),
@@ -249,8 +261,15 @@ def refresh_from_jwxt(store: Store) -> dict:
     return sync_all(client, store.root)
 
 
-def refresh_grades_from_jwxt(store: Store) -> dict:
+GRADE_AUTO_SYNC_INTERVAL = 600  # 秒；页面自动同步的最短间隔，手动同步不受限
+
+
+def refresh_grades_from_jwxt(store: Store, automatic: bool = False) -> dict:
     """Refresh the current login's transcript without fetching unrelated modules."""
+    import time
+    gp = store.p("grades.csv")
+    if automatic and gp.exists() and time.time() - gp.stat().st_mtime < GRADE_AUTO_SYNC_INTERVAL:
+        return {"ok": True, "count": len(store.grades()), "skipped": True}
     client = _client()
     grades = client.fetch_grades()
     # Only replace the cache after the request succeeds; retain it while offline.
@@ -603,7 +622,7 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
 
         def _body(self) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
-            limit = 36_000_000 if self.path == "/api/grades/import" else 1_000_000
+            limit = 7_500_000 if self.path == "/api/grades/import" else 1_000_000
             if n < 0 or n > limit:
                 raise ValueError("请求过大")
             return json.loads(self.rfile.read(n) or b"{}")
@@ -717,7 +736,7 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                     source = "import" if body.get("grade_source") == "import" else "jwxt"
                     return self._json({"ok": True, **store.snapshot(source)})
                 elif self.path == "/api/grades/refresh":
-                    return self._json({"ok": True, "grade_result": refresh_grades_from_jwxt(store),
+                    return self._json({"ok": True, "grade_result": refresh_grades_from_jwxt(store, bool(body.get("auto"))),
                                        **store.snapshot()})
                 elif self.path == "/api/schemes/delete":
                     store.delete_scheme(body.get("name", ""))

@@ -188,3 +188,30 @@ def test_import_api_failure_preserves_previous_data(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_corrupt_import_falls_back_to_jwxt(tmp_path):
+    store = ui.Store(tmp_path)
+    jwxt.export_grades_csv([core.Grade("当前账号课程", 3, "91", "T1", 3.9, "必修")],
+                          str(store.p("grades.csv")))
+    store.p("imported_grades.json").write_text('{"grades": [{"bogus": 1}]}', encoding="utf-8")
+    snap = store.snapshot("import")
+    assert [g["name"] for g in snap["grades"]] == ["当前账号课程"]
+    store.p("imported_grades.json").write_text('[]', encoding="utf-8")
+    assert store.snapshot("import")["grade_source"] == "jwxt"
+
+
+def test_automatic_grade_sync_is_throttled(tmp_path, monkeypatch):
+    store = ui.Store(tmp_path)
+    jwxt.export_grades_csv([core.Grade("课", 2, "90", "T1", 3.8, "必修")], str(store.p("grades.csv")))
+    def boom():
+        raise AssertionError("fresh cache must not hit CAS")
+    monkeypatch.setattr(ui, "_client", boom)
+    r = ui.refresh_grades_from_jwxt(store, automatic=True)
+    assert r["skipped"] and r["count"] == 1
+    with pytest.raises(AssertionError):
+        ui.refresh_grades_from_jwxt(store, automatic=False)
+
+
+def test_import_size_limit_is_5mb():
+    assert calc.MAX_UPLOAD_BYTES == 5 * 1024 * 1024
