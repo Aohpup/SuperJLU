@@ -1,3 +1,4 @@
+from pathlib import Path
 """jwxt 单元测试：加密向量、二次认证分类、模拟 HTTP。不访问真实教务。"""
 from unittest import mock
 
@@ -199,16 +200,32 @@ def test_login_second_factor_mocked():
 
 def test_download_captcha_mocked(tmp_path):
     client = jwxt.JwxtClient()
-    jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 60
+    jpeg = (Path(__file__).parent / "fixtures" / "sample_captcha.jpg").read_bytes()
 
     def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
         assert "/code" in url
+        assert headers and "Referer" in headers
+        client.last_content_type = "image/jpeg"
         return 200, "", url, jpeg
 
     path = tmp_path / "c.jpg"
     with mock.patch.object(client, "_request", side_effect=fake_request):
         saved = client.download_captcha(path)
     assert saved.read_bytes() == jpeg
+    assert client.last_captcha_bytes == jpeg
+
+
+def test_download_captcha_rejects_html(tmp_path):
+    client = jwxt.JwxtClient()
+    html = b"<!DOCTYPE html><html><body>error</body></html>" + b" " * 200
+
+    def fake_request(url, data=None, headers=None, method=None, allow_redirects=True):
+        client.last_content_type = "text/html"
+        return 200, html.decode(), url, html
+
+    with mock.patch.object(client, "_request", side_effect=fake_request):
+        with pytest.raises(jwxt.SecondFactorError, match="不是有效图片"):
+            client.download_captcha(tmp_path / "bad.jpg")
 
 
 def test_session_save_load(tmp_path, monkeypatch):

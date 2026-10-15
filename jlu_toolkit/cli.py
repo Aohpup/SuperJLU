@@ -99,19 +99,50 @@ def _prompt(msg: str) -> str:
 
 
 def _interactive_second_factor(client: jwxt.JwxtClient) -> None:
-    """图形验证码 + 微信验证码交互。"""
+    """图形验证码 + 微信验证码交互（终端 ASCII / 可选 OCR / 多路径保存）。"""
+    from . import captcha_util
+
     print(
-        "需要二次认证：请查看图形验证码图片，并在「智慧吉大」微信小程序/"
-        "服务号收取统一身份认证验证码。",
+        "需要二次认证：图形验证码会画在终端里；同时保存到 Downloads/Pictures/DCIM。"
+        "微信验证码请到「智慧吉大」查看。",
         file=sys.stderr,
     )
+    if not captcha_util.has_pillow():
+        print(
+            "提示：未检测到 Pillow，终端无法绘制验证码。"
+            "Termux 请执行：pkg install python-pillow",
+            file=sys.stderr,
+        )
+    auto_ocr = captcha_util.has_ddddocr()
+    if auto_ocr:
+        print("已启用 ddddocr 自动识别（可直接回车采纳，或改输入）。", file=sys.stderr)
+
     while True:
         path = client.download_captcha()
-        print(f"图形验证码已保存：{path}", file=sys.stderr)
-        print("请用相册/文件管理器打开上面的图片查看。", file=sys.stderr)
-        captcha = _prompt("请输入图形验证码（直接回车刷新图片）：")
-        if not captcha:
+        raw = client.last_captcha_bytes or path.read_bytes()
+        paths = client.last_captcha_paths or [path]
+        print(f"图形验证码已保存（含放大版 *_large.jpg）：", file=sys.stderr)
+        for p in paths:
+            try:
+                print(f"  - {p}  ({p.stat().st_size} bytes)", file=sys.stderr)
+            except OSError:
+                print(f"  - {p}", file=sys.stderr)
+        print(captcha_util.render_ascii(raw), file=sys.stderr)
+
+        suggestion = captcha_util.ocr_digits(raw) if auto_ocr else None
+        if suggestion:
+            print(f"OCR 识别结果：{suggestion}", file=sys.stderr)
+            captcha = _prompt(
+                f"请输入图形验证码 [直接回车用 {suggestion}，输入 refresh 刷新]："
+            )
+            if not captcha:
+                captcha = suggestion
+        else:
+            captcha = _prompt("请输入图形验证码（直接回车 / refresh 刷新图片）：")
+
+        if not captcha or captcha.lower() in ("refresh", "r", "刷新"):
             continue
+
         result = client.request_wechat_code(captcha)
         if result == jwxt.WechatCodeResult.CAPTCHA_ERROR:
             print("图形验证码错误，已刷新，请重试。", file=sys.stderr)

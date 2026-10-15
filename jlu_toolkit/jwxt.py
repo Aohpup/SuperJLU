@@ -33,6 +33,7 @@ from typing import Iterable, Optional
 
 from . import core
 from .des_tpass import strEnc
+from . import captcha_util
 
 CAS_BASE = "https://cas.jlu.edu.cn/tpass"
 CAS_LOGIN = f"{CAS_BASE}/login"
@@ -135,10 +136,9 @@ def default_session_path() -> Path:
 
 
 def captcha_save_path(filename: str = "jlu_cas_captcha.jpg") -> Path:
-    """Termux 优先写到 ~/storage/downloads，否则当前目录。"""
-    termux = Path.home() / "storage" / "downloads"
-    if termux.is_dir():
-        return termux / filename
+    """优先 Termux ~/storage/downloads，其次 Pictures/dcim，否则当前目录。"""
+    for p in captcha_util.captcha_candidate_paths(filename):
+        return p
     return Path.cwd() / filename
 
 
@@ -334,6 +334,10 @@ class JwxtClient:
         self.pending: Optional[PendingSecondFactor] = None
         self.last_debug: dict = {}
         self.last_error_text: Optional[str] = None
+        self.last_content_type: Optional[str] = None
+        self.last_status: Optional[int] = None
+        self.last_captcha_bytes: Optional[bytes] = None
+        self.last_captcha_paths: list = []
 
     def _dbg(self, **kwargs) -> None:
         self.last_debug.update(kwargs)
@@ -382,10 +386,14 @@ class JwxtClient:
                 raw = resp.read()
                 charset = resp.headers.get_content_charset() or "utf-8"
                 text = raw.decode(charset, errors="replace")
-                return resp.getcode() or 200, text, resp.geturl(), raw
+                self.last_content_type = resp.headers.get("Content-Type")
+                self.last_status = resp.getcode() or 200
+                return self.last_status, text, resp.geturl(), raw
         except urllib.error.HTTPError as e:
             raw = e.read() if e.fp else b""
             text = raw.decode("utf-8", errors="replace")
+            self.last_content_type = e.headers.get("Content-Type") if e.headers else None
+            self.last_status = e.code
             # 302 with no-redirect handler lands here
             loc = e.headers.get("Location", "")
             final = urllib.parse.urljoin(url, loc) if loc else url
@@ -624,20 +632,76 @@ class JwxtClient:
         return LoginStep.FAILED
 
     def download_captcha(self, path: Optional[Path] = None) -> Path:
-        """GET /tpass/code → JPEG。需与当前会话 cookie 一致。"""
-        path = path or captcha_save_path()
+        """GET /tpass/code → 校验为真实图片后多路径保存。
+
+        二次认证页的 codeImage 仍指向 /tpass/code（与登录页相同）。
+        必须带上当前会话 cookie；Referer 使用带 service 的登录 URL。
+        CAS 返回的图通常只有约 70x36、1.5–2KB，相册常显示为「空白」——
+        因此会额外写一份放大的 *_large.jpg，并尽量调用 termux-media-scan。
+        """
+        svc = self.pending.service if self.pending else CAS_SERVICE
+        referer = f"{CAS_LOGIN}?service={urllib.parse.quote(svc, safe='')}"
         url = f"{CAS_CODE}?{int(time.time() * 1000)}"
-        code, _, _, raw = self._request(
+        code, text, final, raw = self._request(
             url,
-            headers={"Referer": CAS_LOGIN, "Accept": "image/*,*/*"},
+            headers={
+                "Referer": referer,
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9",
+            },
         )
-        if code != 200 or len(raw) < 50:
+        ct = self.last_content_type
+        self._dbg(
+            step="download_captcha",
+            status=code,
+            content_type=ct,
+            bytes=len(raw),
+            magic=repr(raw[:8]),
+            final_url=final,
+            cookies=self._cookie_names(),
+            referer=referer,
+        )
+        if code != 200:
             raise SecondFactorError(f"获取图形验证码失败 HTTP {code}")
-        if raw[:2] != b"\xff\xd8":
-            raise SecondFactorError("图形验证码不是 JPEG，页面可能已变更")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(raw)
-        return path
+        try:
+            fmt, w, h = captcha_util.validate_captcha_bytes(raw, ct)
+        except captcha_util.CaptchaImageError as e:
+            snippet = text[:120].replace("\n", " ") if text else ""
+            raise SecondFactorError(
+                f"验证码不是有效图片：{e}；Content-Type={ct!r}；"
+                f"bytes={len(raw)}；正文开头={snippet!r}"
+            ) from e
+
+        self.last_captcha_bytes = raw
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(raw)
+            if path.stat().st_size < 50:
+                raise SecondFactorError(f"写入验证码失败（文件过小）：{path}")
+            paths = [path]
+            # 仍写放大副本到同目录
+            try:
+                large = captcha_util.scale_for_gallery(raw)
+                lp = path.with_name(path.stem + "_large.jpg")
+                lp.write_bytes(large)
+                paths.append(lp)
+            except OSError:
+                pass
+        else:
+            paths = captcha_util.write_captcha_files(raw)
+        self.last_captcha_paths = paths
+        scan = captcha_util.media_scan(paths)
+        self._dbg(
+            step="captcha_saved",
+            format=fmt,
+            width=w,
+            height=h,
+            paths=[str(p) for p in paths],
+            media_scan=scan,
+            pillow=captcha_util.has_pillow(),
+            ddddocr=captcha_util.has_ddddocr(),
+        )
+        return paths[0]
 
     def request_wechat_code(self, image_captcha: str) -> WechatCodeResult:
         """GET /tpass/recheckcode?code=&t= ，结果在 cookie recheck_mobile_error_info。"""
@@ -972,11 +1036,23 @@ def probe_reachability(timeout: float = 12.0) -> dict:
     try:
         path = captcha_save_path("jlu_cas_captcha_probe.jpg")
         saved = client.download_captcha(path)
+        info = {}
+        if client.last_captcha_bytes:
+            try:
+                fmt, w, h = captcha_util.validate_captcha_bytes(
+                    client.last_captcha_bytes, client.last_content_type
+                )
+                info = {"format": fmt, "width": w, "height": h}
+            except captcha_util.CaptchaImageError as e:
+                info = {"validate_error": str(e)}
         out["captcha"] = {
             "ok": True,
             "path": str(saved),
+            "paths": [str(p) for p in client.last_captcha_paths],
             "bytes": saved.stat().st_size,
+            "content_type": client.last_content_type,
             "url": CAS_CODE,
+            **info,
         }
     except Exception as e:  # noqa: BLE001
         out["captcha"] = {"ok": False, "error": type(e).__name__ + ": " + str(e)}

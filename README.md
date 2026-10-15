@@ -59,15 +59,20 @@ jlu-toolkit fetch --user 你的邮箱前缀 --what schedule --term 2025-2026-2
 
 ### Termux（Android）示例
 ```bash
-pkg install python git
-termux-setup-storage   # 授权后才能写到系统「下载」目录看验证码
-pip install "git+https://github.com/Runa-Asahi/JLU-Toolkit.git@feat/jwxt-http-fetch"
+pkg install python git python-pillow
+termux-setup-storage   # 授权后才能写到 Download/Pictures/DCIM
+pip install -U --force-reinstall "git+https://github.com/Runa-Asahi/JLU-Toolkit.git@feat/jwxt-http-fetch"
+# 可选：自动识别四位图形验证码
+pip install ddddocr
 jlu-toolkit fetch --probe
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login --debug
-# 按提示：打开「下载」里的 jlu_cas_captcha.jpg → 输入图形码
-# → 点发送后去「智慧吉大」看验证码 → 粘贴回 Termux
-# 若密码步失败：把 --debug 输出（不含密码）发回来排查
+# 图形验证码会直接画在终端；同时保存 jlu_cas_captcha.jpg 与放大的 *_large.jpg
+# 到 ~/storage/downloads、Pictures、dcim（并尝试 termux-media-scan）
+# 输入图形码 → 去「智慧吉大」取微信验证码 → 粘贴回 Termux
 ```
+
+> CAS 图形验证码原图只有约 **70×36、1.5–2KB**，系统相册经常「打不开/空白」。
+> 请看终端 ASCII，或打开 `jlu_cas_captcha_large.jpg`。
 
 ## 接入 AI 助手（MCP）
 ```bash
