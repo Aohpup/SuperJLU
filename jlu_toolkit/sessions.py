@@ -33,15 +33,19 @@ class Site:
     vpn: bool = True       # 校外能否经 vpn.jlu.edu.cn 访问
     captcha: bool = False  # 登录需要验证码（不保存密码，除非用户明确保存）
     readonly: bool = True  # 本工具只读
+    optional_login: bool = False  # 不登录也能用基本功能（登录只为个人中心）
 
 
 SITES: Dict[str, Site] = {s.id: s for s in (
     Site("jwxt", "教务系统", "iedu.jlu.edu.cn", "cas"),
-    Site("pay", "校园缴费", "ip.jlu.edu.cn", "cas"),
-    Site("xsxk", "选课系统", "icourses.jlu.edu.cn", "cas"),
+    # 以下认证方式来自露娜的探测（PR #18）
+    Site("pay", "校园缴费", "ip.jlu.edu.cn", "own", captcha=True),      # 卡号+密码+验证码
+    Site("xsxk", "选课系统", "icourses.jlu.edu.cn", "own", captcha=True),  # AES 加密密码+验证码，token 头鉴权
+    # 邮箱+密码+验证码；课程中心入口可能走 CAS，尚未确认
     Site("ilearn", "学在吉大", "ilearntec.jlu.edu.cn", "own", captcha=True),
     Site("vpn", "WebVPN", "vpn.jlu.edu.cn", "cas", vpn=False),
-    Site("lib", "图书馆", "lib.jlu.edu.cn", "none"),
+    # 首页无需登录；个人中心走 CAS（optional_login：没登录也算可用）
+    Site("lib", "图书馆", "lib.jlu.edu.cn", "cas", optional_login=True),
 )}
 
 MESSAGES = {OK: "已登录", EXPIRED: "登录已过期，请重新登录", MISSING: "尚未登录", UNKNOWN: "已保存会话，尚未验证"}
@@ -154,11 +158,15 @@ def status(site_id: str) -> dict:
         has = _secret(site_id).exists()
         state = (info.get("state") or UNKNOWN) if has else MISSING
         checked, reason = info.get("checked_at"), info.get("reason", "") if has else ""
+    optional = s.auth == "none" or s.optional_login
     if s.auth == "none" and state == MISSING:
         state = OK  # 无需登录的站点
-    msg = MESSAGES[state] if s.auth != "none" else "无需登录"
+    msg = "无需登录" if s.auth == "none" else MESSAGES[state]
+    if s.optional_login and state == MISSING:
+        msg = "未登录（基本功能无需登录，个人中心需统一认证）"
     return {"id": s.id, "name": s.name, "host": s.host, "auth": s.auth, "vpn": s.vpn, "captcha": s.captcha,
-            "state": state, "checked_at": checked, "needs_login": state in (EXPIRED, MISSING),
+            "state": state, "checked_at": checked, "needs_login": state in (EXPIRED, MISSING) and not (optional and state == MISSING),
+            "optional_login": optional,
             "message": msg + (f"（{reason}）" if reason and state != OK else ""),
             "has_check": find_check(site_id) is not None}
 

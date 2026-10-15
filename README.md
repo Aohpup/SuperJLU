@@ -273,11 +273,11 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 | id | 站点 | host | 认证 |
 |---|---|---|---|
 | jwxt | 教务系统 | iedu.jlu.edu.cn | CAS（沿用原有 session.enc） |
-| pay | 校园缴费 | ip.jlu.edu.cn | CAS，只读 |
-| xsxk | 选课系统 | icourses.jlu.edu.cn | CAS |
-| ilearn | 学在吉大 | ilearntec.jlu.edu.cn | 自有（邮箱+密码+验证码） |
+| pay | 校园缴费 | ip.jlu.edu.cn | 自有（卡号+密码+验证码），只读 |
+| xsxk | 选课系统 | icourses.jlu.edu.cn | 自有（AES 密码+验证码，token 头） |
+| ilearn | 学在吉大 | ilearntec.jlu.edu.cn | 自有（邮箱+密码+验证码；课程中心或经 CAS，待确认） |
 | vpn | WebVPN | vpn.jlu.edu.cn | CAS |
-| lib | 图书馆 | lib.jlu.edu.cn | 无需登录 |
+| lib | 图书馆 | lib.jlu.edu.cn | 首页无需登录；个人中心 CAS（optional_login） |
 
 **策略**：cookie 一律经 `secure_store` 加密保存为 `session-<id>.enc`；状态文件 `sessions_status.json` 只记 `state/checked_at/reason`；
 从不保存任何支付信息，缴费站只读；带验证码的站点不保存密码（除非用户明确选择保存）；教务凭据行为不变。
@@ -288,7 +288,7 @@ jlu-toolkit sessions check <id>        # 用户触发：跑一次存活检查（
 jlu-toolkit sessions clear <id>
 ```
 
-- HTTP：`GET /api/sessions` → `{"ok":true,"sites":[{"id","name","host","auth","vpn","captcha","state","checked_at","needs_login","message","has_check"}]}`，
+- HTTP：`GET /api/sessions` → `{"ok":true,"sites":[{"id","name","host","auth","vpn","captcha","optional_login","state","checked_at","needs_login","message","has_check"}]}`，
   `state` ∈ ok/expired/missing/unknown。任何 `POST /api/*` 遇到某站会话过期返回 401：`{"ok":false,"error":"...","session_expired":true,"site":"<id>"}`（教务为 `"jwxt"`）。
 - MCP：`sessions_status()`，返回同上。
 - 钩子：可选模块 `jlu_toolkit/campus.py` 提供 `check_<id>(session) -> {"logged_in": True/False/None, "reason": str}`

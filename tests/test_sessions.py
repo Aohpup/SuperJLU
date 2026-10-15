@@ -36,13 +36,14 @@ def by_id(res):
 def test_registry_ids_are_identifiers():
     assert list(sessions.SITES) == ["jwxt", "pay", "xsxk", "ilearn", "vpn", "lib"]
     assert all(i.isidentifier() for i in sessions.SITES)
-    assert sessions.SITES["ilearn"].captcha and sessions.SITES["lib"].auth == "none"
+    assert all(sessions.SITES[i].auth == "own" and sessions.SITES[i].captcha for i in ("pay", "xsxk", "ilearn"))
+    assert sessions.SITES["lib"].auth == "cas" and sessions.SITES["lib"].optional_login
 
 
 def test_default_status_without_campus():
     s = by_id(sessions.all_status())
     assert s["jwxt"]["state"] == "missing" and s["pay"]["needs_login"]
-    assert s["lib"]["state"] == "ok" and not s["lib"]["needs_login"]
+    assert s["lib"]["state"] == "missing" and not s["lib"]["needs_login"] and s["lib"]["optional_login"]
     assert not any(v["has_check"] for v in s.values())
     assert set(s["pay"]) >= {"id", "name", "state", "checked_at", "needs_login", "message"}
 
