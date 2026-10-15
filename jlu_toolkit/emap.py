@@ -11,13 +11,126 @@ import urllib.parse as up
 from typing import Optional
 
 from . import jwxt
-from .rooms import parse_meta
 
 HOST = "https://iedu.jlu.edu.cn"
 _DO_RE = re.compile(r"""["'(]([\w./*-]*?\.do)\b""")
 _SRC_RE = re.compile(r"""(?:src|href)\s*=\s*["']([^"'#?]+\.(?:js|json|html))""", re.I)
 _JS_REF = re.compile(r"""["']([\w./*-]+\.(?:js|html))["']""")
+
+
 _CODE = re.compile(r"^[A-Z][A-Z0-9_]{1,30}$")
+
+
+def parse_meta(obj) -> dict:
+    """从 EMAP 模块元数据里提取动作 URL、字段名、字段→字典 URL（全是代码，不含个人数据）。"""
+    actions, fields, dicts = set(), set(), {}
+
+    def walk(x, parent_name=None):
+        if isinstance(x, dict):
+            name = x.get("name")
+            if isinstance(name, str) and _CODE.match(name):
+                fields.add(name)
+                for k in ("url", "dict", "dictUrl"):
+                    u = x.get(k)
+                    if isinstance(u, str) and ".do" in u and "code" in u.lower():
+                        dicts[name] = u
+            for k, v in x.items():
+                if isinstance(v, str) and v.endswith(".do") and k in ("url", "action", "actionUrl"):
+                    if "code" in v.lower() and isinstance(name, str):
+                        dicts.setdefault(name, v)
+                    else:
+                        actions.add(v)
+                walk(v, name)
+        elif isinstance(x, list):
+            for i in x:
+                walk(i, parent_name)
+
+    walk(obj)
+    return {"actions": sorted(actions), "fields": sorted(fields), "dicts": dicts}
+
+
+
+def rows_any(obj):
+    """EMAP 响应 → (datas_key, rows, totalSize|None)；兼容 datas.<k>.rows / datas.<k> 列表 / datas 列表。"""
+    if not isinstance(obj, dict):
+        return None
+    d = obj.get("datas")
+    if isinstance(d, dict):
+        for k, blk in d.items():
+            if isinstance(blk, dict) and isinstance(blk.get("rows"), list):
+                tot = blk.get("totalSize", blk.get("total"))
+                try:
+                    tot = int(tot) if tot is not None else None
+                except (TypeError, ValueError):
+                    tot = None
+                return k, blk["rows"], tot
+            if isinstance(blk, list):
+                return k, blk, None
+    if isinstance(d, list):
+        return "datas", d, None
+    return None
+
+
+def post_json(client, path: str, form: dict, referer: str):
+    """POST → (status, obj|None)；网络错误返回 (None, None)。"""
+    try:
+        code, text, _ = client.post_raw(path, form, referer)
+    except jwxt.NetworkError:
+        return None, None
+    try:
+        return code, json.loads(text) if text else None
+    except (json.JSONDecodeError, ValueError):
+        return code, None
+
+
+class TooLarge(jwxt.JwxtError):
+    """totalSize 超过上限：视为未过滤的全校数据，拒绝翻页。"""
+
+
+def fetch_paged(client, path: str, form: dict, referer: str, page_size: int = 200,
+                max_pages: int = 30, max_total: Optional[int] = None) -> list:
+    """按 pageSize/pageNumber 拉全；任何一页 totalSize > max_total 立即拒绝。"""
+    from .endpoints import MAX_TOTAL
+    limit = MAX_TOTAL if max_total is None else max_total
+    out: list = []
+    for page in range(1, max_pages + 1):
+        code, obj = post_json(client, path, {**form, "pageSize": str(page_size), "pageNumber": str(page)}, referer)
+        hit = rows_any(obj) if code == 200 else None
+        if not hit or not hit[1]:
+            break
+        if hit[2] is not None and hit[2] > limit:
+            raise TooLarge(f"refused: unfiltered source total {hit[2]} > {limit}")
+        out += [r for r in hit[1] if isinstance(r, dict)]
+        if (hit[2] is not None and len(out) >= hit[2]) or len(hit[1]) < page_size:
+            break
+    return out
+
+
+def call_known(client, name: str, ctx: Optional[dict] = None, paged: bool = True) -> Optional[list]:
+    """调用 endpoints.KNOWN[name]；缺少上下文或失败返回 None（调用方据此回退到发现）。"""
+    from . import endpoints as E
+    ep = E.get(name)
+    try:
+        client.enter_emap_app(ep.index)
+    except jwxt.LoginError:
+        raise
+    except jwxt.JwxtError:
+        return None
+    if ep.paged and paged:
+        form = E.build_form(ep, ctx)
+        if form is None:
+            return None
+        return fetch_paged(client, ep.path, form, ep.referer)
+    form = E.build_form(ep, ctx)
+    if form is None:
+        return None
+    code, obj = post_json(client, ep.path, form, ep.referer)
+    hit = rows_any(obj) if code == 200 else None
+    if hit is None:
+        return None
+    if hit[2] is not None and hit[2] > E.MAX_TOTAL:
+        raise TooLarge(f"refused: total {hit[2]}")
+    return [r for r in hit[1] if isinstance(r, dict)]
 
 
 class App:

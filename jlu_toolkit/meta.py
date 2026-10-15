@@ -21,18 +21,20 @@ from typing import Optional
 
 from . import jwxt
 
+from . import endpoints as _EP  # noqa: E402
+
 APP_WDKB = jwxt.REF_SCHEDULE
 APP_CJCX = jwxt.REF_GRADES
 APP_XSFACX = "https://iedu.jlu.edu.cn/jwapp/sys/xsfacx/*default/index.do"
 APP_XYWCCX = "https://iedu.jlu.edu.cn/jwapp/sys/xywccx/*default/index.do"
 
-EP_CALENDAR = "/jwapp/sys/wdkb/modules/xskcb/cxxljc.do"
-EP_PERIODS = "/jwapp/sys/wdkb/modules/jshkcb/jc.do"
+EP_CALENDAR = _EP.KNOWN["calendar"].path
+EP_PERIODS = _EP.KNOWN["periods"].path
 EP_GPA = "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"
 # 吉大成绩页真实官方绩点（浏览器 DevTools）：rxylgpacx / rxylgpacxcx.do
 # 浏览器实测：路径里是字面量 modules*cjcx（不是 modules/cjcx）
-EP_GPA_RXYL = "/jwapp/sys/cjcx/modules*cjcx/rxylgpacx/rxylgpacxcx.do"
-EP_GPA_RXYL_ENC = "/jwapp/sys/cjcx/modules%2Acjcx/rxylgpacx/rxylgpacxcx.do"  # * 被编码时的回退
+EP_GPA_RXYL = _EP.KNOWN["official_gpa"].path
+EP_GPA_RXYL_ENC = _EP.KNOWN["official_gpa_enc"].path  # * 被编码时的回退
 EP_GPA_RXYL_SLASH = "/jwapp/sys/cjcx/modules/cjcx/rxylgpacx/rxylgpacxcx.do"
 EP_GPA_RXYL_ALT = "/jwapp/sys/cjcx/modules/rxylgpacx/rxylgpacxcx.do"
 EP_RXYL_META = "/jwapp/sys/cjcx/modules*cjcx/rxylgpacx.do"
@@ -66,9 +68,9 @@ EP_PLAN_COURSES = "/jwapp/sys/jwpubapp/modules/pyfa/kzkccx.do"
 
 class Unavailable(jwxt.JwxtError):
     """接口在吉大不存在/无数据：不是故障。"""
-EP_PLAN = "/jwapp/sys/xsfacx/modules/pyfacxepg/grpyfacx.do"
-EP_COMPLETION = "/jwapp/sys/xywccx/modules/xywccx/cxxsscfa.do"
-EP_COMPLETION_GROUPS = "/jwapp/sys/xywccx/modules/xywccx/cxscfakz.do"
+EP_PLAN = _EP.KNOWN["plan_row"].path
+EP_COMPLETION = _EP.KNOWN["completion"].path
+EP_COMPLETION_GROUPS = _EP.KNOWN["completion_groups"].path
 
 # 官方绩点字段 → 中文标签（吉大 cxxspjjdxx + ysu-sdk 同款）
 GPA_FIELDS = [

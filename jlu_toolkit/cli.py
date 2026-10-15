@@ -621,7 +621,8 @@ def _cmd_plan(x):
             grades = core.load_grades(str(store.p("grades.csv"))) if store.p("grades.csv").exists() else []
             courses_now = core.load_courses(str(store.p("schedule.csv"))) if store.p("schedule.csv").exists() else []
             p = pl.fetch_plan(client, grades, courses_now, use_cache=not x.refresh)
-            f.write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
+            from .endpoints import scrub
+            f.write_text(json.dumps(scrub(p), ensure_ascii=False, indent=1), encoding="utf-8")
             cf = store.p("completion.json")
             if cf.exists():
                 cf.write_text(json.dumps(pl.attach_to_completion(json.loads(cf.read_text(encoding="utf-8")), p),

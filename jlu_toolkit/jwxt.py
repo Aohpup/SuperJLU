@@ -47,15 +47,17 @@ CAS_SERVICE = "https://iedu.jlu.edu.cn/"
 IEDU_PORTAL = "https://iedu.jlu.edu.cn/jwapp/sys/emaphome/portal/index.do"
 IEDU_BASE = "https://iedu.jlu.edu.cn"
 
-EP_CURRENT_SEM = "/jwapp/sys/wdkb/modules/jshkcb/dqxnxq.do"
-EP_COURSES = "/jwapp/sys/wdkb/modules/xskcb/cxxszhxqkb.do"
-EP_GRADES = "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do"
+from . import endpoints as _EP  # noqa: E402
+
+EP_CURRENT_SEM = _EP.KNOWN["current_term"].path
+EP_COURSES = _EP.KNOWN["schedule"].path
+EP_GRADES = _EP.KNOWN["grades"].path
 REF_SCHEDULE = "https://iedu.jlu.edu.cn/jwapp/sys/wdkb/*default/index.do"
 REF_GRADES = "https://iedu.jlu.edu.cn/jwapp/sys/cjcx/*default/index.do"
 # 考试安排（金智通用 studentWdksapApp；参考 XJTU/BIT 公开脚本）
 REF_EXAMS = "https://iedu.jlu.edu.cn/jwapp/sys/studentWdksapApp/*default/index.do"
-EP_EXAMS = "/jwapp/sys/studentWdksapApp/modules/wdksap/wdksap.do"
-EP_EXAMS_ALT = "/jwapp/sys/studentWdksapApp/WdksapController/cxxsksap.do"
+EP_EXAMS = _EP.KNOWN["exams_alt"].path
+EP_EXAMS_ALT = _EP.KNOWN["exams"].path
 
 # 与 wzyyyyyyy/iLearn 一致的桌面 Chrome UA（login10.js 无移动端特殊分支）
 UA = (

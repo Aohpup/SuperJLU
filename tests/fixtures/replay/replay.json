@@ -1,0 +1,276 @@
+{
+ "/jwapp/sys/xywccx/modules/xywccx/cxxsjbxx.do": {
+  "code": "0",
+  "datas": {
+   "cxxsjbxx": {
+    "totalSize": 1,
+    "pageSize": 200,
+    "rows": [
+     {
+      "XH": "TEST-XH",
+      "XM": "TEST-NAME",
+      "PYFADM": "TEST-FA",
+      "BYNJDM": "2028"
+     }
+    ]
+   }
+  }
+ },
+ "/jwapp/sys/xywccx/modules/xywccx/cxscfa.do": {
+  "code": "0",
+  "datas": {
+   "cxscfa": {
+    "totalSize": 1,
+    "pageSize": 200,
+    "rows": [
+     {
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "SCLBDM": "04"
+     }
+    ]
+   }
+  }
+ },
+ "/jwapp/sys/xywccx/modules/xywccx/cxscfakzkc.do": {
+  "code": "0",
+  "datas": {
+   "cxscfakzkc": {
+    "totalSize": 6,
+    "pageSize": 200,
+    "rows": [
+     {
+      "KCH": "SZ001",
+      "KCM": "课程甲",
+      "XF": 2.5,
+      "XS": 40,
+      "KZH": "G1",
+      "CJ": "85",
+      "ZSCJ": "85",
+      "SFTG": "1",
+      "SFTG_DISPLAY": "是",
+      "SFXK": "1",
+      "KCXZDM": "01",
+      "KCXZDM_DISPLAY": "必修",
+      "KCLBDM_DISPLAY": "理论课",
+      "KSLXDM_DISPLAY": "考试",
+      "XNXQDM": "2024-2025-1",
+      "XNXQDM_DISPLAY": "2024-2025-1",
+      "RDKCH": "",
+      "TDKCH": "",
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "WID": "TEST-WID"
+     },
+     {
+      "KCH": "SZ002",
+      "KCM": "课程乙",
+      "XF": 2.5,
+      "XS": 40,
+      "KZH": "G1",
+      "CJ": "90",
+      "ZSCJ": "90",
+      "SFTG": "1",
+      "SFTG_DISPLAY": "是",
+      "SFXK": "1",
+      "KCXZDM": "01",
+      "KCXZDM_DISPLAY": "必修",
+      "KCLBDM_DISPLAY": "理论课",
+      "KSLXDM_DISPLAY": "考试",
+      "XNXQDM": "2024-2025-2",
+      "XNXQDM_DISPLAY": "2024-2025-2",
+      "RDKCH": "",
+      "TDKCH": "",
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "WID": "TEST-WID"
+     },
+     {
+      "KCH": "SZ003",
+      "KCM": "课程丙",
+      "XF": 3,
+      "XS": 48,
+      "KZH": "G1",
+      "CJ": "",
+      "ZSCJ": "",
+      "SFTG": "",
+      "SFTG_DISPLAY": "",
+      "SFXK": "0",
+      "KCXZDM": "01",
+      "KCXZDM_DISPLAY": "必修",
+      "KCLBDM_DISPLAY": "理论课",
+      "KSLXDM_DISPLAY": "考试",
+      "XNXQDM": "",
+      "XNXQDM_DISPLAY": "",
+      "RDKCH": "",
+      "TDKCH": "",
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "WID": "TEST-WID"
+     },
+     {
+      "KCH": "LD001",
+      "KCM": "课程丁",
+      "XF": 2,
+      "XS": 32,
+      "KZH": "G2",
+      "CJ": "",
+      "ZSCJ": "",
+      "SFTG": "",
+      "SFTG_DISPLAY": "",
+      "SFXK": "1",
+      "KCXZDM": "01",
+      "KCXZDM_DISPLAY": "必修",
+      "KCLBDM_DISPLAY": "理论课",
+      "KSLXDM_DISPLAY": "考试",
+      "XNXQDM": "",
+      "XNXQDM_DISPLAY": "",
+      "RDKCH": "",
+      "TDKCH": "",
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "WID": "TEST-WID"
+     },
+     {
+      "KCH": "ZY001",
+      "KCM": "课程戊",
+      "XF": 4,
+      "XS": 64,
+      "KZH": "G31",
+      "CJ": "76",
+      "ZSCJ": "76",
+      "SFTG": "1",
+      "SFTG_DISPLAY": "是",
+      "SFXK": "1",
+      "KCXZDM": "01",
+      "KCXZDM_DISPLAY": "必修",
+      "KCLBDM_DISPLAY": "理论课",
+      "KSLXDM_DISPLAY": "考试",
+      "XNXQDM": "2025-2026-1",
+      "XNXQDM_DISPLAY": "2025-2026-1",
+      "RDKCH": "",
+      "TDKCH": "",
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "WID": "TEST-WID"
+     },
+     {
+      "KCH": "ZY002",
+      "KCM": "课程己",
+      "XF": 4,
+      "XS": 64,
+      "KZH": "G31",
+      "CJ": "",
+      "ZSCJ": "",
+      "SFTG": "",
+      "SFTG_DISPLAY": "",
+      "SFXK": "0",
+      "KCXZDM": "01",
+      "KCXZDM_DISPLAY": "必修",
+      "KCLBDM_DISPLAY": "理论课",
+      "KSLXDM_DISPLAY": "考试",
+      "XNXQDM": "",
+      "XNXQDM_DISPLAY": "",
+      "RDKCH": "",
+      "TDKCH": "",
+      "XH": "TEST-XH",
+      "PYFADM": "TEST-FA",
+      "WID": "TEST-WID"
+     }
+    ]
+   }
+  }
+ },
+ "/jwapp/sys/xsfacx/modules/pyfacxepg/kzcx.do": {
+  "code": "0",
+  "datas": {
+   "kzcx": {
+    "totalSize": 5,
+    "pageSize": 200,
+    "rows": [
+     {
+      "KZH": "G0",
+      "KZM": "通识教育",
+      "FKZH": "",
+      "YQXF": 20,
+      "WCXF": 0,
+      "PYFADM": "TEST-FA"
+     },
+     {
+      "KZH": "G1",
+      "KZM": "思政类课程",
+      "FKZH": "G0",
+      "YQXF": 18,
+      "WCXF": 0,
+      "PYFADM": "TEST-FA"
+     },
+     {
+      "KZH": "G2",
+      "KZM": "劳动教育",
+      "FKZH": "G0",
+      "YQXF": 2,
+      "WCXF": 0,
+      "PYFADM": "TEST-FA"
+     },
+     {
+      "KZH": "G3",
+      "KZM": "专业核心",
+      "FKZH": "",
+      "YQXF": 30,
+      "WCXF": 0,
+      "PYFADM": "TEST-FA"
+     },
+     {
+      "KZH": "G31",
+      "KZM": "核心-必修",
+      "FKZH": "G3",
+      "YQXF": 30,
+      "WCXF": 0,
+      "PYFADM": "TEST-FA"
+     }
+    ]
+   }
+  }
+ },
+ "/jwapp/sys/xsfacx/modules/pyfacxepg/kzkccx.do": {
+  "code": "0",
+  "datas": {
+   "kzkccx": {
+    "totalSize": 239471,
+    "pageSize": 200,
+    "rows": [
+     {
+      "KCH": "X",
+      "KCM": "Y"
+     }
+    ]
+   }
+  }
+ },
+ "/jwapp/sys/cjcx/modules%2Acjcx/rxylgpacx/rxylgpacxcx.do": {
+  "code": "0",
+  "datas": {
+   "rxylgpacxcx": {
+    "totalSize": 1,
+    "pageSize": 200,
+    "rows": [
+     {
+      "ZGCJGPA": 3.61,
+      "CJDPM": "12/150",
+      "XM": "TEST-NAME",
+      "WID": "TEST-WID",
+      "SFFB": "1",
+      "XZNJ": "2024",
+      "XZNJ_DISPLAY": "2024级",
+      "YXDM": "001",
+      "YXDM_DISPLAY": "某学院",
+      "ZYDM": "0101",
+      "ZYDM_DISPLAY": "某专业",
+      "BJDM": "B01",
+      "BJDM_DISPLAY": "某班"
+     }
+    ]
+   }
+  }
+ }
+}

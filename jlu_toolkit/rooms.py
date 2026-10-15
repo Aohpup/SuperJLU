@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import jwxt
+from . import emap, jwxt
 
 # 吉大真实页面：/jwapp/sys/kxjas/*default/index.do#/kxjscx → 应用 kxjas，kxjscx 是前端路由/视图。
 # （kxjscx 作为应用名会返回 #E2140 Not found app）
@@ -27,6 +27,7 @@ ROUTE = "kxjscx"
 APP_ROOT = f"/jwapp/sys/{APP_NAME}/"
 APP = f"https://iedu.jlu.edu.cn{APP_ROOT}*default/index.do"
 BASE = APP_ROOT + "modules/"
+KXJAS = emap.App(APP_NAME, ROUTE)
 META_MODULES = ("kxjscx", "kxjas", "kxjs", "jscx")
 ENDPOINTS = (
     BASE + "kxjscx/cxkxjs.do",
@@ -130,35 +131,7 @@ def week_and_weekday(date: str, first_monday: Optional[str]) -> tuple[int, int]:
 
 # ───────────────────────── EMAP 元数据 ─────────────────────────
 
-_CODE = re.compile(r"^[A-Z][A-Z0-9_]{1,30}$")
-
-
-def parse_meta(obj) -> dict:
-    """从 EMAP 模块元数据里提取动作 URL、字段名、字段→字典 URL（全是代码，不含个人数据）。"""
-    actions, fields, dicts = set(), set(), {}
-
-    def walk(x, parent_name=None):
-        if isinstance(x, dict):
-            name = x.get("name")
-            if isinstance(name, str) and _CODE.match(name):
-                fields.add(name)
-                for k in ("url", "dict", "dictUrl"):
-                    u = x.get(k)
-                    if isinstance(u, str) and ".do" in u and "code" in u.lower():
-                        dicts[name] = u
-            for k, v in x.items():
-                if isinstance(v, str) and v.endswith(".do") and k in ("url", "action", "actionUrl"):
-                    if "code" in v.lower() and isinstance(name, str):
-                        dicts.setdefault(name, v)
-                    else:
-                        actions.add(v)
-                walk(v, name)
-        elif isinstance(x, list):
-            for i in x:
-                walk(i, parent_name)
-
-    walk(obj)
-    return {"actions": sorted(actions), "fields": sorted(fields), "dicts": dicts}
+from .emap import _CODE, parse_meta  # noqa: E402,F401  （已并入 emap）
 
 
 def parse_search_fields(obj) -> list[dict]:
@@ -227,19 +200,7 @@ def _meta_urls(extra_modules=()) -> list[tuple[str, str, dict]]:
 
 
 def _try_json(client, method: str, path: str, form: dict):
-    try:
-        if method == "POST":
-            code, text, _ = client.post_raw(path, form, APP)
-        else:
-            code, text, _, _ = client._request("https://iedu.jlu.edu.cn" + path,
-                                               headers={"Referer": APP, "X-Requested-With": "XMLHttpRequest",
-                                                        "Accept": "application/json, */*"})
-    except jwxt.NetworkError:
-        return None, None
-    try:
-        return code, json.loads(text) if text else None
-    except (json.JSONDecodeError, ValueError):
-        return code, text
+    return emap._try(client, KXJAS, method, path, form)
 
 
 def fetch_meta(client, extra_modules=(), trace: Optional[list] = None) -> dict:
@@ -400,14 +361,8 @@ SCHEMES: dict[str, Callable[[RoomQuery], dict]] = {
 
 
 def _rows_any(obj) -> Optional[tuple[str, list]]:
-    if not isinstance(obj, dict):
-        return None
-    for name, blk in (obj.get("datas") or {}).items():
-        if isinstance(blk, dict) and isinstance(blk.get("rows"), list):
-            return name, blk["rows"]
-        if isinstance(blk, list):
-            return name, blk
-    return None
+    hit = emap.rows_any(obj)
+    return (hit[0], hit[1]) if hit else None
 
 
 def _total(obj) -> Optional[int]:
@@ -498,74 +453,21 @@ def row_to_room(r: dict) -> Optional[Room]:
 
 
 def _abs(a: str) -> str:
-    """相对 URL → /jwapp/sys/kxjas/modules/...（见 emap.App.abs）。"""
-    a = (a or "").split("?")[0].strip()
-    if not a:
-        return a
-    if a.startswith("/"):
-        return a
-    a = a.lstrip("./")
-    if a.startswith("jwapp/"):
-        return "/" + a
-    if a.startswith("modules/"):
-        return APP_ROOT + a
-    return BASE + a
-
-
-_DO_RE = re.compile(r"""["'(]([\w./*-]*?\.do)\b""")
-_SRC_RE = re.compile(r"""(?:src|href)\s*=\s*["']([^"'#?]+\.(?:js|json|html))""", re.I)
-_JS_REF = re.compile(r"""["']([\w./*-]+\.(?:js|html))["']""")
+    """相对 URL → /jwapp/sys/kxjas/modules/...（统一实现见 emap.App.abs）。"""
+    return KXJAS.abs(a)
 
 
 def discover(client, max_files: int = 30) -> dict:
-    """只读：进入 kxjas 入口，抓取页面引用及常见视图脚本，提取 *.do、模块名、字典 URL。"""
-    import urllib.parse as up
-    out: dict = {"app": APP_NAME, "route": ROUTE}
-    try:
-        code, html, final, _ = client._request(APP + "?EMAP_LANG=zh", headers={"Referer": jwxt.IEDU_PORTAL})
-    except jwxt.NetworkError as e:
-        return {"error": type(e).__name__}
-    out["index_status"], out["index_bytes"] = code, len(html or "")
-    out["index_final"] = up.urlparse(final or "").path
-    srcs = [up.urljoin(final or APP, s) for s in _SRC_RE.findall(html or "")]
-    out["script_srcs"] = [up.urlparse(s).path for s in srcs][:60]
-    queue = [s for s in srcs if APP_ROOT in s] + ["https://iedu.jlu.edu.cn" + APP_ROOT + f for f in VIEW_FILES]
-    queue = list(dict.fromkeys(queue))
-    paths = set(_DO_RE.findall(html or ""))
-    fetched, seen = [], set()
-    while queue and len(seen) < max_files:
-        u = queue.pop(0)
-        if u in seen:
-            continue
-        seen.add(u)
-        try:
-            c, txt, _, _ = client._request(u, headers={"Referer": APP})
-        except jwxt.NetworkError:
-            continue
-        if c != 200 or not txt or "loginForm" in txt:
-            continue
-        fetched.append({"path": up.urlparse(u).path, "bytes": len(txt)})
-        paths.update(_DO_RE.findall(txt))
-        for ref in _JS_REF.findall(txt)[:40]:
-            v = up.urljoin(u, ref)
-            if APP_ROOT in v and v not in seen:
-                queue.append(v)
-    out["fetched"] = fetched
-    out["do_paths"] = sorted(p for p in paths if len(p) < 160)
-    mods = set()
-    for p in out["do_paths"]:
-        m = re.search(r"modules/(\w+)\.do$", p) or re.search(r"modules/(\w+)/\w+\.do$", p)
-        if m:
-            mods.add(m.group(1))
-    out["modules_seen"] = sorted(mods)
-    return out
+    """只读：kxjas 页面发现（统一实现见 emap.discover）。"""
+    return emap.discover(client, KXJAS, max_files)
 
 
 def _attempts(meta: dict, profile: Optional[dict]):
     actions = [_abs(a) for a in meta.get("actions", []) if re.search(r"(kx|cx|jscx)", a)]
     actions += [_abs(a) for a in meta.get("discovered_do", []) if re.search(r"(kx|cx)", a)
                 and not re.search(r"modules/\w+\.do$", a) and "code" not in a.lower()]
-    endpoints = list(dict.fromkeys(actions + list(ENDPOINTS)))
+    from .endpoints import KNOWN
+    endpoints = list(dict.fromkeys([KNOWN["rooms_query"].path] + actions + list(ENDPOINTS)))
     flds = meta.get("fields", [])
     schemes = {k: _with_filters(v, flds) for k, v in SCHEMES.items()}
     ms = _meta_scheme(flds)
@@ -583,7 +485,7 @@ def query_rooms(client, q: RoomQuery, profile_path: Optional[Path] = None,
     """返回 (空教室列表, 命中的 profile)。全部失败则抛 JwxtError（附各尝试的 code/msg）。"""
     client.enter_emap_app(APP)
     if meta is None:
-        meta = full_meta(client)
+        meta = cached_meta(client)
     profile = None
     if profile_path and profile_path.exists():
         try:
@@ -653,6 +555,30 @@ def query_rooms_any(client, q: RoomQuery, profile_path: Optional[Path] = None,
     return out, {**prof, "week_via": "per-date", "total": len(out)}
 
 
+def _meta_cache() -> Path:
+    return jwxt.config_dir() / "data" / "rooms_meta.json"
+
+
+def cached_meta(client, refresh: bool = False) -> dict:
+    """kxjscx 元数据（字段/检索字段/字典 URL，均为代码层信息）本地缓存；没有才走发现。"""
+    f = _meta_cache()
+    if f.exists() and not refresh:
+        try:
+            m = json.loads(f.read_text(encoding="utf-8"))
+            if m.get("fields"):
+                return m
+        except (json.JSONDecodeError, ValueError):
+            pass
+    m = full_meta(client)
+    if m.get("fields"):
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+    return m
+
+
 def full_meta(client, trace: Optional[list] = None, disc: Optional[dict] = None) -> dict:
     disc = disc if disc is not None else discover(client)
     meta = fetch_meta(client, disc.get("modules_seen", []), trace)
@@ -700,7 +626,7 @@ def campus_codes_from_jc(client) -> list[str]:
 
 def list_campuses(client, meta: Optional[dict] = None) -> list[dict]:
     client.enter_emap_app(APP)
-    meta = meta if meta is not None else full_meta(client)
+    meta = meta if meta is not None else cached_meta(client)
     for k in ("XXXQDM", "XQDM", "XXXQ"):
         if k in meta.get("dicts", {}):
             got = fetch_code_list(client, meta["dicts"][k])
@@ -711,7 +637,7 @@ def list_campuses(client, meta: Optional[dict] = None) -> list[dict]:
 
 def list_codes(client, keys, parent: Optional[dict] = None, meta: Optional[dict] = None) -> list[dict]:
     client.enter_emap_app(APP)
-    meta = meta if meta is not None else full_meta(client)
+    meta = meta if meta is not None else cached_meta(client)
     for k in keys:
         if k in meta.get("dicts", {}):
             got = fetch_code_list(client, meta["dicts"][k], parent)
@@ -733,7 +659,7 @@ def extra_search_fields(meta: dict) -> list[dict]:
 
 def list_buildings(client, campus: str = "", meta: Optional[dict] = None) -> list[dict]:
     client.enter_emap_app(APP)
-    meta = meta if meta is not None else full_meta(client)
+    meta = meta if meta is not None else cached_meta(client)
     for k in ("JXLDM", "JZWDM"):
         if k in meta.get("dicts", {}):
             allb = fetch_code_list(client, meta["dicts"][k])
