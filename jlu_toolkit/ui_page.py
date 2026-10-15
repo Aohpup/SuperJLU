@@ -87,7 +87,7 @@ tbody tr:hover td{background:var(--card2)}
 tr.off td{opacity:.42}
 .term td{background:var(--pri2)!important;font-size:12px;color:var(--pri);font-weight:650;padding:6px 10px}
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri)}
-select,input[type=text],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
+select,input[type=text],input[type=password],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
 select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px var(--pri2)}
 .chip{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:99px;background:var(--pri2);color:var(--pri);font-weight:550;line-height:1.6}
 /* 考试 */
