@@ -1,7 +1,7 @@
 name: Release Android apk
 
 # 推送 v* 标签：构建 release apk → apksigner 签名 → SHA256 → 上传到同名 GitHub Release
-#（与 release-windows.yml 共用一个 Release，谁先到谁创建，另一个追加上传）。
+#（与 release-windows.yml 共用一个 Release，softprops/action-gh-release 会复用已存在的 Release）。
 # 手动运行（workflow_dispatch）：默认构建未签名 debug apk；勾选 signed 则构建签名 release apk。均只作为产物上传。
 # Gradle 约定见 docs/android-release.md。
 on:
@@ -60,7 +60,8 @@ jobs:
             test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != v$v"; exit 1; }
           fi
           echo "JLU_VERSION_NAME=$v" >> "$GITHUB_ENV"
-          echo "JLU_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "JLU_VERSION_CODE=$((10000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "APK_NAME=SuperJLU-$v.apk" >> "$GITHUB_ENV"
       - name: Build debug (manual run)
         if: steps.check.outputs.built == 'true' && env.SIGNED != 'true'
         working-directory: android
@@ -68,8 +69,8 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
           mkdir -p ../dist
-          cp app/build/outputs/apk/debug/app-debug.apk ../dist/jlu-toolkit-debug.apk
-          (cd ../dist && sha256sum jlu-toolkit-debug.apk > jlu-toolkit-debug.apk.sha256 && cat *.sha256)
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist/SuperJLU-debug.apk
+          (cd ../dist && sha256sum SuperJLU-debug.apk > SuperJLU-debug.apk.sha256 && cat *.sha256)
       - name: Build release (unsigned)
         if: steps.check.outputs.built == 'true' && env.SIGNED == 'true'
         working-directory: android
@@ -94,14 +95,15 @@ jobs:
           "$bt/zipalign" -f -p 4 "$in" "$RUNNER_TEMP/aligned.apk"
           "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias "$ANDROID_KEY_ALIAS" \
             --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD \
-            --out dist/jlu-toolkit.apk "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" verify --print-certs dist/jlu-toolkit.apk | grep -i "SHA-256"
+            --out "dist/$APK_NAME" "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" verify --print-certs "dist/$APK_NAME" | grep -i "SHA-256"
           rm -f "$ks"
-          (cd dist && sha256sum jlu-toolkit.apk > jlu-toolkit.apk.sha256 && cat jlu-toolkit.apk.sha256)
+          rm -f "dist/$APK_NAME.idsig"
+          (cd dist && sha256sum "$APK_NAME" > "$APK_NAME.sha256" && cat "$APK_NAME.sha256")
       - uses: actions/upload-artifact@v4
         if: steps.check.outputs.built == 'true'
         with:
-          name: jlu-toolkit-android
+          name: SuperJLU-android
           path: dist/*
 
   release:
@@ -113,20 +115,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: jlu-toolkit-android
+          name: SuperJLU-android
           path: dist
-      - name: Upload to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          files="dist/jlu-toolkit.apk dist/jlu-toolkit.apk.sha256"
-          for i in 1 2 3 4 5 6; do
-            if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$GITHUB_REF_NAME" $files -R "$GITHUB_REPOSITORY" --clobber && exit 0
-            elif gh release create "$GITHUB_REF_NAME" $files -R "$GITHUB_REPOSITORY" \
-                   --title "$GITHUB_REF_NAME" --generate-notes; then
-              exit 0
-            fi
-            echo "重试 $i（可能与 Windows 发布并发创建）"; sleep 20
-          done
-          exit 1
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: SuperJLU ${{ github.ref_name }}
+          body_path: .github/release-notes.md
+          files: |
+            dist/SuperJLU-*.apk
+            dist/SuperJLU-*.apk.sha256
+          fail_on_unmatched_files: true

@@ -1,7 +1,7 @@
 name: Release Windows exe
 
-# 推送 v* 标签时：构建 Windows 单文件 exe，附带 SHA256，发布到 GitHub Release。
-# 也可在 Actions 页面手动运行（只上传构建产物，不发 Release）。
+# 推送 v* 标签：构建托盘版 SuperJLU.exe（packaging/superjlu.spec），附带 SHA256，发布到 GitHub Release。
+# 也可手动运行（只上传构建产物，不发 Release）。与 release-android.yml 共用同一个 Release（softprops 会复用已存在的 Release）。
 on:
   push:
     tags: ["v*"]
@@ -21,7 +21,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install ".[captcha]" pyinstaller pytest
+          pip install ".[desktop,captcha]" pyinstaller pytest
       - name: Test
         run: pytest -q
       - name: Check tag matches version
@@ -30,27 +30,21 @@ jobs:
         run: |
           v=$(python -c "import jlu_toolkit; print(jlu_toolkit.__version__)")
           test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v$v"; exit 1; }
-      - name: Build exe
-        run: >
-          pyinstaller --onefile --name jlu-toolkit --console
-          --collect-data jlu_toolkit
-          --collect-submodules jlu_toolkit
-          --hidden-import keyring.backends.Windows
-          packaging/jlu_toolkit_exe.py
-      - name: Smoke test
-        run: dist\jlu-toolkit.exe --version
+      - name: Build SuperJLU.exe
+        run: python packaging/build_windows.py
       - name: SHA256
         shell: pwsh
         run: |
-          $h = (Get-FileHash dist\jlu-toolkit.exe -Algorithm SHA256).Hash.ToLower()
-          "$h  jlu-toolkit.exe" | Out-File -Encoding ascii dist\jlu-toolkit.exe.sha256
-          Get-Content dist\jlu-toolkit.exe.sha256
+          if (!(Test-Path dist\SuperJLU.exe)) { throw "SuperJLU.exe 未生成" }
+          $h = (Get-FileHash dist\SuperJLU.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  SuperJLU.exe" | Out-File -Encoding ascii dist\SuperJLU.exe.sha256
+          Get-Content dist\SuperJLU.exe.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: jlu-toolkit-windows
+          name: SuperJLU-windows
           path: |
-            dist/jlu-toolkit.exe
-            dist/jlu-toolkit.exe.sha256
+            dist/SuperJLU.exe
+            dist/SuperJLU.exe.sha256
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -59,13 +53,20 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
       - uses: actions/download-artifact@v4
         with:
-          name: jlu-toolkit-windows
+          name: SuperJLU-windows
           path: dist
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/jlu-toolkit.exe dist/jlu-toolkit.exe.sha256 \
-            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: SuperJLU ${{ github.ref_name }}
+          body_path: .github/release-notes.md
+          files: |
+            dist/SuperJLU.exe
+            dist/SuperJLU.exe.sha256
+          fail_on_unmatched_files: true
