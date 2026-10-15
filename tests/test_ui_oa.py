@@ -119,4 +119,24 @@ def test_refresh_errors(srv, monkeypatch):
 def test_page_has_oa_tab():
     from jlu_toolkit.ui_page import PAGE
     assert 'data-t="oa"' in PAGE and 'id="t-oa"' in PAGE and "/api/oa/notices" in PAGE
-    assert "vpn.jlu.edu.cn" in PAGE and "即将推出" in PAGE
+    assert "vpn.jlu.edu.cn" in PAGE and "/api/oa/subscriptions" in PAGE and "jlu-toolkit oa watch" in PAGE
+
+
+def test_channels_from_file_and_category(srv):
+    base, root = srv
+    _, j = _get(base + "/api/oa/channels")
+    assert j["channels"] == [{"id": "179577", "name": "校内通知"}]  # 无文件时回退
+    (root / "oa_channels.json").write_text(json.dumps({"179578": "学术讲座", "179579": "示例公告"}, ensure_ascii=False),
+                                           encoding="utf-8")
+    d = json.loads(json.dumps(SAMPLE))
+    d["channels_items"]["179578"] = [{"id": "50", "title": "示例讲座", "dept": "示例学院", "time": "2026-10-15 08:00",
+                                      "top": False, "url": ""}]
+    (root / "oa_notices.json").write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    _, j = _get(base + "/api/oa/channels")
+    assert [c["id"] for c in j["channels"]] == ["179577", "179578", "179579"]
+    _, j = _get(base + "/api/oa/notices?category=179578")
+    assert j["channel_name"] == "学术讲座" and [i["id"] for i in j["items"]] == ["50"]
+    _, j = _get(base + "/api/oa/notices?category=" + urllib.request.quote("讲座"))
+    assert j["channel"] == "179578"
+    _, j = _get(base + "/api/oa/notices?category=179579")
+    assert j["count"] == 0

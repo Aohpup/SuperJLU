@@ -266,9 +266,16 @@ def _oa_data(store: Store) -> dict:
     return d if isinstance(d, dict) else {}
 
 
-def oa_channels_api(store: Store) -> dict:
+def _oa_known(store: Store) -> dict:
+    """栏目名：内置 179577 校内通知 + data/oa_channels.json（--probe 发现）+ 缓存里记下的栏目。"""
     from . import oa
-    ch = {**oa.KNOWN_CHANNELS, **(_oa_data(store).get("channels") or {})}
+    f = store._json("oa_channels.json", {})
+    f = {str(k): str(v) for k, v in f.items()} if isinstance(f, dict) else {}
+    return {**oa.KNOWN_CHANNELS, **f, **(_oa_data(store).get("channels") or {})}
+
+
+def oa_channels_api(store: Store) -> dict:
+    ch = _oa_known(store)
     return {"ok": True, "channels": [{"id": k, "name": v} for k, v in ch.items()]}
 
 
@@ -276,7 +283,7 @@ def oa_notices_api(store: Store, q: dict) -> dict:
     """GET /api/oa/notices?category=&keyword=&limit= —— 只读 data/oa_notices.json，不访问 OA。"""
     from . import oa
     d = _oa_data(store)
-    known = d.get("channels") or {}
+    known = _oa_known(store)
     ch = oa.resolve_category(q.get("category", ""), known)
     kw = q.get("keyword", "").strip()
     try:
@@ -304,7 +311,7 @@ def oa_notice_api(store: Store, nid: str) -> Optional[dict]:
 def oa_refresh_api(store: Store, body: dict) -> dict:
     """POST /api/oa/refresh —— 只抓第 1 页（max_pages=1），写回本地缓存。"""
     from . import oa
-    ch = oa.resolve_category(str(body.get("category") or ""), _oa_data(store).get("channels") or {})
+    ch = oa.resolve_category(str(body.get("category") or ""), _oa_known(store))
     client = jwxt.JwxtClient()
     has = bool(client.load_session())
     res = oa.fetch_notices(client, ch, limit=30, max_pages=1)
