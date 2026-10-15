@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
 
         new Thread(() -> {
             try {
-                if (!Python.isStarted()) Python.start(new AndroidPlatform(getApplicationContext()));
+                ensurePython();
                 String url = Python.getInstance().getModule("jlu_android")
                         .callAttr("start", getFilesDir().getAbsolutePath()).toString();
                 baseUrl = url;
@@ -77,7 +77,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             boolean ok;
             try {
-                if (!Python.isStarted()) Python.start(new AndroidPlatform(getApplicationContext()));
+                ensurePython();
                 ok = Python.getInstance().getModule("jlu_android")
                         .callAttr("campus_reachable").toBoolean();
             } catch (Throwable t) { ok = false; }
@@ -116,6 +116,22 @@ public class MainActivity extends Activity {
             return in;
         });
         root.requestApplyInsets();
+    }
+
+    /**
+     * 启动线程和网络检测线程会同时走到这里。原来两边各自 isStarted() 再 start()，
+     * 两个线程都看到"未启动"时第二个会抛 IllegalStateException: Python already started。
+     * 用类锁串行化，并且吞掉并发情况下仍可能出现的同一异常。
+     */
+    private void ensurePython() {
+        synchronized (MainActivity.class) {
+            if (Python.isStarted()) return;
+            try {
+                Python.start(new AndroidPlatform(getApplicationContext()));
+            } catch (IllegalStateException e) {
+                if (!Python.isStarted()) throw e;
+            }
+        }
     }
 
     private void scheduleKeepalive() {
