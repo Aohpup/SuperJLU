@@ -330,10 +330,13 @@ def fetch_known(client, grades=None, courses_now=None) -> Optional[dict]:
 
 
 def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True, use_known: bool = True) -> dict:
+    got = None
     if use_known:
         got = fetch_known(client, grades, courses_now)
         if got and got.get("tree_nodes"):
             return got
+    known_info = {"courses": (got or {}).get("count", 0), "tree": 0}
+    via = "cache"
     best: dict = {}
     cp = _cache_path()
     if use_cache and cp.exists():
@@ -343,6 +346,7 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True, us
             best = {}
     if "plan" not in best or "trees" not in best or "kzkccx" in best["plan"].get("path", "") and not any(
             k in best["plan"].get("form", {}) for k in ("PYFADM", "querySetting")):
+        via = "discovery"
         _, found = explore(client)
         best = {k: {kk: v[kk] for kk in ("app", "route", "path", "form", "captions")}
                 for k, v in found.items() if k != "trees"}
@@ -385,12 +389,12 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True, us
         cov = len(kzh & {n["code"] for n in nodes})
         if nodes and (tree is None or cov > tree[0]):
             tree, tree_src = (cov, nodes), pth.split("/sys/", 1)[-1]
-    res = {"source": {k: {"app": v["app"], "action": v["path"].split("/sys/", 1)[-1]}
+    res = {"source": {k: {"app": v["app"], "action": v["path"].split("/sys/", 1)[-1], "via": via}
                       for k, v in best.items() if k != "trees"},
-           "count": len(courses), "courses": courses}
+           "count": len(courses), "courses": courses, "known_fallback": known_info}
     if tree:
         res["tree_nodes"] = tree[1]
-        res["source"]["tree"] = {"action": tree_src}
+        res["source"]["tree"] = {"action": tree_src, "via": via}
         bt = build_tree(tree[1], [dict(c) for c in courses])
         res["tree_stats"] = bt["stats"]
         res["tree_summary"] = tree_summary(bt["roots"])

@@ -33,7 +33,7 @@ class Endpoint:
 
     @property
     def referer(self) -> str:
-        return self.index + "?EMAP_LANG=zh" + (f"#/{self.referer_hash}" if self.referer_hash else "")
+        return self.index + "?EMAP_LANG=zh"  # 浏览器不会发送 #片段；与发现路径一致
 
 
 def _e(app, rel, key="", **kw) -> Endpoint:

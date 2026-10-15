@@ -117,3 +117,24 @@ def test_rooms_replay_known_endpoint_cached_meta_and_paging(data_dir, monkeypatc
     r0 = found[0]
     assert r0.kind == "多媒体" and r0.exam_seats and r0.free_time == "08:00-09:40"
     assert [s["name"] for s in rooms.extra_search_fields(rooms.cached_meta(c))] == ["SFKT"]
+
+
+def test_plan_via_recorded_on_fallback_and_through_sync(data_dir, monkeypatch):
+    # 已知树接口为空 → 回退到发现，via 仍需记录
+    c = ReplayClient()
+    orig = c.post_raw
+
+    def post(path, form, ref):
+        if path.endswith("/kzcx.do"):
+            return 200, json.dumps({"code": "0", "datas": {"kzcx": {"totalSize": 0, "rows": []}}}), ""
+        return orig(path, form, ref)
+    c.post_raw = post
+    monkeypatch.setattr(emap, "discover", lambda cl, a: {"modules_seen": [a.route], "do_paths": []})
+    monkeypatch.setattr(emap, "module_meta", lambda cl, a, m: {"modules": {}, "trace": []})
+    p = plan.fetch_plan(c)
+    assert p["source"]["plan"]["via"] in ("discovery", "cache") and p["known_fallback"]["courses"] == 6
+    # 已知接口路径经 sync 写盘后 via 仍在
+    from jlu_toolkit import sync
+    sync._wjson(data_dir / "p.json", plan.fetch_plan(ReplayClient()))
+    d = json.loads((data_dir / "p.json").read_text(encoding="utf-8"))
+    assert d["source"]["plan"]["via"] == "known" and d["source"]["tree"]["via"] == "known"
