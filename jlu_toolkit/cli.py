@@ -178,6 +178,8 @@ def _main():
 
     pp = sub.add_parser("plan", help="培养方案课程明细（课程号/学分/学期/课组/修读状态）")
     pp.add_argument("--probe", action="store_true", help="只读探测：应用/模块/动作名、字段名+标题、行数（无数值）")
+    pp.add_argument("--debug-known", action="store_true",
+                    help="只读：打印各已知接口的参数名与响应行数/total（ASCII，无数值）")
     pp.add_argument("--refresh", action="store_true", help="从教务重新拉取（默认读本地 plan_courses.json）")
     pp.add_argument("--status", default="", help="只看某状态：已修/在修/未修/未通过")
     pp.add_argument("--term", default="", help="按建议修读学期筛选（包含匹配）")
@@ -628,6 +630,13 @@ def _cmd_plan(x):
     f = store.p("plan_courses.json")
     err = lambda m: print(m, file=sys.stderr)  # noqa: E731
     try:
+        if getattr(x, "debug_known", False):
+            client = jwxt.JwxtClient(debug=bool(x.debug))
+            if not client.load_session():
+                raise jwxt.LoginError("no saved session")
+            print(json.dumps(pl.debug_known(client)))
+            client.save_session()
+            return
         if x.probe or x.refresh or not f.exists():
             client = jwxt.JwxtClient(debug=bool(x.debug))
             if not client.load_session():
