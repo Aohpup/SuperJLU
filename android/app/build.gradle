@@ -1,0 +1,42 @@
+plugins {
+    id "com.android.application"
+    id "com.chaquo.python"
+}
+
+android {
+    namespace "io.github.runaasahi.jlutoolkit"
+    compileSdk 35
+    defaultConfig {
+        applicationId "io.github.runaasahi.jlutoolkit"
+        minSdk 24
+        targetSdk 35
+        versionCode((System.getenv("JLU_VERSION_CODE") ?: "1") as int)
+        versionName(System.getenv("JLU_VERSION_NAME") ?: "0.0.0-dev")
+        ndk { abiFilters "arm64-v8a", "x86_64" }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version "3.13"
+        // 构建机上需要同版本的 Python（python3.13）；可用 -PbuildPython=/path/python3.13 覆盖
+        if (project.hasProperty("buildPython")) buildPython(project.property("buildPython"))
+        pip {
+            install "cryptography==42.0.8"
+            // keyring 在 Android 上没有可用后端，暂不安装，走 secure_store 的文件回退
+        }
+    }
+    sourceSets {
+        main {
+            // 直接打包仓库根目录下的 jlu_toolkit 包（不复制，桌面端代码保持唯一来源）
+            srcDir "../.."
+            include "jlu_toolkit/**", "jlu_android.py"
+            exclude "**/__pycache__/**"
+            srcDir "src/main/python"
+        }
+    }
+}
