@@ -236,6 +236,84 @@ def room_fields_api(store: Store) -> dict:
                                          for s in rooms.extra_search_fields(rooms.full_meta(c))])}
 
 
+# ───────────────────────── OA 校内通知（只读本地缓存） ─────────────────────────
+
+def _oa_url(u) -> str:
+    """只保留指向 oa.jlu.edu.cn 的链接（相对路径补全），其它一律丢弃。"""
+    import urllib.parse
+    from . import oa
+    u = str(u or "").strip()
+    if not u:
+        return ""
+    full = urllib.parse.urljoin(oa.BASE + "/", u)
+    pr = urllib.parse.urlparse(full)
+    return full if pr.scheme in ("http", "https") and pr.hostname == "oa.jlu.edu.cn" else ""
+
+
+def _oa_item(i: dict, full: bool = False) -> dict:
+    out = {"id": str(i.get("id") or ""), "title": str(i.get("title") or ""), "time": str(i.get("time") or ""),
+           "dept": str(i.get("dept") or ""), "top": bool(i.get("top")), "url": _oa_url(i.get("url"))}
+    if full:
+        atts = i.get("attachments")
+        out["text"] = str(i.get("text") or "")
+        out["attachments"] = [{"name": str(a.get("name") or "附件"), "url": _oa_url(a.get("url"))}
+                              for a in (atts if isinstance(atts, list) else []) if isinstance(a, dict) and _oa_url(a.get("url"))]
+    return out
+
+
+def _oa_data(store: Store) -> dict:
+    d = store._json("oa_notices.json", {})
+    return d if isinstance(d, dict) else {}
+
+
+def oa_channels_api(store: Store) -> dict:
+    from . import oa
+    ch = {**oa.KNOWN_CHANNELS, **(_oa_data(store).get("channels") or {})}
+    return {"ok": True, "channels": [{"id": k, "name": v} for k, v in ch.items()]}
+
+
+def oa_notices_api(store: Store, q: dict) -> dict:
+    """GET /api/oa/notices?category=&keyword=&limit= —— 只读 data/oa_notices.json，不访问 OA。"""
+    from . import oa
+    d = _oa_data(store)
+    known = d.get("channels") or {}
+    ch = oa.resolve_category(q.get("category", ""), known)
+    kw = q.get("keyword", "").strip()
+    try:
+        limit = max(1, min(500, int(q.get("limit") or 500)))
+    except ValueError:
+        raise ValueError("limit 应为整数")
+    items = [_oa_item(i) for i in ((d.get("channels_items") or {}).get(ch) or []) if isinstance(i, dict)]
+    if kw:
+        items = [i for i in items if kw in i["title"] or kw in i["dept"]]
+    items.sort(key=lambda i: (i["top"], i["time"], i["id"]), reverse=True)
+    items = items[:limit]
+    return {"ok": True, "channel": ch, "channel_name": known.get(ch) or oa.KNOWN_CHANNELS.get(ch, ""),
+            "count": len(items), "fetched_at": d.get("updated"), "items": items}
+
+
+def oa_notice_api(store: Store, nid: str) -> Optional[dict]:
+    """GET /api/oa/notice?id= —— 单条（含本地已缓存的正文/附件，若有）。"""
+    for lst in ((_oa_data(store).get("channels_items") or {}).values()):
+        for i in lst or []:
+            if isinstance(i, dict) and str(i.get("id")) == nid:
+                return {"ok": True, "item": _oa_item(i, full=True)}
+    return None
+
+
+def oa_refresh_api(store: Store, body: dict) -> dict:
+    """POST /api/oa/refresh —— 只抓第 1 页（max_pages=1），写回本地缓存。"""
+    from . import oa
+    ch = oa.resolve_category(str(body.get("category") or ""), _oa_data(store).get("channels") or {})
+    client = jwxt.JwxtClient()
+    has = bool(client.load_session())
+    res = oa.fetch_notices(client, ch, limit=30, max_pages=1)
+    oa.save(store.root, res)
+    if has:
+        client.save_session()
+    return oa_notices_api(store, {"category": ch})
+
+
 def make_handler(store: Store):
     class H(BaseHTTPRequestHandler):
         server_version = "JLUToolkitUI"
@@ -277,6 +355,19 @@ def make_handler(store: Store):
             if path == "/api/session":
                 # 新增（可选）：会话状态，供前端显示「请重新登录」横幅；只读本地文件，不访问教务
                 return self._json(jwxt.session_status())
+            if path.startswith("/api/oa/"):
+                import urllib.parse
+                q = {k: v[0] for k, v in urllib.parse.parse_qs(self.path.partition("?")[2]).items()}
+                try:
+                    if path == "/api/oa/notices":
+                        return self._json(oa_notices_api(store, q))
+                    if path == "/api/oa/channels":
+                        return self._json(oa_channels_api(store))
+                    if path == "/api/oa/notice":
+                        r = oa_notice_api(store, q.get("id", ""))
+                        return self._json(r or {"ok": False, "error": "本地没有这条通知"}, 200 if r else 404)
+                except ValueError as e:
+                    return self._json({"ok": False, "error": str(e)}, 400)
             if path == "/api/data":
                 return self._json(store.snapshot())
             if path == "/api/ics":
@@ -309,6 +400,16 @@ def make_handler(store: Store):
                     return self._json({"ok": True, **room_fields_api(store)})
                 elif self.path == "/api/rooms/campuses":
                     return self._json({"ok": True, **campuses_api(store)})
+                elif self.path == "/api/oa/refresh":
+                    try:
+                        return self._json(oa_refresh_api(store, body))
+                    except jwxt.NetworkError as e:
+                        return self._json({"ok": False, "error": f"连不上 OA（校外请先连 vpn.jlu.edu.cn）：{e}",
+                                           "offline": True}, 502)
+                    except jwxt.SessionExpiredError:
+                        raise
+                    except jwxt.LoginError as e:
+                        return self._json({"ok": False, "error": str(e), "login_needed": True}, 400)
                 elif self.path == "/api/refresh":
                     return self._json({"ok": True, "result": refresh_from_jwxt(store), **store.snapshot()})
                 else:
