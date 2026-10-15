@@ -265,3 +265,29 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 ```
 
 `GET /api/oa/channels` → `{"channels": [{"id": "179577", "name": "校内通知"}]}`；出错 `{"ok": false, "error": "...", "login_needed": true}`。
+
+### OA 关键词订阅与提醒（增量同步）
+
+只请求列表**第 1 页**（含置顶），按公告 id 与本地已见记录去重；绝不全量翻页，栏目之间间隔 2 秒。首次运行只记录现有 id，不发提醒。
+
+```
+jlu-toolkit oa subscribe add -k 讲座,奖学金 [--dept 教务处] [--category 179577]
+jlu-toolkit oa subscribe list [--json]
+jlu-toolkit oa subscribe remove <id>
+jlu-toolkit oa watch [--interval 30] [--once]     # 间隔最小 10 分钟
+```
+
+- 匹配：关键词出现在标题或发文单位中；设置了 `--dept` 时单位须包含其一。
+- 提醒：plyer（`pip install jlu-toolkit[notify]`）→ Termux `termux-notification` → Windows PowerShell 通知 → Linux `notify-send` → 仅打印；任何失败都不会中断。
+- 存储（`config_dir()/data`）：`oa_seen.json`、`oa_subscriptions.json` `{rules:[{id,keywords,depts,channel,created}]}`、`oa_matches.json` `{matches:[{rule_id,keywords_hit,notice,matched_at}]}`（最多 300 条）。
+- MCP：`oa_new_matches(limit=20, since="")` → `{rules, matches}`（只读本地）。
+
+Web API（仅 127.0.0.1）：
+
+| 方法 | 路径 | 请求 | 返回 |
+|---|---|---|---|
+| GET | `/api/oa/subscriptions?limit=20` | – | `200 {"ok":true,"rules":[...],"matches":[...]}` |
+| POST | `/api/oa/subscriptions` | `Content-Type: application/json`，`{"keywords":["讲座"] 或 "讲座,补考","depts":[...]（可选）,"channel":"179577"（可选）}` | `201 {"ok":true,"rule":{id,keywords,depts,channel,created}}`；校验失败 `400 {"ok":false,"error":"..."}` |
+| DELETE | `/api/oa/subscriptions/<id>` 或 `?id=<id>` | – | `200 {"ok":true,"removed":"<id>"}`；不存在 `404`；缺 id `405` |
+
+校验：至少 1 个关键词，每个 ≤40 字、最多 20 个（自动去重、去空白，支持中文逗号）；channel 必须是数字；规则最多 100 条。
