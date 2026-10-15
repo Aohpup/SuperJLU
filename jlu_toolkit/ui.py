@@ -267,10 +267,34 @@ def make_handler(store: Store):
                 raise ValueError("请求过大")
             return json.loads(self.rfile.read(n) or b"{}")
 
+        def _oa_sub(self, method: str) -> bool:
+            # OA 订阅接口（oa_subscribe.api）：GET/POST/DELETE /api/oa/subscriptions[/<id>]
+            from urllib.parse import parse_qs, urlsplit
+            from . import oa_subscribe
+            u = urlsplit(self.path)
+            if not u.path.startswith("/api/oa/subscriptions"):
+                return False
+            try:
+                body = self._body() if method == "POST" else None
+            except ValueError as e:
+                self._json({"ok": False, "error": str(e)}, 400)
+                return True
+            code, obj = oa_subscribe.api(method, u.path, parse_qs(u.query), body, store.root)
+            self._json(obj, code)
+            return True
+
+        def do_DELETE(self):
+            if not self._host_ok():
+                return self._send(403, b"forbidden", "text/plain")
+            if not self._oa_sub("DELETE"):
+                self._send(404, b"not found", "text/plain")
+
         def do_GET(self):
             if not self._host_ok():
                 return self._send(403, b"forbidden", "text/plain")
             path = self.path.split("?")[0]
+            if self._oa_sub("GET"):
+                return
             if path in ("/", "/index.html"):
                 return self._send(200, PAGE.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
@@ -291,6 +315,8 @@ def make_handler(store: Store):
         def do_POST(self):
             if not self._host_ok() or "application/json" not in (self.headers.get("Content-Type") or ""):
                 return self._send(403, b"forbidden", "text/plain")
+            if self._oa_sub("POST"):
+                return
             try:
                 body = self._body()
                 if self.path == "/api/schemes":
