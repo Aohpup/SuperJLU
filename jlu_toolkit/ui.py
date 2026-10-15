@@ -174,12 +174,21 @@ def _client() -> "jwxt.JwxtClient":
     return c
 
 
+# 吉大六个校区（教务代码表 01–06）；前端同样内置，接口取不到时也用这份
+CAMPUSES = [{"code": "01", "name": "前卫校区"}, {"code": "02", "name": "南岭校区"},
+            {"code": "03", "name": "新民校区"}, {"code": "04", "name": "朝阳校区"},
+            {"code": "05", "name": "南湖校区"}, {"code": "06", "name": "和平校区"}]
+
+
 def campuses_api(store: Store) -> dict:
     from . import rooms
     cache = store.p("campuses.json")
     if cache.exists():
         return {"campuses": json.loads(cache.read_text(encoding="utf-8"))}
-    c = _client()
+    try:
+        c = _client()
+    except Exception:  # noqa: BLE001  无会话时直接给内置列表
+        return {"campuses": CAMPUSES}
     lst = rooms.list_campuses(c)
     cache.write_text(json.dumps(lst, ensure_ascii=False), encoding="utf-8")
     c.save_session()
@@ -296,7 +305,21 @@ def _oa_known(store: Store) -> dict:
     from . import oa
     f = store._json("oa_channels.json", {})
     f = {str(k): str(v) for k, v in f.items()} if isinstance(f, dict) else {}
-    return {**oa.KNOWN_CHANNELS, **f, **(_oa_data(store).get("channels") or {})}
+    from . import college
+    oa_ch = {**oa.KNOWN_CHANNELS, **f, **(_oa_data(store).get("channels") or {})}
+    lead = {k: v for k, v in oa_ch.items() if not _OA_TAIL.search(v)}
+    tail = {k: v for k, v in oa_ch.items() if _OA_TAIL.search(v)}
+    # 顺序：OA 常规栏目 → 软件学院/计算机学院 → 医院、动科等院系栏目
+    return {**lead, **college.channels(), **tail}
+
+
+import re as _re
+_OA_TAIL = _re.compile(r"医院|动科|动物")
+
+
+def _resolve(cat: str, known: dict) -> str:
+    from . import college, oa
+    return cat if college.is_channel(cat) else oa.resolve_category(cat, known)
 
 
 def oa_channels_api(store: Store) -> dict:
@@ -309,19 +332,31 @@ def oa_notices_api(store: Store, q: dict) -> dict:
     from . import oa
     d = _oa_data(store)
     known = _oa_known(store)
-    ch = oa.resolve_category(q.get("category", ""), known)
+    ch = _resolve(q.get("category", ""), known)
     kw = q.get("keyword", "").strip()
     try:
         limit = max(1, min(500, int(q.get("limit") or 500)))
     except ValueError:
         raise ValueError("limit 应为整数")
-    items = [_oa_item(i) for i in ((d.get("channels_items") or {}).get(ch) or []) if isinstance(i, dict)]
+    from . import college
+    extra = {}
+    if college.is_channel(ch):
+        d = college.load(store.root)
+        src, _ = college._split(ch)
+        items = [{**_oa_item(i), "url": college.safe_url(i.get("url"), src["host"])}
+                 for i in ((d.get("channels_items") or {}).get(ch) or []) if isinstance(i, dict)]
+        st = (d.get("status") or {}).get(ch) or {}
+        extra = {"source": "college", "status": st.get("status", ""), "hint": st.get("hint", ""),
+                 "source_url": college.list_url(ch)}
+        d = {**d, "updated": st.get("at") or d.get("updated")}
+    else:
+        items = [_oa_item(i) for i in ((d.get("channels_items") or {}).get(ch) or []) if isinstance(i, dict)]
     if kw:
         items = [i for i in items if kw in i["title"] or kw in i["dept"]]
     items.sort(key=lambda i: (i["top"], i["time"], i["id"]), reverse=True)
     items = items[:limit]
     return {"ok": True, "channel": ch, "channel_name": known.get(ch) or oa.KNOWN_CHANNELS.get(ch, ""),
-            "count": len(items), "fetched_at": d.get("updated"), "items": items}
+            "count": len(items), "fetched_at": d.get("updated"), "items": items, **extra}
 
 
 def oa_notice_api(store: Store, nid: str) -> Optional[dict]:
@@ -330,13 +365,23 @@ def oa_notice_api(store: Store, nid: str) -> Optional[dict]:
         for i in lst or []:
             if isinstance(i, dict) and str(i.get("id")) == nid:
                 return {"ok": True, "item": _oa_item(i, full=True)}
+    from . import college
+    i = college.find(store.root, nid)
+    if i:
+        src, _ = college._split(i.get("channel", ""))
+        return {"ok": True, "item": {**_oa_item(i, full=True), "url": college.safe_url(i.get("url"), src["host"]),
+                                     "source": "college"}}
     return None
 
 
 def oa_refresh_api(store: Store, body: dict) -> dict:
     """POST /api/oa/refresh —— 只抓第 1 页（max_pages=1），写回本地缓存。"""
     from . import oa
-    ch = oa.resolve_category(str(body.get("category") or ""), _oa_known(store))
+    from . import college
+    ch = _resolve(str(body.get("category") or ""), _oa_known(store))
+    if college.is_channel(ch):
+        college.save(store.root, college.fetch(ch))
+        return oa_notices_api(store, {"category": ch})
     client = jwxt.JwxtClient()
     has = bool(client.load_session())
     res = oa.fetch_notices(client, ch, limit=30, max_pages=1)
@@ -488,6 +533,12 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
         def do_DELETE(self):
             if not self._host_ok():
                 return self._send(403, b"forbidden", "text/plain")
+            path = self.path.split("?")[0]
+            if path.startswith("/api/login/accounts/"):
+                import urllib.parse
+                u = urllib.parse.unquote(path[len("/api/login/accounts/"):])
+                ok = login.delete_account(u)
+                return self._json({"ok": ok, "accounts": login.accounts()}, 200 if ok else 404)
             if not self._oa_sub("DELETE"):
                 self._send(404, b"not found", "text/plain")
 
@@ -500,6 +551,11 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             if path in ("/", "/index.html"):
                 return self._send(200, PAGE.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
+            if path in ("/favicon.svg", "/favicon.ico"):  # SuperJLU 官方标志
+                from importlib import resources
+                data = resources.files("jlu_toolkit").joinpath("data", path[1:]).read_bytes()
+                ctype = "image/svg+xml" if path.endswith(".svg") else "image/x-icon"
+                return self._send(200, data, ctype)
             if path == "/api/sessions":  # 各校园站点会话状态（只读本地）
                 from . import sessions
                 return self._json(sessions.all_status())
@@ -528,8 +584,11 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 return self._json(j)
             if path == "/api/sso/jump":
                 return self._sso_jump()
+            if path == "/api/login/accounts":  # 只返回账号名，绝不返回密码
+                return self._json({"ok": True, "accounts": login.accounts()})
             if path == "/api/login":
                 return self._json({"ok": True, "saved_username": login.saved_username(),
+                                   "accounts": login.accounts(),
                                    "session": jwxt.session_status()})
             if path == "/api/data":
                 return self._json(store.snapshot())
@@ -568,12 +627,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 elif self.path == "/api/login/start":
                     return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
                                                                  body.get("remember", True) is not False)})
-                elif self.path == "/api/login/captcha":
-                    return self._json({"ok": True, **login.captcha()})
                 elif self.path == "/api/login/send_code":
-                    return self._json({"ok": True, **login.send_code(body.get("captcha", ""))})
+                    return self._json({"ok": True, **login.send_code()})
                 elif self.path == "/api/login/verify":
-                    return self._json({"ok": True, **login.verify(body.get("captcha", ""), body.get("wechat_code", ""))})
+                    return self._json({"ok": True, **login.verify(wechat_code=body.get("wechat_code", ""))})
                 elif self.path == "/api/login/cancel":
                     return self._json({"ok": True, **login.cancel()})
                 elif self.path == "/api/oa/refresh":
