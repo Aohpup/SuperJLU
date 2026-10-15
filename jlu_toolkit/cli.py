@@ -16,9 +16,9 @@ def _utf8_stdio() -> None:
             pass
 
 
-def main():
+def main(argv=None):
     try:
-        _main()
+        _main(argv)
     except jwxt.SessionExpiredError as e:
         print(f"{e}", file=sys.stderr)
         sys.exit(3)
@@ -41,7 +41,7 @@ def _cmd_status(x):
         sys.exit(3)
 
 
-def _main():
+def _main(argv=None):
     _utf8_stdio()
     from . import __version__
     p = argparse.ArgumentParser(prog="jlu-toolkit", description="吉大课表/成绩本地工具")
@@ -188,13 +188,31 @@ def _main():
     pp.add_argument("-o", "--out", help="--probe 报告路径")
     pp.add_argument("--debug", action="store_true")
 
+    oa = sub.add_parser("oa", help="吉大 OA 校内通知（只读；需校园网/VPN）")
+    oa.add_argument("action", nargs="?", default="notices", choices=["notices", "subscribe", "watch"],
+                    help="notices：列出通知；subscribe：管理关键词订阅；watch：增量同步并提醒")
+    oa.add_argument("sub_action", nargs="?", default="list", choices=["add", "list", "remove"],
+                    help="subscribe 的子命令：add/list/remove")
+    oa.add_argument("rule_id", nargs="?", default="", help="remove 时的规则 id")
+    oa.add_argument("--keywords", "-k", default="", help="subscribe add：关键词，逗号分隔")
+    oa.add_argument("--dept", default="", help="subscribe add：发文单位过滤，逗号分隔（可选）")
+    oa.add_argument("--interval", type=int, default=30, help="watch 间隔分钟（默认 30，最小 10）")
+    oa.add_argument("--once", action="store_true", help="watch 只运行一次")
+    oa.add_argument("--probe", action="store_true", help="只读探测认证方式/列表/分页/详情（ASCII 计数，无标题）")
+    oa.add_argument("--category", default="", help="栏目 channelId 或名称（默认 179577 校内通知）")
+    oa.add_argument("--keyword", default="", help="标题/单位关键字（本地过滤）")
+    oa.add_argument("--limit", type=int, default=30)
+    oa.add_argument("--pages", type=int, default=5, help="最多翻页数")
+    oa.add_argument("--json", action="store_true", help="ASCII JSON 输出")
+    oa.add_argument("--debug", action="store_true")
+
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
     u.add_argument("--data-dir", help="自定义数据目录")
     u.add_argument("--open", action="store_true", help="启动后尝试打开浏览器")
 
-    x = p.parse_args()
+    x = p.parse_args(argv)
     if x.cmd == "ics":
         open(x.o, "w", encoding="utf-8").write(
             core.to_ics(core.load_courses(x.csv), x.first_monday)
@@ -232,6 +250,8 @@ def _main():
         _cmd_plan(x)
     elif x.cmd == "sync":
         _cmd_sync(x)
+    elif x.cmd == "oa":
+        _cmd_oa(x)
     elif x.cmd == "rooms":
         _cmd_rooms(x)
 
@@ -802,6 +822,108 @@ def _cmd_ui(x):
         root.mkdir(parents=True, exist_ok=True)
     ui.serve(port=x.port, root=root, open_browser=x.open)
 
+
+
+
+def _cmd_oa_sub(x):
+    import time
+    from . import oa_subscribe as osub
+    if x.action == "subscribe":
+        try:
+            if x.sub_action == "add":
+                r = osub.add_rule(x.keywords, x.dept, x.category if x.category.isdigit() else "")
+                print(json.dumps(r) if x.json else f"已添加 {r['id']}：{'/'.join(r['keywords'])}"
+                      + (f"（单位：{'/'.join(r['depts'])}）" if r["depts"] else ""))
+            elif x.sub_action == "remove":
+                if not x.rule_id:
+                    raise ValueError("用法：jlu-toolkit oa subscribe remove <id>")
+                if not osub.remove_rule(x.rule_id):
+                    raise ValueError(f"规则不存在：{x.rule_id}")
+                print(f"已删除 {x.rule_id}")
+            else:
+                rules = osub.list_rules()
+                if x.json:
+                    print(json.dumps({"rules": rules, "matches": osub.recent_matches(x.limit if getattr(x, "limit", 0) else 20)}, ensure_ascii=False))
+                for r in [] if x.json else rules:
+                    print(f"{r['id']}  {'/'.join(r['keywords'])}" + (f"  单位：{'/'.join(r['depts'])}" if r["depts"] else ""))
+                if not x.json:
+                    ms = osub.recent_matches(5)
+                    if ms:
+                        print(f"最近命中 {len(ms)} 条：")
+                    for m in ms:
+                        print(f"  {m['matched_at']}  {m['notice'].get('title','')}  关键词：{'/'.join(m['keywords_hit'])}")
+                if not rules and not x.json:
+                    print("暂无订阅；用 jlu-toolkit oa subscribe add -k 讲座,奖学金 添加")
+        except ValueError as e:
+            print(f"OA: {e}", file=sys.stderr)
+            sys.exit(2)
+        return
+    interval = max(osub.MIN_INTERVAL, x.interval)
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    client.load_session()
+    while True:
+        try:
+            res = osub.watch_once(client)
+            print(f"[OA] {time.strftime('%H:%M')} 新通知 {res['new']} 条，命中 {res['matches']} 条", file=sys.stderr)
+        except (jwxt.JwxtError, ValueError) as e:
+            print(f"OA: {e}", file=sys.stderr)
+            if x.once:
+                sys.exit(2)
+        if x.once:
+            return
+        try:
+            time.sleep(interval * 60)
+        except KeyboardInterrupt:
+            return
+
+
+def _cmd_oa(x):
+    from . import oa, ui
+    if x.action in ("subscribe", "watch"):
+        return _cmd_oa_sub(x)
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    has = bool(client.load_session())
+    try:
+        if x.probe:
+            rep = {"saved_session": has, **oa.probe(client, anon_client=jwxt.JwxtClient())}
+            try:
+                ch = oa.discover_channels(jwxt.JwxtClient())["channels"]
+                if ch:
+                    d = ui.data_dir(); d.mkdir(parents=True, exist_ok=True)
+                    (d / "oa_channels.json").write_text(json.dumps(ch, ensure_ascii=False, indent=1), encoding="utf-8")
+            except jwxt.JwxtError:
+                pass
+            print(json.dumps(rep, indent=1))
+            if has:
+                client.save_session()
+            return
+        store = ui.Store(ui.data_dir())
+        known = {}
+        try:
+            known = json.loads(store.p("oa_notices.json").read_text(encoding="utf-8")).get("channels", {})
+        except (OSError, ValueError):
+            pass
+        try:
+            known = {**json.loads(store.p("oa_channels.json").read_text(encoding="utf-8")), **known}
+        except (OSError, ValueError):
+            pass
+        ch = oa.resolve_category(x.category, known)
+        res = oa.fetch_notices(client, ch, x.keyword, max(1, x.limit), max(1, x.pages),
+                               channel_filter=bool(x.category))
+        oa.save(store.root if hasattr(store, "root") else ui.data_dir(), res)
+        if has:
+            client.save_session()
+    except (jwxt.JwxtError, ValueError) as e:
+        _json_err(x, e)
+        print(f"OA: {e}", file=sys.stderr)
+        sys.exit(2)
+    if x.json:
+        res.pop("channels", None)
+        print(json.dumps(res))
+        return
+    print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
+    for i in res["items"]:
+        print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")
 
 if __name__ == "__main__":
     main()

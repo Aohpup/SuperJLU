@@ -87,7 +87,7 @@ tbody tr:hover td{background:var(--card2)}
 tr.off td{opacity:.42}
 .term td{background:var(--pri2)!important;font-size:12px;color:var(--pri);font-weight:650;padding:6px 10px}
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri)}
-select,input[type=text],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
+select,input[type=text],input[type=search],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
 select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px var(--pri2)}
 .chip{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:99px;background:var(--pri2);color:var(--pri);font-weight:550;line-height:1.6}
 /* 考试 */
@@ -108,6 +108,13 @@ details.gc{margin-top:8px}details.gc summary{font-size:12.5px;color:var(--sub)}
 details.tn{border-left:2px solid var(--line);padding:6px 0 6px 12px;margin-top:6px;border-radius:0 0 0 4px}details.tn>summary{padding:2px 0}
 details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))}
 @media(max-width:520px){main{padding:6px 10px 12px}.card{padding:14px;border-radius:16px}.gpa b{font-size:22px}.big{font-size:28px}}
+/* OA 通知 */
+.oal{list-style:none;margin:0;padding:0}.oal li{display:flex;gap:10px;align-items:flex-start;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:10px}.oal li:last-child{border-bottom:0}.oal li:hover{background:var(--card2)}
+.oal .tt{font-weight:600;line-height:1.45;flex:1;min-width:0}.oal .mt{display:block;color:var(--sub);font-size:12.5px;font-weight:450;margin-top:2px}.oal .ar{color:var(--sub);flex:none}
+.pin{display:inline-block;background:var(--warn2);color:var(--warn);font-size:11.5px;font-weight:650;padding:0 7px;border-radius:999px;margin-right:6px;vertical-align:1px}
+#oa-ch button{flex:none;white-space:nowrap;padding:7px 14px}.oaf{display:flex;gap:8px;flex-wrap:wrap}.oaf input{flex:2;min-width:160px}.oaf select{flex:1;min-width:120px}
+.oad h2{font-size:18px;line-height:1.45}.oad .body{white-space:pre-wrap;line-height:1.8;margin:14px 0;word-break:break-word}.oad .att{display:flex;flex-direction:column;gap:6px;margin-top:8px}.oad .att a{color:var(--pri);text-decoration:none;font-weight:550}.oad .att a:hover{text-decoration:underline}
+.soon{display:inline-block;background:var(--pri2);color:var(--pri);font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;vertical-align:2px;margin-left:6px}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head>
 <body>
@@ -153,6 +160,17 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
  <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
  <div class="card" id="rres" hidden></div></section>
 <section class="tab" id="t-ks"><div class="card"><h2>考试倒计时</h2><div id="exams"></div></div></section>
+<section class="tab" id="t-oa">
+ <div id="oa-list-v">
+ <div class="card"><div class="row"><h2 style="margin:0">OA 通知 <span class="sub" id="oa-meta"></span></h2><span class="sp"></span><button class="btn" id="oa-ref" title="只取 OA 第 1 页">⟳ 更新</button></div>
+  <div class="seg" id="oa-ch" style="margin:12px 0 0;overflow-x:auto" hidden></div>
+  <div class="oaf" style="margin-top:12px"><input id="oa-kw" type="search" placeholder="搜索标题或发文单位（本地筛选）"><select id="oa-dept"><option value="">全部单位</option></select></div>
+  <p class="sub" style="margin:10px 0 0">数据来自 OA（oa.jlu.edu.cn），只读、保存在本机。校外访问需先连接 <code>vpn.jlu.edu.cn</code>。</p></div>
+ <div class="card" id="oa-box" style="padding:8px 14px"><div class="state"><div class="spin"></div><b>正在读取通知…</b></div></div>
+ <div class="card" id="oa-sub"><h2>关键词订阅</h2><div id="oa-sub-b"><p class="sub" style="margin:0">读取中…</p></div></div>
+ </div>
+ <div id="oa-detail-v" hidden></div>
+</section>
 <section class="tab" id="t-sz">
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
   <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
@@ -161,7 +179,7 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用终端登录时保存的会话；会话失效时请在终端运行 <code>jlu-toolkit fetch --force-login</code>。</p></div>
 </section>
 </main>
-<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="sz"><b>⚙</b>设置</button></nav>
+<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>⚙</b>设置</button></nav>
 <div id="toast"></div>
 <script>
 "use strict";
@@ -285,6 +303,39 @@ function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats
  box.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;RS=RS.k===k?{k,d:-RS.d}:{k,d:1};renderRooms(j)})}
 $("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
  const j=await api("/api/rooms",{mode:RM,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
+let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null;
+function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
+function oaLink(u,label){return/^https?:\/\/oa\.jlu\.edu\.cn\//.test(u||"")?`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`:""}
+function renderOA(){const box=$("#oa-box");if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">校外请先连接 vpn.jlu.edu.cn 再点“更新”。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
+ if(!OA)return;const all=OA.items||[];const ds=[...new Set(all.map(i=>i.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh"));const sel=$("#oa-dept");sel.innerHTML='<option value="">全部单位</option>'+ds.map(d=>`<option${d===OAQ.dept?" selected":""}>${esc(d)}</option>`).join("");
+ $("#oa-meta").textContent=all.length?`${all.length} 条${OA.fetched_at?" · 更新于 "+String(OA.fetched_at).replace("T"," ").slice(0,16):""}`:"";
+ if(!all.length){box.innerHTML=`<div class="state"><b>还没有通知</b>点右上角“更新”从 OA 取第一页，或在终端运行 <code>jlu-toolkit oa notices</code>。</div>`;return}
+ const it=oaFilter(all,OAQ);if(!it.length){box.innerHTML=`<div class="state"><b>没有符合条件的通知</b>换个关键词或单位试试。</div>`;return}
+ box.innerHTML=`<ul class="oal">${it.map(i=>`<li data-id="${esc(i.id)}" tabindex="0"><div class="tt">${i.top?'<span class="pin">置顶</span>':""}${esc(i.title)}<span class="mt">${esc(i.dept||"未知单位")} · ${esc(i.time||"")}</span></div><span class="ar">›</span></li>`).join("")}</ul>`;
+ box.querySelectorAll("li").forEach(li=>{li.onclick=()=>openOA(li.dataset.id);li.onkeydown=e=>{if(e.key==="Enter")openOA(li.dataset.id)}})}
+function renderOACh(){const box=$("#oa-ch"),l=OACHS||[];box.hidden=l.length<2;box.innerHTML=l.map(c=>`<button data-ch="${esc(c.id)}" class="${c.id===OACH?"on":""}">${esc(c.name||c.id)}</button>`).join("");box.querySelectorAll("button").forEach(b=>b.onclick=()=>{OACH=b.dataset.ch;OA=null;OAQ.dept="";renderOACh();$("#oa-box").innerHTML=`<div class="state"><div class="spin"></div><b>正在读取通知…</b></div>`;loadOA()})}
+async function loadOA(){OAERR="";if(!OACHS){try{OACHS=(await api("/api/oa/channels")).channels}catch(e){OACHS=[{id:"179577",name:"校内通知"}]}if(!OACHS.some(c=>c.id===OACH))OACH=(OACHS[0]||{id:"179577"}).id;renderOACh()}try{OA=await api("/api/oa/notices?category="+encodeURIComponent(OACH))}catch(e){OA=null;OAERR=e.message}renderOA()}
+function oaBack(){$("#oa-detail-v").hidden=true;$("#oa-list-v").hidden=false}
+async function openOA(id){const v=$("#oa-detail-v");$("#oa-list-v").hidden=true;v.hidden=false;v.innerHTML=`<div class="card"><div class="state"><div class="spin"></div><b>正在读取…</b></div></div>`;scrollTo(0,0);
+ let i;try{i=(await api("/api/oa/notice?id="+encodeURIComponent(id))).item}catch(e){v.innerHTML=`<div class="card"><button class="btn ghost" id="oa-back">‹ 返回</button><div class="state"><b>读取失败</b>${esc(e.message)}</div></div>`;$("#oa-back").onclick=oaBack;return}
+ const atts=i.attachments||[];
+ v.innerHTML=`<div class="card oad"><div class="row" style="margin-bottom:10px"><button class="btn ghost" id="oa-back">‹ 返回</button><span class="sp"></span>${oaLink(i.url,"在 OA 中打开 ↗")}</div><h2>${i.top?'<span class="pin">置顶</span>':""}${esc(i.title)}</h2><div class="sub">${esc(i.dept||"未知单位")} · ${esc(i.time||"")}</div>`+
+  (i.text?`<div class="body">${esc(i.text)}</div>`:`<div class="state" style="padding:28px 8px"><b>本地没有正文</b>点“在 OA 中打开”查看原文（校外需先连接 vpn.jlu.edu.cn）。</div>`)+
+  (atts.length?`<h2 style="font-size:15px;margin-top:6px">附件 <span class="sub">${atts.length}</span></h2><div class="att">${atts.map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">📎 ${esc(a.name)}</a>`).join("")}</div>`:"")+`</div>`;
+ $("#oa-back").onclick=oaBack}
+$("#oa-kw").oninput=e=>{OAQ.kw=e.target.value;renderOA()};$("#oa-dept").onchange=e=>{OAQ.dept=e.target.value;renderOA()};
+$("#oa-ref").onclick=async()=>{const b=$("#oa-ref");b.disabled=true;b.textContent="更新中…";try{OA=await api("/api/oa/refresh",{category:OACH});OAERR="";renderOA();toast("已更新 OA 第一页")}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="⟳ 更新"}};
+async function subReq(m,path,body){const r=await fetch(path,body?{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method:m});let j=null;try{j=await r.json()}catch(_){}if(r.status===404&&(!j||j.ok===undefined)){const e=new Error("NOAPI");e.noapi=true;throw e}if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||("HTTP "+r.status));return j}
+const OACHN=id=>((OACHS||[]).find(c=>c.id===id)||{}).name||id;
+async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 JLU Toolkit 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
+ const rules=j.rules||[],ms=(j.matches||[]).filter(m=>rules.some(r=>r.id===m.rule_id));
+ b.innerHTML=`<p class="sub" style="margin:0 0 10px">按关键词（标题匹配）和发文单位订阅，只在本机保存。</p><div class="oaf"><input id="sub-kw" type="text" placeholder="关键词，逗号分隔，如 讲座,补考"><input id="sub-dp" type="text" placeholder="发文单位（可选，逗号分隔）"><button class="btn pri" id="sub-add">添加</button></div>`+
+ (rules.length?`<ul class="oal" style="margin-top:8px">${rules.map(r=>`<li style="cursor:default"><div class="tt">${(r.keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join(" ")}<span class="mt">${(r.depts||[]).length?"单位："+esc(r.depts.join("、"))+" · ":""}${r.channel?esc(OACHN(r.channel)):"全部栏目"}</span></div><button class="btn ghost" data-del="${esc(r.id)}">删除</button></li>`).join("")}</ul>`:`<p class="sub" style="margin:12px 0 0">还没有订阅规则。</p>`)+
+ `<h2 style="font-size:15px;margin:16px 0 4px">最近命中</h2>`+(ms.length?`<ul class="oal">${ms.map(m=>{const n=m.notice||{};return`<li data-id="${esc(n.id)}"><div class="tt">${n.top?'<span class="pin">置顶</span>':""}${esc(n.title)}<span class="mt">命中「${esc((m.keywords_hit||[]).join("、"))}」 · ${esc(n.dept||"")} · ${esc(n.time||"")}</span></div><span class="ar">›</span></li>`}).join("")}</ul>`:`<p class="sub" style="margin:0">暂无命中。命中记录由后台检查生成，请在终端运行 <code>jlu-toolkit oa watch</code>。</p>`);
+ $("#sub-add").onclick=async()=>{const kw=$("#sub-kw").value.trim();if(!kw)return toast("请填写关键词");const dp=$("#sub-dp").value.split(/[,，、]/).map(x=>x.trim()).filter(Boolean);try{await subReq("POST","/api/oa/subscriptions",{keywords:kw,depts:dp,channel:OACH});toast("已添加订阅");loadSubs()}catch(e){toast(e.noapi?"当前版本还没有订阅功能，请更新":e.message)}};
+ b.querySelectorAll("[data-del]").forEach(x=>x.onclick=async()=>{if(!confirm("删除这条订阅？"))return;try{await subReq("DELETE","/api/oa/subscriptions/"+encodeURIComponent(x.dataset.del))}catch(e){if(!/404/.test(e.message)&&!e.noapi)return toast(e.message)}loadSubs()});
+ b.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>openOA(li.dataset.id))}
+document.querySelector('nav button[data-t="oa"]').addEventListener("click",()=>{if(!OA){loadOA().then(loadSubs)}});
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
 load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});

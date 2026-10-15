@@ -240,3 +240,56 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 
 `POST /api/*` 遇到会话过期时返回 HTTP 401 和 `{"ok": false, "error": "...请重新登录...", "session_expired": true}`；
 其它接口的返回结构不变。
+
+## OA 校内通知（只读，实验性）
+
+吉大 OA（`oa.jlu.edu.cn`，万户 ezOFFICE）仅校园网/VPN 可达。本工具只发 GET，绝不做审批/表单操作。
+
+```
+jlu-toolkit oa --probe                 # ASCII 计数：登录页字段名、匿名/会话访问、行数、分页、栏目数、详情结构
+jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
+```
+
+- 列表：`PortalInformation!jldxList.action?channelId=<栏目>&startPage=<页>`（179577 = 校内通知）
+- 详情：`PortalInformation!getInformation.action?id=<id>&channelId=<栏目>`
+- 存储：`data/oa_notices.json` → `{updated, channels:{id:name}, channels_items:{id:[item]}}`
+- 关键字：默认用服务端搜索 `GET jldxList.action?searchId=<UTF-8 关键字>`（**不带 channelId**；PC 实测带 channelId 会忽略关键字，GBK 中文返回 0）。服务端检索跨全部栏目且可能命中正文，所以结果标题不一定含关键字。指定 `--category` 时按条目链接中的 channelId 本地筛选（`channel_filtered: true`），可能因此变少；不指定时结果可能来自任意栏目。`search` 字段为 `server`；若服务端搜索不可用（`oa._search_pref = ()`）则退回本地跨页过滤标题/单位（`search: local`）。
+- `oa --probe` 的 `search_variants`：每个变体给出 ascii/cjk/罕见词 `zzqx9` 的行数、与未过滤第 1 页的 id 重叠数、标题命中数；`filters` 判定 = 罕见词 0 行 且 ascii 命中率 ≥ 80% 且 ascii 重叠 < 行数。
+- MCP：`oa_notices(category, keyword, limit, refresh)`
+
+### 拟议 /api 形状（供 Web UI，后端尚未实现）
+
+`GET /api/oa/notices?category=&keyword=&limit=` →
+
+```json
+{"ok": true, "channel": "179577", "channel_name": "校内通知", "count": 2, "fetched_at": "2026-10-15T09:00:00",
+ "items": [{"id": "123", "title": "...", "time": "2026-10-01 08:05", "dept": "...", "top": true, "url": "https://oa.jlu.edu.cn/..."}]}
+```
+
+`GET /api/oa/channels` → `{"channels": [{"id": "179577", "name": "校内通知"}]}`；出错 `{"ok": false, "error": "...", "login_needed": true}`。
+
+### OA 关键词订阅与提醒（增量同步）
+
+只请求列表**第 1 页**（含置顶），按公告 id 与本地已见记录去重；绝不全量翻页，栏目之间间隔 2 秒。首次运行只记录现有 id，不发提醒。
+
+```
+jlu-toolkit oa subscribe add -k 讲座,奖学金 [--dept 教务处] [--category 179577]
+jlu-toolkit oa subscribe list [--json]
+jlu-toolkit oa subscribe remove <id>
+jlu-toolkit oa watch [--interval 30] [--once]     # 间隔最小 10 分钟
+```
+
+- 匹配：关键词出现在标题或发文单位中；设置了 `--dept` 时单位须包含其一。
+- 提醒：plyer（`pip install jlu-toolkit[notify]`）→ Termux `termux-notification` → Windows PowerShell 通知 → Linux `notify-send` → 仅打印；任何失败都不会中断。
+- 存储（`config_dir()/data`）：`oa_seen.json`、`oa_subscriptions.json` `{rules:[{id,keywords,depts,channel,created}]}`、`oa_matches.json` `{matches:[{rule_id,keywords_hit,notice,matched_at}]}`（最多 300 条）。
+- MCP：`oa_new_matches(limit=20, since="")` → `{rules, matches}`（只读本地）。
+
+Web API（仅 127.0.0.1）：
+
+| 方法 | 路径 | 请求 | 返回 |
+|---|---|---|---|
+| GET | `/api/oa/subscriptions?limit=20` | – | `200 {"ok":true,"rules":[...],"matches":[...]}` |
+| POST | `/api/oa/subscriptions` | `Content-Type: application/json`，`{"keywords":["讲座"] 或 "讲座,补考","depts":[...]（可选）,"channel":"179577"（可选）}` | `201 {"ok":true,"rule":{id,keywords,depts,channel,created}}`；校验失败 `400 {"ok":false,"error":"..."}` |
+| DELETE | `/api/oa/subscriptions/<id>` 或 `?id=<id>` | – | `200 {"ok":true,"removed":"<id>"}`；不存在 `404`；缺 id `405` |
+
+校验：至少 1 个关键词，每个 ≤40 字、最多 20 个（自动去重、去空白，支持中文逗号）；channel 必须是数字；规则最多 100 条。
