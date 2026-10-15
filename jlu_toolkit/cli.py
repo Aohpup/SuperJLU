@@ -510,7 +510,8 @@ def _cmd_gpa_probe(x):
         "modules_seen": (report.get("discover") or {}).get("modules_seen"),
         "gpaish_actions": [{"name": a["name"], "url": a["url"], "fields": a["fields"]}
                            for a in report.get("actions", []) if a.get("gpaish")],
-        "tries": [{k: t.get(k) for k in ("url", "status", "code", "msg", "datas_key", "fields", "matched_labels")}
+        "tries": [{k: t.get(k) for k in ("name", "variant", "status", "code", "msg",
+                                         "matched_labels", "payload_fields", "shape")}
                   for t in report.get("tries", [])],
     }, ensure_ascii=False, indent=1))
 

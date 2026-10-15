@@ -122,7 +122,7 @@ def test_fetch_gpa_sends_xh_fields():
     fc = FakeClient(ROUTES)
     g = meta.fetch_official_gpa(fc)
     sent = dict(fc.posts)[meta.EP_GPA]
-    assert sent.get("XH") == "20240001" or all(sent.get(f"XH{i}") == "20240001" for i in range(1, 7))
+    assert any(s.get("XH") == "20240001" or s.get("XH1") == "20240001" for _, s in fc.posts)
     assert g["items"][0]["value"] == "3.61"
 
 
@@ -331,8 +331,8 @@ def test_fetch_uses_resolved_cxxspjjdxx():
                      "controls": [{"name": "XH"}, {"name": "XNXQDM"}, {"name": "PJJD"}, {"name": "JQPJF"}]},
                 ]}), path
             if path == "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do":
-                assert fields.get("XH") == "20240001"
-                assert "XNXQDM" not in fields  # 累计，不传学期
+                if not fields.get("XH"):
+                    return 200, json.dumps({"code": "0", "datas": {"cxxspjjdxx": {"rows": []}}}), path
                 return 200, json.dumps({"datas": {"cxxspjjdxx": {"rows": [{"PJJD": "3.747", "JQPJF": "87.5", "SYBXKGPA": "3.8"}]}}}), path
             if "/jwapp/sys/cjcx/cjcx/" in path:
                 raise AssertionError(f"bad resolved path: {path}")
@@ -341,3 +341,55 @@ def test_fetch_uses_resolved_cxxspjjdxx():
     g = meta.fetch_official_gpa(FC())
     assert g["source"] == "official" and g["endpoint"].endswith("cxxspjjdxx.do")
     assert [i["key"] for i in g["items"]] == ["PJJD", "JQPJF", "SYBXKGPA"]
+
+
+def test_response_shape_and_extract_payload():
+    obj = {"code": "0", "datas": {"cxxspjjdxx": {"rows": [], "totalSize": 0}}}
+    s = meta.response_shape(obj)
+    assert "$.datas" in s["paths"] and s["paths"]["$.datas.cxxspjjdxx.rows"] == "array[0]"
+    assert meta.extract_gpa_payload(obj) is None
+
+    obj2 = {"code": "0", "datas": {"cxxspjjdxx": {"PJJD": 3.7, "JQPJF": 88}}}
+    assert meta.extract_gpa_payload(obj2)["PJJD"] == 3.7
+    s2 = meta.response_shape(obj2)
+    assert "PJJD" in s2["gpa_keys_seen"]
+    dumped = json.dumps(s2)
+    assert "3.7" not in dumped and "88" not in dumped
+
+    obj3 = {"code": "0", "datas": [{"PJJD": "3.1", "XH": "secret"}]}
+    assert meta.extract_gpa_payload(obj3)["PJJD"] == "3.1"
+    assert "secret" not in json.dumps(meta.response_shape(obj3))
+
+    obj4 = {"PJJD": 3.2, "SYBXKGPA": 3.5}
+    assert meta.extract_gpa_payload(obj4)["PJJD"] == 3.2
+
+
+def test_param_variants_include_xh_and_querysetting():
+    vs = meta._param_variants("20240001", ["XH", "XNXQDM"], "2026-2027-1")
+    names = [n for n, _, _ in vs]
+    assert "POST:XH" in names and "POST:XH+XNXQDM" in names
+    assert "POST:querySetting(XH)" in names and "POST:empty" in names
+    # 不含学号值泄漏到 variant 名以外的结构——form 有值但测试侧不打印
+    assert any(f.get("XH") == "20240001" for _, _, f in vs)
+
+
+def test_call_gpa_tries_variants_until_nonempty_rows():
+    calls = []
+    class FC:
+        def enter_emap_app(self, a): pass
+        def current_semester(self): return "2026-2027-1"
+        def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+            return 200, "{}", url, b""
+        def post_raw(self, path, fields, ref):
+            calls.append(dict(fields))
+            # 前两次空 rows，第三次（带 XNXQDM）返回
+            if fields.get("XNXQDM") == "2026-2027-1":
+                return 200, json.dumps({"code": "0", "datas": {"cxxspjjdxx": {"rows": [
+                    {"PJJD": "3.747", "JQPJF": "87.5"}]}}}), path
+            return 200, json.dumps({"code": "0", "datas": {"cxxspjjdxx": {"rows": []}}}), path
+
+    g = meta._call_gpa_action(FC(), "/jwapp/sys/cjcx/modules/cjcx/cxxspjjdxx.do",
+                              ["XH", "XNXQDM"], "20240001", "2026-2027-1")
+    assert g and g["source"] == "official" and g["items"][0]["key"] == "PJJD"
+    assert g["variant"] == "POST:XH+XNXQDM"
+    assert any("XNXQDM" in c for c in calls)

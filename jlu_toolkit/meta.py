@@ -341,6 +341,125 @@ def _gpaish(name: str, url: str, fields: list[str]) -> bool:
     return bool(GPA_ACTION_HINT.search(blob))
 
 
+
+def response_shape(obj, max_paths: int = 40) -> dict:
+    """脱敏响应形状：路径→类型；列表记长度；dict.rows 记字段名。不含任何值。"""
+    paths, labels = {}, []
+
+    def walk(x, path="$"):
+        if len(paths) >= max_paths:
+            return
+        if isinstance(x, dict):
+            paths[path] = "object"
+            # 若本层就有绩点字段
+            hit = [k for k, _ in GPA_FIELDS if k in x]
+            if hit:
+                labels.extend(hit)
+                paths[path + "{fields}"] = sorted(x.keys())[:40]
+            for k, v in x.items():
+                walk(v, f"{path}.{k}")
+        elif isinstance(x, list):
+            paths[path] = f"array[{len(x)}]"
+            if x and isinstance(x[0], dict):
+                paths[path + "[0].fields"] = sorted(x[0].keys())[:40]
+                labels.extend(k for k, _ in GPA_FIELDS if k in x[0])
+                walk(x[0], path + "[0]")
+        else:
+            paths[path] = type(x).__name__
+
+    walk(obj)
+    return {"paths": paths, "gpa_keys_seen": sorted(set(labels))}
+
+
+def extract_gpa_payload(obj) -> Optional[dict]:
+    """从任意常见 EMAP 形状中取出含官方绩点字段的一行/一块。"""
+    if not isinstance(obj, dict):
+        return None
+    # 1) datas.<name>.rows[0]
+    for name, blk in (obj.get("datas") or {}).items() if isinstance(obj.get("datas"), dict) else ():
+        if isinstance(blk, dict):
+            rows = blk.get("rows")
+            if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+                if any(k in rows[0] for k, _ in GPA_FIELDS):
+                    return rows[0]
+            if any(k in blk for k, _ in GPA_FIELDS):
+                return blk
+        if isinstance(blk, list) and blk and isinstance(blk[0], dict):
+            if any(k in blk[0] for k, _ in GPA_FIELDS):
+                return blk[0]
+    # 2) datas 本身是 list
+    if isinstance(obj.get("datas"), list) and obj["datas"] and isinstance(obj["datas"][0], dict):
+        if any(k in obj["datas"][0] for k, _ in GPA_FIELDS):
+            return obj["datas"][0]
+    # 3) 顶层就有绩点字段
+    if any(k in obj for k, _ in GPA_FIELDS):
+        return obj
+    # 4) data / result 常见别名
+    for alt in ("data", "result", "rows"):
+        v = obj.get(alt)
+        if isinstance(v, dict) and any(k in v for k, _ in GPA_FIELDS):
+            return v
+        if isinstance(v, list) and v and isinstance(v[0], dict) and any(k in v[0] for k, _ in GPA_FIELDS):
+            return v[0]
+    return None
+
+
+def _param_variants(xh: str, action_fields: list[str], term: str = "") -> list[tuple[str, str, dict]]:
+    """(variant_name, method, form) — 针对 cxxspjjdxx 等实测 200 空行的情况穷举。"""
+    f = set(action_fields or [])
+    vs = []
+    if xh:
+        vs.append(("POST:XH", "POST", {"XH": xh}))
+        vs.append(("POST:XH1..6", "POST", {f"XH{i}": xh for i in range(1, 7)}))
+        vs.append(("POST:XH+*order", "POST", {"XH": xh, "*order": "-XNXQDM"}))
+        qs = json.dumps([{"name": "XH", "value": xh, "linkOpt": "AND", "builder": "equal"}], ensure_ascii=False)
+        vs.append(("POST:querySetting(XH)", "POST", {"querySetting": qs}))
+        vs.append(("POST:requestParamStr(XH)", "POST",
+                   {"requestParamStr": json.dumps({"XH": xh}, ensure_ascii=False)}))
+        if term or "XNXQDM" in f:
+            t = term or ""
+            if t:
+                vs.append(("POST:XH+XNXQDM", "POST", {"XH": xh, "XNXQDM": t}))
+                vs.append(("POST:querySetting(XH,XNXQDM)", "POST", {
+                    "querySetting": json.dumps([
+                        {"name": "XH", "value": xh, "linkOpt": "AND", "builder": "equal"},
+                        {"name": "XNXQDM", "value": t, "linkOpt": "AND", "builder": "equal"},
+                    ], ensure_ascii=False)}))
+        if "TJLX" in f:
+            for tjlx in ("1", "2", "0", "all"):
+                vs.append((f"POST:XH+TJLX={tjlx}", "POST", {"XH": xh, "TJLX": tjlx}))
+        vs.append(("GET:XH", "GET", {"XH": xh}))
+        vs.append(("GET:XH+XNXQDM" if term else "GET:XH", "GET",
+                   {"XH": xh, **({"XNXQDM": term} if term else {})}))
+    # 元数据字段全量：只填学号相关，其它留空（避免 WID 报错）
+    if xh and f:
+        base = _xh_fields(xh, list(f), term)
+        vs.append(("POST:meta_fields", "POST", base))
+    vs.append(("POST:empty", "POST", {}))  # 最后：看无参时的响应形状
+    # 去重
+    seen, out = set(), []
+    for name, method, form in vs:
+        key = (method, tuple(sorted(form.items())))
+        if key not in seen:
+            seen.add(key); out.append((name, method, form))
+    return out
+
+
+def _request_json(client, url: str, method: str, form: dict) -> tuple[int, object]:
+    if method == "GET":
+        from urllib.parse import urlencode
+        full = "https://iedu.jlu.edu.cn" + url + (("?" + urlencode(form)) if form else "")
+        code, text, _, _ = client._request(full, headers={
+            "Referer": APP_CJCX, "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, */*"})
+    else:
+        code, text, _ = client.post_raw(url, form, APP_CJCX)
+    try:
+        return code, json.loads(text) if text else {}
+    except (json.JSONDecodeError, ValueError):
+        return code, text
+
+
 def probe_gpa(client, log=print) -> dict:
     """扫描 cjcx 应用：动作/字段名列表 + 绩点候选试调用结果（无个人数值）。"""
     from . import emap
@@ -367,59 +486,77 @@ def probe_gpa(client, log=print) -> dict:
         if a["url"] not in seen:
             seen.add(a["url"]); uniq.append(a)
     uniq.sort(key=lambda a: (0 if "cxxspjjdxx" in a["url"] else 1 if ("cxsfwfcsj" in a["url"] or "cxcjcxsfkf" in a["url"]) else 2, a["url"]))
-    xh = _s(_plan_row(client).get("XH"))
+    plan = _plan_row(client)
+    xh = _s(plan.get("XH"))
+    term = ""
+    try:
+        term = client.current_semester() or ""
+    except Exception:
+        pass
     report["has_xh"] = bool(xh)
+    report["has_term"] = bool(term)
     tries = []
+    # 优先动作多试几种参数；其它动作只试 XH / meta_fields
     for a in uniq:
-        fields = _xh_fields(xh, a["fields"]) if xh else {}
-        item = {"url": a["url"], "name": a["name"], "param_names": sorted(fields)}
-        try:
-            code, text, _ = client.post_raw(a["url"], fields, APP_CJCX)
-            item["status"] = code
-            obj = json.loads(text) if text else {}
-            item["code"] = _s(obj.get("code"))[:8]
-            if isinstance(obj.get("msg"), str):
-                item["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
-            for name, blk in (obj.get("datas") or {}).items():
-                if isinstance(blk, dict) and isinstance(blk.get("rows"), list) and blk["rows"]:
-                    row = blk["rows"][0]
-                    item["datas_key"] = name
-                    item["fields"] = sorted(row.keys()) if isinstance(row, dict) else []
-                    item["matched_labels"] = [k for k, _ in GPA_FIELDS if isinstance(row, dict) and k in row]
-                    break
-                if isinstance(blk, dict) and any(k in blk for k, _ in GPA_FIELDS):
-                    item["datas_key"] = name
-                    item["fields"] = sorted(blk.keys())
-                    item["matched_labels"] = [k for k, _ in GPA_FIELDS if k in blk]
-                    break
-        except (json.JSONDecodeError, ValueError):
-            item["non_json"] = True
-        except jwxt.JwxtError as e:
-            item["error"] = type(e).__name__
-        tries.append(item)
-        log(f"[绩点] {a['url'].rsplit('/',1)[-1]} → status={item.get('status')} code={item.get('code')} match={item.get('matched_labels')}")
+        variants = _param_variants(xh, a["fields"], term)
+        if "cxxspjjdxx" not in a["url"] and "cxsfwfcsj" not in a["url"] and "cxcjcxsfkf" not in a["url"]:
+            variants = [v for v in variants if v[0] in ("POST:XH", "POST:meta_fields", "POST:XH1..6", "POST:empty")][:3]
+        for vname, method, form in variants:
+            item = {"url": a["url"], "name": a["name"] or a["url"].rsplit("/", 1)[-1],
+                    "variant": vname, "param_names": sorted(form)}
+            try:
+                code, obj = _request_json(client, a["url"], method, form)
+                item["status"] = code
+                if isinstance(obj, (dict, list)):
+                    item["shape"] = response_shape(obj)
+                    if isinstance(obj, dict):
+                        item["code"] = _s(obj.get("code"))[:8]
+                        if isinstance(obj.get("msg"), str):
+                            item["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
+                    payload = extract_gpa_payload(obj) if isinstance(obj, dict) else None
+                    if payload:
+                        item["matched_labels"] = [k for k, _ in GPA_FIELDS if k in payload]
+                        item["payload_fields"] = sorted(payload.keys())[:40]
+                else:
+                    item["non_json_bytes"] = len(obj or "")
+            except jwxt.JwxtError as e:
+                item["error"] = type(e).__name__
+            tries.append(item)
+            shape_brief = ""
+            if item.get("shape"):
+                paths = item["shape"].get("paths") or {}
+                # 紧凑：只挑 datas / rows / gpa 相关
+                keep = [f"{k}:{v}" for k, v in paths.items()
+                        if "datas" in k or "rows" in k or "fields" in k][:6]
+                shape_brief = "; ".join(keep) or list(paths.items())[:3]
+            log(f"[绩点] {item['name']} / {vname} → {item.get('status')} code={item.get('code')} "
+                f"match={item.get('matched_labels')} shape={shape_brief}")
+            if item.get("matched_labels"):
+                break  # 该动作已命中，不再试其它变体
     report["tries"] = tries
-    report["hit"] = next(({"url": t["url"], "matched_labels": t["matched_labels"], "datas_key": t.get("datas_key")}
+    report["hit"] = next(({"url": t["url"], "variant": t["variant"], "matched_labels": t["matched_labels"]}
                           for t in tries if t.get("matched_labels")), None)
     # 脱敏：去掉可能含学号的请求体
     return {k: report[k] for k in ("discover", "meta", "meta_trace", "actions", "tries", "hit", "has_xh")}
 
 
-def _call_gpa_action(client, url: str, fields: list[str], xh: str) -> Optional[dict]:
-    data = _post(client, url, _xh_fields(xh, fields), APP_CJCX)
-    for blk in (data.get("datas") or {}).values():
-        if isinstance(blk, dict) and isinstance(blk.get("rows"), list) and blk["rows"]:
-            g = parse_official_gpa(blk["rows"][0])
-            if g["items"]:
-                g["source"] = "official"
-                g["endpoint"] = url
-                return g
-        if isinstance(blk, dict):
-            g = parse_official_gpa(blk)
-            if g["items"]:
-                g["source"] = "official"
-                g["endpoint"] = url
-                return g
+def _call_gpa_action(client, url: str, fields: list[str], xh: str, term: str = "") -> Optional[dict]:
+    for vname, method, form in _param_variants(xh, fields, term):
+        try:
+            code, obj = _request_json(client, url, method, form)
+        except jwxt.JwxtError:
+            continue
+        if not isinstance(obj, dict) or code != 200:
+            continue
+        payload = extract_gpa_payload(obj)
+        if not payload:
+            continue
+        g = parse_official_gpa(payload)
+        if g["items"]:
+            g["source"] = "official"
+            g["endpoint"] = url
+            g["variant"] = vname
+            return g
     return None
 
 
@@ -427,6 +564,11 @@ def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
     from . import emap
     tried = []
     xh = xh or _s(_plan_row(client).get("XH"))
+    term = ""
+    try:
+        term = client.current_semester() or ""
+    except Exception:
+        pass
     client.enter_emap_app(APP_CJCX)
     app = emap.App("cjcx", "cjcx")
     try:
@@ -453,7 +595,7 @@ def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
         if xh:
             for url, fields in candidates:
                 try:
-                    g = _call_gpa_action(client, url, fields, xh)
+                    g = _call_gpa_action(client, url, fields, xh, term)
                     if g:
                         return g
                     tried.append(f"{url.rsplit('/',1)[-1]}:empty")
