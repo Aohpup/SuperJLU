@@ -170,12 +170,21 @@ def _client() -> "jwxt.JwxtClient":
     return c
 
 
+# 吉大六个校区（教务代码表 01–06）；前端同样内置，接口取不到时也用这份
+CAMPUSES = [{"code": "01", "name": "前卫校区"}, {"code": "02", "name": "南岭校区"},
+            {"code": "03", "name": "新民校区"}, {"code": "04", "name": "朝阳校区"},
+            {"code": "05", "name": "南湖校区"}, {"code": "06", "name": "和平校区"}]
+
+
 def campuses_api(store: Store) -> dict:
     from . import rooms
     cache = store.p("campuses.json")
     if cache.exists():
         return {"campuses": json.loads(cache.read_text(encoding="utf-8"))}
-    c = _client()
+    try:
+        c = _client()
+    except Exception:  # noqa: BLE001  无会话时直接给内置列表
+        return {"campuses": CAMPUSES}
     lst = rooms.list_campuses(c)
     cache.write_text(json.dumps(lst, ensure_ascii=False), encoding="utf-8")
     c.save_session()
@@ -484,6 +493,11 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             if path in ("/", "/index.html"):
                 return self._send(200, PAGE.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
+            if path in ("/favicon.svg", "/favicon.ico"):  # SuperJLU 官方标志
+                from importlib import resources
+                data = resources.files("jlu_toolkit").joinpath("data", path[1:]).read_bytes()
+                ctype = "image/svg+xml" if path.endswith(".svg") else "image/x-icon"
+                return self._send(200, data, ctype)
             if path == "/api/sessions":  # 各校园站点会话状态（只读本地）
                 from . import sessions
                 return self._json(sessions.all_status())
