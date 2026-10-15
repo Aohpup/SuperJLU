@@ -1,4 +1,4 @@
-package io.github.runaasahi.jlutoolkit;
+package cn.superjlu.app;
 
 import android.app.Activity;
 import android.content.Intent;

@@ -51,4 +51,4 @@ def test_app_name_icon_and_insets():
     assert "setOnApplyWindowInsetsListener" in act and "displayCutout" in act
     assert "api/session/keepalive" in act and "onPause" in act
     gradle = (ROOT / "android" / "app" / "build.gradle").read_text(encoding="utf-8")
-    assert 'applicationId "io.github.runaasahi.jlutoolkit"' in gradle
+    assert 'applicationId "cn.superjlu.app"' in gradle
