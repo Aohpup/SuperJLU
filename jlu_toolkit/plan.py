@@ -331,7 +331,7 @@ def fetch_plan(client, grades=None, courses_now=None, use_cache: bool = True) ->
             best = json.loads(cp.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, ValueError):
             best = {}
-    if "plan" not in best or "kzkccx" in best["plan"].get("path", "") and not any(
+    if "plan" not in best or "trees" not in best or "kzkccx" in best["plan"].get("path", "") and not any(
             k in best["plan"].get("form", {}) for k in ("PYFADM", "querySetting")):
         _, found = explore(client)
         best = {k: {kk: v[kk] for kk in ("app", "route", "path", "form", "captions")}
