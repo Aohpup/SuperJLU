@@ -1,8 +1,8 @@
 """Android 入口：在后台线程启动 JLU Toolkit Web UI，只监听 127.0.0.1 的随机端口。
 
 不修改桌面端代码：通过 XDG_CONFIG_HOME 把配置/数据目录指到应用私有目录，
-并设置 JLU_TOOLKIT_NO_KEYRING（Android 上暂无钥匙串，secure_store 走文件回退，
-之后由 Android Keystore 接管）。
+会话、账号密码和缓存由 secure_store 的 Android Keystore 后端加密
+（密钥别名 jlu-toolkit-storage，见 #14），不再设置 JLU_TOOLKIT_NO_KEYRING。
 """
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ def start(files_dir: str) -> str:
     if _httpd is not None:
         return f"http://127.0.0.1:{_httpd.server_address[1]}/"
     os.environ["XDG_CONFIG_HOME"] = os.path.join(files_dir, "config")
-    os.environ.setdefault("JLU_TOOLKIT_NO_KEYRING", "1")
     os.environ.setdefault("HOME", files_dir)
     from jlu_toolkit import ui
 

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import core, exams as ex, jwxt
+from .web_login import LoginFlow
 from .ui_page import PAGE
 
 ALLOWED_HOSTS = ("127.0.0.1", "localhost")
@@ -236,7 +237,9 @@ def room_fields_api(store: Store) -> dict:
                                          for s in rooms.extra_search_fields(rooms.full_meta(c))])}
 
 
-def make_handler(store: Store):
+def make_handler(store: Store, login: Optional[LoginFlow] = None):
+    login = login or LoginFlow()
+
     class H(BaseHTTPRequestHandler):
         server_version = "JLUToolkitUI"
 
@@ -277,6 +280,9 @@ def make_handler(store: Store):
             if path == "/api/session":
                 # 新增（可选）：会话状态，供前端显示「请重新登录」横幅；只读本地文件，不访问教务
                 return self._json(jwxt.session_status())
+            if path == "/api/login":
+                return self._json({"ok": True, "saved_username": login.saved_username(),
+                                   "session": jwxt.session_status()})
             if path == "/api/data":
                 return self._json(store.snapshot())
             if path == "/api/ics":
@@ -309,6 +315,17 @@ def make_handler(store: Store):
                     return self._json({"ok": True, **room_fields_api(store)})
                 elif self.path == "/api/rooms/campuses":
                     return self._json({"ok": True, **campuses_api(store)})
+                elif self.path == "/api/login/start":
+                    return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
+                                                                 body.get("remember", True) is not False)})
+                elif self.path == "/api/login/captcha":
+                    return self._json({"ok": True, **login.captcha()})
+                elif self.path == "/api/login/send_code":
+                    return self._json({"ok": True, **login.send_code(body.get("captcha", ""))})
+                elif self.path == "/api/login/verify":
+                    return self._json({"ok": True, **login.verify(body.get("captcha", ""), body.get("wechat_code", ""))})
+                elif self.path == "/api/login/cancel":
+                    return self._json({"ok": True, **login.cancel()})
                 elif self.path == "/api/refresh":
                     return self._json({"ok": True, "result": refresh_from_jwxt(store), **store.snapshot()})
                 else:
