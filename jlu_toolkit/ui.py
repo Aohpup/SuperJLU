@@ -341,6 +341,78 @@ def oa_refresh_api(store: Store, body: dict) -> dict:
     return oa_notices_api(store, {"category": ch})
 
 
+LINK_FIELDS = ("id", "name", "icon", "url", "purpose", "login", "campus_only", "vpn_url")
+
+
+def _link_ok(u) -> bool:
+    import urllib.parse
+    try:
+        p = urllib.parse.urlsplit(str(u or ""))
+    except ValueError:
+        return False
+    h = (p.hostname or "").lower()
+    return p.scheme == "https" and (h == "jlu.edu.cn" or h.endswith(".jlu.edu.cn")) and not p.username
+
+
+def _vpn_rewriter():
+    """露娜 #18 的 campus.vpn_url（WebVPN 主机 AES-CFB 加密）；还没合进来时返回 None。"""
+    try:
+        from .campus import vpn_url  # type: ignore
+    except Exception:  # noqa: BLE001 — 模块不存在或缺 cryptography 都当作暂不支持
+        return None
+    return vpn_url
+
+
+def campus_links_api(override: Optional[Path] = None) -> dict:
+    """GET /api/links —— 内置 data/campus_links.json + 可选用户覆盖（config_dir/campus_links.json）。
+
+    覆盖规则：同 id 合并字段；"hidden": true 隐藏；新 id 追加。只返回 https://*.jlu.edu.cn 链接。
+    """
+    base = json.loads((Path(__file__).parent / "data" / "campus_links.json").read_text(encoding="utf-8"))
+    items = {x["id"]: dict(x) for x in base.get("links", [])}
+    order = list(items)
+    override = override or jwxt.config_dir() / "campus_links.json"
+    src, err = "builtin", None
+    if override.exists():
+        try:
+            o = json.loads(override.read_text(encoding="utf-8"))
+            for x in (o.get("links", []) if isinstance(o, dict) else o):
+                if not isinstance(x, dict) or not x.get("id"):
+                    continue
+                i = str(x["id"])
+                if i not in items:
+                    order.append(i)
+                items[i] = {**items.get(i, {}), **x}
+            src = "override"
+        except (json.JSONDecodeError, OSError, AttributeError, TypeError) as e:
+            err = f"覆盖文件无效，已忽略：{e}"
+    out, dropped = [], 0
+    rewrite = _vpn_rewriter()
+    for i in order:
+        x = items[i]
+        if x.get("hidden"):
+            continue
+        if not _link_ok(x.get("url")):
+            dropped += 1
+            continue
+        y = {k: x[k] for k in LINK_FIELDS if k in x}
+        if "vpn_url" in y and not _link_ok(y["vpn_url"]):
+            y.pop("vpn_url")
+        y["campus_only"] = bool(y.get("campus_only"))
+        if y["campus_only"] and "vpn_url" not in y and rewrite is not None:
+            try:
+                v = rewrite(y["url"])
+            except Exception:  # noqa: BLE001
+                v = None
+            if v and v != y["url"] and _link_ok(v):
+                y["vpn_url"] = v
+        out.append(y)
+    r = {"ok": True, "links": out, "source": src, "dropped": dropped}
+    if err:
+        r["warning"] = err
+    return r
+
+
 def make_handler(store: Store):
     class H(BaseHTTPRequestHandler):
         server_version = "JLUToolkitUI"
@@ -398,6 +470,8 @@ def make_handler(store: Store):
                         return self._json(r or {"ok": False, "error": "本地没有这条通知"}, 200 if r else 404)
                 except ValueError as e:
                     return self._json({"ok": False, "error": str(e)}, 400)
+            if path == "/api/links":
+                return self._json(campus_links_api())
             if path == "/api/data":
                 return self._json(store.snapshot())
             if path == "/api/ics":
