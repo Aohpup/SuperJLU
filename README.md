@@ -245,3 +245,107 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
 
 Android 版（`android/`，Chaquopy + WebView）的构建与签名发布约定见 [docs/android-release.md](docs/android-release.md)。
 Android 下凭据用 Android Keystore 包裹的主密钥加密（`backend_name()` = `android-keystore`），需要 Chaquopy 提供的 `cryptography==42.0.8`。
+
+## OA 校内通知（只读，实验性）
+
+吉大 OA（`oa.jlu.edu.cn`，万户 ezOFFICE）仅校园网/VPN 可达。本工具只发 GET，绝不做审批/表单操作。
+
+```
+jlu-toolkit oa --probe                 # ASCII 计数：登录页字段名、匿名/会话访问、行数、分页、栏目数、详情结构
+jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
+```
+
+- 列表：`PortalInformation!jldxList.action?channelId=<栏目>&startPage=<页>`（179577 = 校内通知）
+- 详情：`PortalInformation!getInformation.action?id=<id>&channelId=<栏目>`
+- 存储：`data/oa_notices.json` → `{updated, channels:{id:name}, channels_items:{id:[item]}}`
+- 关键字：默认用服务端搜索 `GET jldxList.action?searchId=<UTF-8 关键字>`（**不带 channelId**；PC 实测带 channelId 会忽略关键字，GBK 中文返回 0）。服务端检索跨全部栏目且可能命中正文，所以结果标题不一定含关键字。指定 `--category` 时按条目链接中的 channelId 本地筛选（`channel_filtered: true`），可能因此变少；不指定时结果可能来自任意栏目。`search` 字段为 `server`；若服务端搜索不可用（`oa._search_pref = ()`）则退回本地跨页过滤标题/单位（`search: local`）。
+- `oa --probe` 的 `search_variants`：每个变体给出 ascii/cjk/罕见词 `zzqx9` 的行数、与未过滤第 1 页的 id 重叠数、标题命中数；`filters` 判定 = 罕见词 0 行 且 ascii 命中率 ≥ 80% 且 ascii 重叠 < 行数。
+- MCP：`oa_notices(category, keyword, limit, refresh)`
+
+### 拟议 /api 形状（供 Web UI，后端尚未实现）
+
+`GET /api/oa/notices?category=&keyword=&limit=` →
+
+```json
+{"ok": true, "channel": "179577", "channel_name": "校内通知", "count": 2, "fetched_at": "2026-10-15T09:00:00",
+ "items": [{"id": "123", "title": "...", "time": "2026-10-01 08:05", "dept": "...", "top": true, "url": "https://oa.jlu.edu.cn/..."}]}
+```
+
+`GET /api/oa/channels` → `{"channels": [{"id": "179577", "name": "校内通知"}]}`；出错 `{"ok": false, "error": "...", "login_needed": true}`。
+
+## 校园站点会话（sessions）
+
+`jlu_toolkit/sessions.py` 统一管理各站点登录会话（只读本地，不后台轮询，不绕过验证码）。
+
+| id | 站点 | host | 认证 |
+|---|---|---|---|
+| jwxt | 教务系统 | iedu.jlu.edu.cn | CAS（沿用原有 session.enc） |
+| pay | 校园缴费 | ip.jlu.edu.cn | 自有（卡号+密码+验证码），只读 |
+| xsxk | 选课系统 | icourses.jlu.edu.cn | 自有（AES 密码+验证码，token 头） |
+| ilearn | 学在吉大 | ilearntec.jlu.edu.cn | 自有（邮箱+密码+验证码；课程中心或经 CAS，待确认） |
+| vpn | WebVPN | vpn.jlu.edu.cn | CAS |
+| lib | 图书馆 | lib.jlu.edu.cn | 首页无需登录；个人中心 CAS（optional_login） |
+
+> 探测备注（`campus --probe`，2026-10）：`pay` / `xsxk` 实际是自有表单+验证码（非 CAS）；
+> `ilearn` 课程中心会经 `ilearn.jlu.edu.cn/cas-server` 桥到 `cas.jlu.edu.cn`；
+> `lib` 门户匿名，个人中心走 CAS `service=.../sso/login/3rd/30569`。上表认证列待 sessions 注册表后续对齐。
+
+**策略**：cookie 一律经 `secure_store` 加密保存为 `session-<id>.enc`；状态文件 `sessions_status.json` 只记 `state/checked_at/reason`；
+从不保存任何支付信息，缴费站只读；带验证码的站点不保存密码（除非用户明确选择保存）；教务凭据行为不变。
+
+```
+jlu-toolkit sessions [--json]          # 各站状态
+jlu-toolkit sessions check <id>        # 用户触发：跑一次存活检查（有钩子时）
+jlu-toolkit sessions clear <id>
+```
+
+- HTTP：`GET /api/sessions` → `{"ok":true,"sites":[{"id","name","host","auth","vpn","captcha","optional_login","state","checked_at","needs_login","message","has_check"}]}`，
+  `state` ∈ ok/expired/missing/unknown。任何 `POST /api/*` 遇到某站会话过期返回 401：`{"ok":false,"error":"...","session_expired":true,"site":"<id>"}`（教务为 `"jwxt"`）。
+- MCP：`sessions_status()`，返回同上。
+- 钩子：`jlu_toolkit/campus.py`（`feat/campus-probe`）提供 `check_<id>(session) -> {"logged_in": True/False/None, "reason": str}`
+  （session 是带该站 cookie 的 `JwxtClient`，只发一次无副作用 GET；判定过期时先 `mark_expired` 再抛 `SiteSessionExpired`；
+  None → unknown）与 `vpn_url(url)`（AES-128-CFB / key=`Didida1127Didida` → `https://vpn.jlu.edu.cn/{scheme}/{token}{path}`）；
+  也可 `sessions.register_check(id, fn)` / `sessions.register_vpn_url(fn)`。无 campus 且未注册时 `vpn_url` 抛 `NotImplementedError`。
+- 探测：`jlu-toolkit campus --probe [--json]`（只读，无个人数值）。
+- 站点代码抛 `sessions.SiteSessionExpired("<id>")`，并可调用 `sessions.mark_expired(id, reason)`。
+
+## 登录保持与离线缓存
+
+统一认证要微信验证码，所以**不做**用密码静默重登。改为：
+
+- **CAS 单点登录持久化**：每次 `save_session()` 后，把 `cas.jlu.edu.cn` 主机上的全部 cookie（含 TGC 类长期票据，不假设具体名字）加密保存为站点 `cas`。
+  登录表单若有 `remember*` / `rememberMe` 字段会自动开启。
+- **静默换票** `sessions.refresh_via_cas(site)`：仅 `auth == "cas"` 且已知 service 的站点（目前只有 `jwxt`）。
+  教务会话过期时（`session_alive` / 接口请求落到登录页）自动尝试一次：带 CAS cookie 访问 `tpass/login?service=…`，回到教务则保存新会话；
+  落在 CAS 登录页则把 `cas` 标记为过期，照常抛 `SessionExpiredError`（界面显示应用内登录）。
+- **保活** `sessions.keepalive()`：一次轻量 GET。`jlu-toolkit sessions keepalive [--json]`（失效退出码 3）；
+  `POST /api/session/keepalive`（App 前台约每 15 分钟调用；Python 端没有后台循环）。
+- **加密数据缓存**：`secure_store.save_json(path, obj)` / `load_json(path, default)` / `json_exists(path)`。
+  `official_gpa.json`、`completion.json`、`plan_courses.json` 改为加密 `.enc`（旧明文首次读取时迁移）；
+  每次写入在 `data/cache_meta.json` 记 `updated_at`。课表/成绩/考试 CSV 与设置、OA 缓存暂保持原格式。
+- **离线标记**：`GET /api/session`、`GET /api/data` 增加 `offline`（教务会话不是 ok 但本地有缓存）与 `cached_at`（ISO 时间）。
+### OA 关键词订阅与提醒（增量同步）
+
+只请求列表**第 1 页**（含置顶），按公告 id 与本地已见记录去重；绝不全量翻页，栏目之间间隔 2 秒。首次运行只记录现有 id，不发提醒。
+
+```
+jlu-toolkit oa subscribe add -k 讲座,奖学金 [--dept 教务处] [--category 179577]
+jlu-toolkit oa subscribe list [--json]
+jlu-toolkit oa subscribe remove <id>
+jlu-toolkit oa watch [--interval 30] [--once]     # 间隔最小 10 分钟
+```
+
+- 匹配：关键词出现在标题或发文单位中；设置了 `--dept` 时单位须包含其一。
+- 提醒：plyer（`pip install jlu-toolkit[notify]`）→ Termux `termux-notification` → Windows PowerShell 通知 → Linux `notify-send` → 仅打印；任何失败都不会中断。
+- 存储（`config_dir()/data`）：`oa_seen.json`、`oa_subscriptions.json` `{rules:[{id,keywords,depts,channel,created}]}`、`oa_matches.json` `{matches:[{rule_id,keywords_hit,notice,matched_at}]}`（最多 300 条）。
+- MCP：`oa_new_matches(limit=20, since="")` → `{rules, matches}`（只读本地）。
+
+Web API（仅 127.0.0.1）：
+
+| 方法 | 路径 | 请求 | 返回 |
+|---|---|---|---|
+| GET | `/api/oa/subscriptions?limit=20` | – | `200 {"ok":true,"rules":[...],"matches":[...]}` |
+| POST | `/api/oa/subscriptions` | `Content-Type: application/json`，`{"keywords":["讲座"] 或 "讲座,补考","depts":[...]（可选）,"channel":"179577"（可选）}` | `201 {"ok":true,"rule":{id,keywords,depts,channel,created}}`；校验失败 `400 {"ok":false,"error":"..."}` |
+| DELETE | `/api/oa/subscriptions/<id>` 或 `?id=<id>` | – | `200 {"ok":true,"removed":"<id>"}`；不存在 `404`；缺 id `405` |
+
+校验：至少 1 个关键词，每个 ≤40 字、最多 20 个（自动去重、去空白，支持中文逗号）；channel 必须是数字；规则最多 100 条。

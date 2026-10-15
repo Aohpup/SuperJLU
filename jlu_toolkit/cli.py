@@ -16,9 +16,9 @@ def _utf8_stdio() -> None:
             pass
 
 
-def main():
+def main(argv=None):
     try:
-        _main()
+        _main(argv)
     except jwxt.SessionExpiredError as e:
         print(f"{e}", file=sys.stderr)
         sys.exit(3)
@@ -41,13 +41,20 @@ def _cmd_status(x):
         sys.exit(3)
 
 
-def _main():
+def _main(argv=None):
     _utf8_stdio()
     from . import __version__
     p = argparse.ArgumentParser(prog="jlu-toolkit", description="吉大课表/成绩本地工具")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    ss = sub.add_parser("sessions", help="各校园站点会话状态（不联网）；clear <site> 清除某站会话")
+    ss.add_argument("action", nargs="?", default="list", choices=["list", "clear", "check", "keepalive"])
+    ss.add_argument("site", nargs="?", default="")
+    ss.add_argument("--json", action="store_true")
+    camp = sub.add_parser("campus", help="校园站点探测（只读 GET；pay/xsxk/ilearn/vpn/lib）")
+    camp.add_argument("--probe", action="store_true", help="匿名探测登录类型/重定向/候选只读接口（无个人数值）")
+    camp.add_argument("--json", action="store_true", help="输出完整 JSON 报告")
     st = sub.add_parser("status", help="查看登录会话状态（默认不联网；--check 访问教务一次验证）")
     st.add_argument("--check", action="store_true", help="访问教务一次确认会话是否仍有效")
     st.add_argument("--json", action="store_true")
@@ -188,13 +195,31 @@ def _main():
     pp.add_argument("-o", "--out", help="--probe 报告路径")
     pp.add_argument("--debug", action="store_true")
 
+    oa = sub.add_parser("oa", help="吉大 OA 校内通知（只读；需校园网/VPN）")
+    oa.add_argument("action", nargs="?", default="notices", choices=["notices", "subscribe", "watch"],
+                    help="notices：列出通知；subscribe：管理关键词订阅；watch：增量同步并提醒")
+    oa.add_argument("sub_action", nargs="?", default="list", choices=["add", "list", "remove"],
+                    help="subscribe 的子命令：add/list/remove")
+    oa.add_argument("rule_id", nargs="?", default="", help="remove 时的规则 id")
+    oa.add_argument("--keywords", "-k", default="", help="subscribe add：关键词，逗号分隔")
+    oa.add_argument("--dept", default="", help="subscribe add：发文单位过滤，逗号分隔（可选）")
+    oa.add_argument("--interval", type=int, default=30, help="watch 间隔分钟（默认 30，最小 10）")
+    oa.add_argument("--once", action="store_true", help="watch 只运行一次")
+    oa.add_argument("--probe", action="store_true", help="只读探测认证方式/列表/分页/详情（ASCII 计数，无标题）")
+    oa.add_argument("--category", default="", help="栏目 channelId 或名称（默认 179577 校内通知）")
+    oa.add_argument("--keyword", default="", help="标题/单位关键字（本地过滤）")
+    oa.add_argument("--limit", type=int, default=30)
+    oa.add_argument("--pages", type=int, default=5, help="最多翻页数")
+    oa.add_argument("--json", action="store_true", help="ASCII JSON 输出")
+    oa.add_argument("--debug", action="store_true")
+
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
     u.add_argument("--data-dir", help="自定义数据目录")
     u.add_argument("--open", action="store_true", help="启动后尝试打开浏览器")
 
-    x = p.parse_args()
+    x = p.parse_args(argv)
     if x.cmd == "ics":
         open(x.o, "w", encoding="utf-8").write(
             core.to_ics(core.load_courses(x.csv), x.first_monday)
@@ -207,9 +232,10 @@ def _main():
             if not x.csv:
                 from . import ui
                 f = ui.data_dir() / "official_gpa.json"
-                if not f.exists():
+                from . import secure_store
+                d = secure_store.load_json(f)
+                if d is None:
                     print("尚无官方绩点；先运行 jlu-toolkit sync，或提供成绩 CSV", file=sys.stderr); sys.exit(2)
-                d = json.loads(f.read_text(encoding="utf-8"))
                 print(f"来源：{d.get('source')}  {d.get('endpoint') or ''}")
                 for i in d.get("items", []):
                     print(f"  {i['label']}：{i['value']}")
@@ -218,6 +244,10 @@ def _main():
     elif x.cmd == "today":
         for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
+    elif x.cmd == "sessions":
+        _cmd_sessions(x)
+    elif x.cmd == "campus":
+        _cmd_campus(x)
     elif x.cmd == "status":
         _cmd_status(x)
     elif x.cmd == "fetch":
@@ -232,6 +262,8 @@ def _main():
         _cmd_plan(x)
     elif x.cmd == "sync":
         _cmd_sync(x)
+    elif x.cmd == "oa":
+        _cmd_oa(x)
     elif x.cmd == "rooms":
         _cmd_rooms(x)
 
@@ -637,15 +669,15 @@ def _cmd_plan(x):
             print(json.dumps(pl.debug_known(client)))
             client.save_session()
             return
-        if x.probe or x.refresh or not f.exists():
+        from . import secure_store
+        if x.probe or x.refresh or not secure_store.json_exists(f):
             client = jwxt.JwxtClient(debug=bool(x.debug))
             if not client.load_session():
                 raise jwxt.LoginError("没有已保存的会话")
             if x.probe:
                 rep, found = pl.explore(client, log=err)
                 cf = store.p("completion.json")
-                comp_groups = (json.loads(cf.read_text(encoding="utf-8")).get("groups")
-                               if cf.exists() else None)
+                comp_groups = (secure_store.load_json(cf) or {}).get("groups")
                 try:
                     rep["diagnostics"] = pl.diagnose(client, found, comp_groups)
                 except jwxt.JwxtError as e:
@@ -664,13 +696,13 @@ def _cmd_plan(x):
             courses_now = core.load_courses(str(store.p("schedule.csv"))) if store.p("schedule.csv").exists() else []
             p = pl.fetch_plan(client, grades, courses_now, use_cache=not x.refresh)
             from .endpoints import scrub
-            f.write_text(json.dumps(scrub(p), ensure_ascii=False, indent=1), encoding="utf-8")
+            secure_store.save_json(f, scrub(p))
             cf = store.p("completion.json")
-            if cf.exists():
-                cf.write_text(json.dumps(pl.attach_to_completion(json.loads(cf.read_text(encoding="utf-8")), p),
-                                         ensure_ascii=False, indent=1), encoding="utf-8")
+            comp = secure_store.load_json(cf)
+            if comp is not None:
+                secure_store.save_json(cf, pl.attach_to_completion(comp, p))
             client.save_session()
-        p = json.loads(f.read_text(encoding="utf-8"))
+        p = secure_store.load_json(f, {})
     except jwxt.LoginError as e:
         err(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login"); _json_err(x, e); sys.exit(1)
     except jwxt.JwxtError as e:
@@ -802,6 +834,163 @@ def _cmd_ui(x):
         root.mkdir(parents=True, exist_ok=True)
     ui.serve(port=x.port, root=root, open_browser=x.open)
 
+
+
+
+def _cmd_oa_sub(x):
+    import time
+    from . import oa_subscribe as osub
+    if x.action == "subscribe":
+        try:
+            if x.sub_action == "add":
+                r = osub.add_rule(x.keywords, x.dept, x.category if x.category.isdigit() else "")
+                print(json.dumps(r) if x.json else f"已添加 {r['id']}：{'/'.join(r['keywords'])}"
+                      + (f"（单位：{'/'.join(r['depts'])}）" if r["depts"] else ""))
+            elif x.sub_action == "remove":
+                if not x.rule_id:
+                    raise ValueError("用法：jlu-toolkit oa subscribe remove <id>")
+                if not osub.remove_rule(x.rule_id):
+                    raise ValueError(f"规则不存在：{x.rule_id}")
+                print(f"已删除 {x.rule_id}")
+            else:
+                rules = osub.list_rules()
+                if x.json:
+                    print(json.dumps({"rules": rules, "matches": osub.recent_matches(x.limit if getattr(x, "limit", 0) else 20)}, ensure_ascii=False))
+                for r in [] if x.json else rules:
+                    print(f"{r['id']}  {'/'.join(r['keywords'])}" + (f"  单位：{'/'.join(r['depts'])}" if r["depts"] else ""))
+                if not x.json:
+                    ms = osub.recent_matches(5)
+                    if ms:
+                        print(f"最近命中 {len(ms)} 条：")
+                    for m in ms:
+                        print(f"  {m['matched_at']}  {m['notice'].get('title','')}  关键词：{'/'.join(m['keywords_hit'])}")
+                if not rules and not x.json:
+                    print("暂无订阅；用 jlu-toolkit oa subscribe add -k 讲座,奖学金 添加")
+        except ValueError as e:
+            print(f"OA: {e}", file=sys.stderr)
+            sys.exit(2)
+        return
+    interval = max(osub.MIN_INTERVAL, x.interval)
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    client.load_session()
+    while True:
+        try:
+            res = osub.watch_once(client)
+            print(f"[OA] {time.strftime('%H:%M')} 新通知 {res['new']} 条，命中 {res['matches']} 条", file=sys.stderr)
+        except (jwxt.JwxtError, ValueError) as e:
+            print(f"OA: {e}", file=sys.stderr)
+            if x.once:
+                sys.exit(2)
+        if x.once:
+            return
+        try:
+            time.sleep(interval * 60)
+        except KeyboardInterrupt:
+            return
+
+
+def _cmd_oa(x):
+    from . import oa, ui
+    if x.action in ("subscribe", "watch"):
+        return _cmd_oa_sub(x)
+    client = jwxt.JwxtClient(debug=bool(x.debug))
+    has = bool(client.load_session())
+    try:
+        if x.probe:
+            rep = {"saved_session": has, **oa.probe(client, anon_client=jwxt.JwxtClient())}
+            try:
+                ch = oa.discover_channels(jwxt.JwxtClient())["channels"]
+                if ch:
+                    d = ui.data_dir(); d.mkdir(parents=True, exist_ok=True)
+                    (d / "oa_channels.json").write_text(json.dumps(ch, ensure_ascii=False, indent=1), encoding="utf-8")
+            except jwxt.JwxtError:
+                pass
+            print(json.dumps(rep, indent=1))
+            if has:
+                client.save_session()
+            return
+        store = ui.Store(ui.data_dir())
+        known = {}
+        try:
+            known = json.loads(store.p("oa_notices.json").read_text(encoding="utf-8")).get("channels", {})
+        except (OSError, ValueError):
+            pass
+        try:
+            known = {**json.loads(store.p("oa_channels.json").read_text(encoding="utf-8")), **known}
+        except (OSError, ValueError):
+            pass
+        ch = oa.resolve_category(x.category, known)
+        res = oa.fetch_notices(client, ch, x.keyword, max(1, x.limit), max(1, x.pages),
+                               channel_filter=bool(x.category))
+        oa.save(store.root if hasattr(store, "root") else ui.data_dir(), res)
+        if has:
+            client.save_session()
+    except (jwxt.JwxtError, ValueError) as e:
+        _json_err(x, e)
+        print(f"OA: {e}", file=sys.stderr)
+        sys.exit(2)
+    if x.json:
+        res.pop("channels", None)
+        print(json.dumps(res))
+        return
+    print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
+    for i in res["items"]:
+        print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")
+
+
+def _cmd_campus(x):
+    from . import campus, jwxt
+    if not x.probe:
+        print("用法：jlu-toolkit campus --probe [--json]", file=sys.stderr)
+        sys.exit(2)
+    try:
+        rep = campus.probe(jwxt.JwxtClient())
+    except jwxt.NetworkError as e:
+        print(f"campus: {e}", file=sys.stderr)
+        sys.exit(1)
+    if x.json:
+        print(json.dumps(rep, ensure_ascii=False, indent=2))
+        return
+    print(campus.probe_table(rep))
+    print()
+    print(f"vpn_url 格式：{rep.get('vpn_format')}")
+    print(f"vpn_key：{rep.get('vpn_key')}")
+    for s in rep.get("sites") or []:
+        need = s.get("needs_login_to_confirm") or []
+        if need:
+            print(f"  [{s.get('id')}] 仍需登录确认：{', '.join(need)}")
+
+
+def _cmd_sessions(x):
+    from . import sessions
+    try:
+        if x.action == "keepalive":
+            r = sessions.keepalive()
+            print(json.dumps(r, ensure_ascii=False) if x.json else
+                  ("会话有效" + ("（已通过统一认证续期）" if r["refreshed_via_cas"] else "")) if r["alive"]
+                  else r["session"]["message"])
+            if not r["alive"]:
+                sys.exit(3)
+            return
+        if x.action in ("clear", "check"):
+            if not x.site:
+                raise ValueError(f"用法：jlu-toolkit sessions {x.action} <site>（{', '.join(sessions.SITES)}）")
+            if x.action == "clear":
+                sessions.clear(x.site)
+                print(f"已清除 {x.site} 的会话")
+                return
+            r = sessions.check(x.site)
+            print(json.dumps(r, ensure_ascii=False) if x.json else f"{r['id']}: {r['state']}  {r['message']}")
+            return
+        res = sessions.all_status()
+    except ValueError as e:
+        print(f"sessions: {e}", file=sys.stderr)
+        sys.exit(2)
+    if x.json:
+        print(json.dumps(res, ensure_ascii=False))
+        return
+    for r in res["sites"]:
+        print(f"{r['id']:<7}{r['name']:<8}{r['state']:<9}{r['message']}")
 
 if __name__ == "__main__":
     main()

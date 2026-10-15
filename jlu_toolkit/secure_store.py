@@ -307,3 +307,56 @@ class SecretFile:
         for p in (self.enc_path, self.plain_path):
             if p.is_file():
                 p.unlink()
+
+
+# ───────── 数据缓存（data/*.json）加密 ─────────
+
+# 含个人数值、需要加密的缓存；其余（设置、OA 通知等）保持明文 JSON
+PERSONAL_CACHES = frozenset({"official_gpa.json", "completion.json", "plan_courses.json"})
+CACHE_META = "cache_meta.json"
+
+
+def _cache_file(path: Path) -> SecretFile:
+    path = Path(path)
+    return SecretFile(path.parent, path.stem)
+
+
+def json_exists(path: Path) -> bool:
+    """path 为 xxx.json；加密后的 xxx.enc 也算存在。"""
+    return _cache_file(path).exists()
+
+
+def save_json(path: Path, obj: Any) -> Path:
+    """加密保存数据缓存（钥匙串不可用时退回 0600 明文），并在同目录 cache_meta.json 记录 updated_at。"""
+    path = Path(path)
+    out = _cache_file(path).save(obj)
+    touch_cache_meta(path)
+    return out
+
+
+def touch_cache_meta(path: Path) -> None:
+    import datetime as _dt
+    path = Path(path)
+    meta = cache_meta(path.parent)
+    meta[path.name] = {"updated_at": _dt.datetime.now().isoformat(timespec="seconds")}
+    try:
+        (path.parent / CACHE_META).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def load_json(path: Path, default: Any = None) -> Any:
+    """读取数据缓存；旧的明文 xxx.json 会透明迁移为加密文件。解密/解析失败返回 default。"""
+    try:
+        v = _cache_file(Path(path)).load()
+    except (SecureStoreError, ValueError, OSError):
+        return default
+    return default if v is None else v
+
+
+def cache_meta(root: Path) -> dict:
+    try:
+        d = json.loads((Path(root) / CACHE_META).read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}

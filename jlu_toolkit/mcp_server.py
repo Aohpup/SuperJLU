@@ -57,17 +57,54 @@ def main():
         from . import ui
         from .cli import filter_plan
         f = ui.Store(ui.data_dir()).p("plan_courses.json")
-        if not f.exists():
+        from . import secure_store
+        p = secure_store.load_json(f)
+        if p is None:
             return {"error": "尚无 plan_courses.json，请先运行 jlu-toolkit sync"}
-        p = _j.loads(f.read_text(encoding="utf-8"))
         cs = filter_plan(p.get("courses", []), status, term, nature)
         return {"count": len(cs), "courses": cs}
+
+    @mcp.tool()
+    def sessions_status() -> dict:
+        """各校园站点（教务/缴费/选课/学在吉大/VPN/图书馆）的登录会话状态。只读本地记录，不联网。"""
+        from . import sessions
+        return sessions.all_status()
 
     @mcp.tool()
     def session_status() -> dict:
         """教务登录会话状态（只读本地记录，不联网）。needs_login 为 true 时请提示用户在终端重新登录。"""
         from . import jwxt
         return jwxt.session_status()
+
+    @mcp.tool()
+    def oa_notices(category: str = "", keyword: str = "", limit: int = 20, refresh: bool = False) -> dict:
+        """吉大 OA 校内通知（只读）。category：栏目 channelId 或名称（默认校内通知）；keyword：标题/单位关键字。
+        refresh=true 时联网抓取（需校园网/VPN），否则读本地 oa_notices.json。"""
+        import json as _j
+        from . import jwxt, oa, ui
+        root = ui.data_dir()
+        f = root / "oa_notices.json"
+        try:
+            known = _j.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+            ch = oa.resolve_category(category, known.get("channels", {}))
+            if refresh or not f.exists():
+                c = jwxt.JwxtClient()
+                c.load_session()
+                oa.save(root, oa.fetch_notices(c, ch, keyword, limit, channel_filter=bool(category)))
+                known = _j.loads(f.read_text(encoding="utf-8"))
+        except (jwxt.JwxtError, ValueError) as e:
+            return {"error": str(e)}
+        items = known.get("channels_items", {}).get(ch, [])
+        if keyword:
+            items = [i for i in items if keyword in i.get("title", "") or keyword in i.get("dept", "")]
+        return {"channel": ch, "updated": known.get("updated"), "count": len(items[:limit]), "items": items[:limit]}
+
+    @mcp.tool()
+    def oa_new_matches(limit: int = 20, since: str = "") -> dict:
+        """OA 订阅命中的新通知（只读本地 oa_matches.json，由 jlu-toolkit oa watch 产生）。
+        since：ISO 时间，只返回之后命中的；同时返回当前订阅规则。"""
+        from . import oa_subscribe as osub
+        return {"rules": osub.list_rules(), "matches": osub.recent_matches(limit, since)}
 
     @mcp.tool()
     def list_campuses() -> list:

@@ -13,7 +13,12 @@ from . import exams as ex, jwxt, meta
 
 def _wjson(path: Path, obj) -> None:
     from .endpoints import scrub
+    from . import secure_store
+    if path.name in secure_store.PERSONAL_CACHES:
+        secure_store.save_json(path, scrub(obj))
+        return
     path.write_text(json.dumps(scrub(obj), ensure_ascii=False, indent=1), encoding="utf-8")
+    secure_store.touch_cache_meta(path)
 
 
 def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> dict:
@@ -87,8 +92,9 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
         p = pl.fetch_plan(client, grades=grades_cache, courses_now=courses_cache)
         _wjson(root / "plan_courses.json", p)
         cf = root / "completion.json"
-        if cf.exists():
-            comp = json.loads(cf.read_text(encoding="utf-8"))
+        from . import secure_store
+        comp = secure_store.load_json(cf)
+        if comp is not None:
             _wjson(cf, pl.attach_to_completion(comp, p))
         st: dict = {}
         for c in p["courses"]:
