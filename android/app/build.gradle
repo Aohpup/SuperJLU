@@ -4,10 +4,10 @@ plugins {
 }
 
 android {
-    namespace "io.github.runaasahi.jlutoolkit"
+    namespace "cn.superjlu.app"
     compileSdk 35
     defaultConfig {
-        applicationId "io.github.runaasahi.jlutoolkit"
+        applicationId "cn.superjlu.app"
         minSdk 24
         targetSdk 35
         versionCode((System.getenv("JLU_VERSION_CODE") ?: "1") as int)
