@@ -254,6 +254,27 @@ def save_cas_from_jar(jar) -> int:
     return len(cs)
 
 
+def migrate_cas_from_jwxt(jar=None) -> int:
+    """一次性透明迁移：站点 'cas' 为空时，从教务会话（jar 或已保存的 session）抽出 CAS 主机 cookie。
+
+    #20 之前登录的 session.enc 往往已含 cas.jlu.edu.cn 的 cookie，但没有单独的 session-cas；
+    幂等：已有 cas 会话则返回 0，不覆盖。按 domain 过滤，不假定 cookie 名。
+    """
+    existing = load_cookies("cas")
+    if existing:
+        return 0
+    if jar is None:
+        try:
+            data = _secret("jwxt").load()
+        except secure_store.SecureStoreError:
+            data = None
+        items = (data or {}).get("cookies") if isinstance(data, dict) else None
+        if not items:
+            return 0
+        jar = jwxt.jar_from_list(items)
+    return save_cas_from_jar(jar)
+
+
 def refresh_via_cas(site_id: str, c: Optional[jwxt.JwxtClient] = None) -> bool:
     """站点会话过期时，用已保存的 CAS cookie 对该站 service 换票，成功则保存新会话。
 
@@ -263,10 +284,12 @@ def refresh_via_cas(site_id: str, c: Optional[jwxt.JwxtClient] = None) -> bool:
     s = site(site_id)
     if s.auth != "cas" or not s.service or site_id == "cas":
         return False
+    c = c or client(site_id)
+    # #20 之前的教务会话里可能已有 CAS cookie，先迁到站点 cas
+    migrate_cas_from_jwxt(c.jar if any(True for _ in c.jar) else None)
     cas = load_cookies("cas")
     if not cas:
         return False
-    c = c or client(site_id)
     if getattr(c, "_cas_refreshing", False):
         return False
     c._cas_refreshing = True

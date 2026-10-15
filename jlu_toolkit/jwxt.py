@@ -564,6 +564,11 @@ class JwxtClient:
             return False
         self.jar = jar_from_list(data.get("cookies") or [])
         self._rebuild_opener()
+        try:  # 旧会话可能已含 CAS cookie，但站点 cas 为空（#20 之前登录的）
+            from . import sessions
+            sessions.migrate_cas_from_jwxt(self.jar)
+        except Exception:  # noqa: BLE001
+            pass
         return True
 
     def clear_session_file(self, path: Optional[Path] = None) -> None:

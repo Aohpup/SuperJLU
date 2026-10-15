@@ -173,3 +173,38 @@ def test_http_offline_and_keepalive(env, monkeypatch):
         assert k["alive"] and k["offline"] is False
     finally:
         srv.shutdown()
+
+
+
+def test_migrate_cas_from_jwxt_session(env):
+    """旧 session 含 CAS cookie、站点 cas 为空时，加载教务会话会一次性迁过去。"""
+    c = jwxt.JwxtClient()
+    c.jar = jar(("CASTGC", "old-tgt", "cas.jlu.edu.cn"), ("JSESSIONID", "iedu", "iedu.jlu.edu.cn"),
+                ("Language", "zh", "cas.jlu.edu.cn"))
+    # 只写教务会话，不调 save_cas_from_jar（模拟 #20 之前）
+    jwxt._secret(jwxt.default_session_path()).save({"cookies": jwxt.jar_to_list(c.jar)})
+    jwxt._write_session_status(jwxt.SESSION_OK)
+    assert sessions.load_cookies("cas") is None
+    assert jwxt.JwxtClient().load_session() is True
+    names = sorted(d["name"] for d in sessions.load_cookies("cas"))
+    assert names == ["CASTGC", "Language"]
+    # 幂等：再迁一次不覆盖
+    sessions.save_cookies("cas", [{"name": "CASTGC", "value": "kept", "domain": "cas.jlu.edu.cn", "path": "/"}])
+    assert sessions.migrate_cas_from_jwxt() == 0
+    assert sessions.load_cookies("cas")[0]["value"] == "kept"
+
+
+def test_refresh_migrates_before_exchange(monkeypatch, env):
+    """refresh_via_cas 在 cas 为空时会从当前 jar（或已存 jwxt 会话）迁移。"""
+    c = jwxt.JwxtClient()
+    c.jar = jar(("CASTGC", "tgt", "cas.jlu.edu.cn"), ("JSESSIONID", "s", "iedu.jlu.edu.cn"))
+    jwxt._secret(jwxt.default_session_path()).save({"cookies": jwxt.jar_to_list(c.jar)})
+    seen = {}
+
+    def fn(self, url):
+        seen["has"] = any(ck.name == "CASTGC" for ck in self.jar)
+        return 200, "<html>portal</html>", "https://iedu.jlu.edu.cn/jwapp/", b""
+    route(monkeypatch, fn)
+    assert sessions.load_cookies("cas") is None
+    assert sessions.refresh_via_cas("jwxt", jwxt.JwxtClient()) is True
+    assert seen["has"] and sessions.load_cookies("cas")
