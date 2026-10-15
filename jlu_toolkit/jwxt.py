@@ -254,6 +254,21 @@ def session_status() -> dict:
     }
 
 
+_REMEMBER_RE = re.compile(r"<input\b[^>]*\bname=[\"']((?:remember|rememberMe|rememberme|warn)[\w-]*)[\"'][^>]*>", re.I)
+
+
+def remember_me_fields(html: str) -> list:
+    """登录表单若有「记住我」类字段（remember*/rememberMe），返回 [(name, value)] 以开启它；没有则 []。"""
+    out = []
+    for m in _REMEMBER_RE.finditer(html or ""):
+        name = m.group(1)
+        if name.lower() == "warn":
+            continue
+        vm = re.search(r"\bvalue=[\"']([^\"']*)[\"']", m.group(0), re.I)
+        out.append((name, (vm.group(1) if vm and vm.group(1) not in ("", "false", "0") else "true")))
+    return out[:2]
+
+
 def looks_like_login_redirect(final_url: str, text: str = "") -> bool:
     """响应是否落在了 CAS 登录页 / 二次认证页（= 会话失效）。"""
     u = urllib.parse.urlparse(final_url or "")
@@ -519,7 +534,25 @@ class JwxtClient:
         out = _secret(path).save({"cookies": jar_to_list(self.jar)})
         if path == default_session_path():
             _write_session_status(SESSION_OK)
+            try:  # CAS 单点登录状态单独加密保存（站点 'cas'），供会话过期时静默换票
+                from . import sessions
+                sessions.save_cas_from_jar(self.jar)
+            except Exception:  # noqa: BLE001
+                pass
         return out
+
+    def try_cas_refresh(self) -> bool:
+        """教务会话过期时，用保存的 CAS cookie 换票一次（只试一次）。"""
+        if getattr(self, "_cas_tried", False) or getattr(self, "_cas_refreshing", False):
+            return False
+        self._cas_tried = True
+        try:
+            from . import sessions
+            ok = sessions.refresh_via_cas("jwxt", self)
+        except Exception:  # noqa: BLE001
+            ok = False
+        self._cas_refreshed = ok
+        return ok
 
     def load_session(self, path: Optional[Path] = None) -> bool:
         path = path or default_session_path()
@@ -531,6 +564,11 @@ class JwxtClient:
             return False
         self.jar = jar_from_list(data.get("cookies") or [])
         self._rebuild_opener()
+        try:  # 旧会话可能已含 CAS cookie，但站点 cas 为空（#20 之前登录的）
+            from . import sessions
+            sessions.migrate_cas_from_jwxt(self.jar)
+        except Exception:  # noqa: BLE001
+            pass
         return True
 
     def clear_session_file(self, path: Optional[Path] = None) -> None:
@@ -545,6 +583,8 @@ class JwxtClient:
             return False
         host = urllib.parse.urlparse(final).hostname or ""
         if host != IEDU_HOST or code not in (200, 302) or looks_like_login_redirect(final, text):
+            if self.try_cas_refresh():
+                return self.session_alive()
             mark_session_expired("session_alive")
             return False
         self._logged_in = True
@@ -639,6 +679,7 @@ class JwxtClient:
             return LoginStep.WRONG_PASSWORD
 
         _html, lt, execution, post_url = self.fetch_login_page(service)
+        remember = remember_me_fields(_html)
         referer = f"{CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
         rsa = self.encrypt_password_bundle(username, password, lt)
         # 字段顺序与页面 hidden input 一致；sl 不可省略（省略会 HTTP 500）
@@ -651,7 +692,7 @@ class JwxtClient:
                 ("lt", lt),
                 ("execution", execution),
                 ("_eventId", "submit"),
-            ]
+            ] + remember
         ).encode("utf-8")
 
         self._dbg(
@@ -1051,6 +1092,8 @@ class JwxtClient:
                 "若仍失败请 --force-login，并加 --debug 查看 cookie_names。"
             )
         if looks_like_login_redirect(final, text if code != 200 or not text.lstrip().startswith("{") else ""):
+            if self.try_cas_refresh():
+                return self._post_form(path, fields, referer)
             mark_session_expired(path)
             raise SessionExpiredError()
         if code != 200:
@@ -1059,6 +1102,8 @@ class JwxtClient:
             return json.loads(text)
         except json.JSONDecodeError as e:
             if "loginForm" in text or "/tpass/login" in text or "二次认证" in text:
+                if self.try_cas_refresh():
+                    return self._post_form(path, fields, referer)
                 mark_session_expired(path)
                 raise SessionExpiredError() from e
             raise JwxtError(f"{path} 返回非 JSON") from e

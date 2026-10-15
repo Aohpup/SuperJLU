@@ -1,6 +1,8 @@
 """校历/节次/官方绩点/学业完成 + sync + explore v2（不访问教务）。"""
 import json
 
+from jlu_toolkit import secure_store
+
 import pytest
 
 from jlu_toolkit import core, explore, jwxt, meta, sync, ui
@@ -136,7 +138,7 @@ def test_sync_all_writes_files_and_summary_has_no_personal(tmp_path):
     for secret in ("20240001", "3.61", "51"):
         assert secret not in dumped
     for f in ("schedule.csv", "grades.csv", "calendar.json", "periods.json", "official_gpa.json", "completion.json"):
-        assert (tmp_path / f).exists(), f
+        assert secure_store.json_exists(tmp_path / f) if f.endswith(".json") else (tmp_path / f).exists(), f
     assert fc.saved
     snap = ui.Store(tmp_path).snapshot()
     assert snap["first_monday"] == "2026-09-07" and snap["first_monday_source"] == "calendar"
@@ -236,7 +238,7 @@ def test_sync_unavailable_gpa_is_not_failure(tmp_path):
     fc = FakeClient(routes)
     s = sync.sync_all(fc, tmp_path)
     assert s["official_gpa"]["ok"] and s["official_gpa"]["available"] is False
-    assert json.loads((tmp_path / "official_gpa.json").read_text(encoding="utf-8"))["available"] is False
+    assert secure_store.load_json(tmp_path / "official_gpa.json")["available"] is False
 
 
 def test_grade_jw_point_roundtrip(tmp_path):
@@ -474,7 +476,7 @@ def test_sync_does_not_promote_cxxscj(tmp_path):
         return orig(path, fields, ref)
     fc.post_raw = post_raw
     s = sync.sync_all(fc, tmp_path)
-    g = json.loads((tmp_path / "official_gpa.json").read_text(encoding="utf-8"))
+    g = secure_store.load_json(tmp_path / "official_gpa.json")
     assert g.get("source") != "official" or "cxxscj" not in (g.get("endpoint") or "")
     # 应回退 jw_point 或 available false
     assert g.get("source") in ("grades_jw_point", None) or g.get("available") is False or g.get("source") == "grades_jw_point"

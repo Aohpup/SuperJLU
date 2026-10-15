@@ -34,7 +34,7 @@ def by_id(res):
 
 
 def test_registry_ids_are_identifiers():
-    assert list(sessions.SITES) == ["jwxt", "pay", "xsxk", "ilearn", "vpn", "lib"]
+    assert list(sessions.SITES) == ["jwxt", "pay", "xsxk", "ilearn", "vpn", "lib", "cas"]
     assert all(i.isidentifier() for i in sessions.SITES)
     assert all(sessions.SITES[i].auth == "own" and sessions.SITES[i].captcha for i in ("pay", "xsxk", "ilearn"))
     assert sessions.SITES["lib"].auth == "cas" and sessions.SITES["lib"].optional_login
@@ -131,7 +131,7 @@ def test_http(cfg, monkeypatch):
 def test_cli(capsys):
     from jlu_toolkit import cli
     cli.main(["sessions", "--json"])
-    assert len(json.loads(capsys.readouterr().out)["sites"]) == 6
+    assert len(json.loads(capsys.readouterr().out)["sites"]) == 7
     sessions.save_cookies("lib", [])
     cli.main(["sessions", "clear", "lib"])
     assert "已清除" in capsys.readouterr().out
