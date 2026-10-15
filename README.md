@@ -253,6 +253,7 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 - 列表：`PortalInformation!jldxList.action?channelId=<栏目>&startPage=<页>`（179577 = 校内通知）
 - 详情：`PortalInformation!getInformation.action?id=<id>&channelId=<栏目>`
 - 存储：`data/oa_notices.json` → `{updated, channels:{id:name}, channels_items:{id:[item]}}`
+- 关键字：门户搜索（`searchId`/`searchnr`）实测服务端**不过滤**（任意关键字都返回同一页）。`--keyword` 因此在本地跨页过滤标题/单位（最多 `--pages` 页，默认 5 页≈150 条）；输出 JSON 的 `search` 为 `local`。`oa --probe` 的 `search_variants` 会检查每个变体（与未过滤第 1 页的 id 重叠数、标题命中数、罕见词 `zzqx9` 行数），若某变体确实过滤则自动改用服务端搜索（`search: server`）。
 - MCP：`oa_notices(category, keyword, limit, refresh)`
 
 ### 拟议 /api 形状（供 Web UI，后端尚未实现）

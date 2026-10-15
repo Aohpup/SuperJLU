@@ -123,10 +123,30 @@ def test_search_variants_and_channels():
     oa._search_pref = None
     c = Fake(1)
     sv = oa.search_variants(c)
-    assert sv["post_searchId_utf8"]["cjk"] == 2 and sv["get_searchId_gbk"]["cjk"] == 0
+    assert sv["post_searchId_utf8"]["cjk"]["rows"] == 2 and sv["get_searchId_gbk"]["cjk"]["rows"] == 0
+    assert sv["post_searchId_utf8"]["cjk"]["overlap"] == 2 and not sv["post_searchId_utf8"]["filters"]
     r = oa.fetch_notices(c, keyword="教务")
-    assert [i["id"] for i in r["items"]] == ["222"]
+    assert [i["id"] for i in r["items"]] == ["222"] and r["search"] == "local"
     d = oa.discover_channels(Fake(1))
     assert d["channels"]["190001"] == "学术讲座" and d["channels"]["190002"] == "放假安排"
     assert d["sources"]["jldx_left.js"] == 1
+    oa._search_pref = None
+
+
+def test_search_filtering_detected():
+    class F(Fake):
+        def _request(self, url, data=None, headers=None, method=None, allow_redirects=True):
+            if data is not None:
+                return 200, "", url, b""
+            if "searchId=" in url:
+                h = LIST.split('<div class="li rel">')[0] + '<div class="li rel">' + LIST.split('<div class="li rel">')[2] \
+                    if "searchId=%E6%95%99" in url or "%E9%80%9A" in url else "<html></html>"
+                h = h.replace("id=222", "id=999").replace("教务通知", "教务通知 2025")
+                return 200, h, url, h.encode()
+            return super()._request(url, data, headers, method, allow_redirects)
+    oa._search_pref = None
+    sv = oa.search_variants(F(1))
+    assert sv["get_searchId_utf8_ch"]["filters"] and sv["get_searchId_utf8_ch"]["cjk"]["overlap"] == 0
+    r = oa.fetch_notices(F(1), keyword="教务")
+    assert r["search"] == "server" and [i["id"] for i in r["items"]] == ["999"]
     oa._search_pref = None

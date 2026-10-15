@@ -203,26 +203,46 @@ def search_request(client, keyword: str, variant: tuple, page: int = 1) -> tuple
     return code, _decode(raw or b"", text or ""), final or LIST
 
 
+RARE_KEYWORD = "zzqx9"
+
+
 def search_variants(client, keywords=("2025", "通知")) -> dict:
+    """每个变体：行数、与未过滤第 1 页的 id 重叠数、标题含关键字数；rare 关键字应为 0 行。
+    filters=true 表示服务端确实按关键字过滤。只输出计数。"""
+    try:
+        c0, h0, f0 = get(client, list_url())
+        base = {i["id"] for i in parse_list(h0)["items"]}
+    except jwxt.NetworkError:
+        base = set()
     out = {}
     for v in SEARCH_VARIANTS:
         row = {}
-        for k, kw in zip(("ascii", "cjk"), keywords):
+        for k, kw in zip(("ascii", "cjk", "rare"), (*keywords, RARE_KEYWORD)):
             try:
                 c, h, f = search_request(client, kw, v)
-                row[k] = len(parse_list(h)["items"]) if c == 200 and not needs_login(f, h) else -c
+                if c != 200 or needs_login(f, h):
+                    row[k] = {"rows": -c}
+                    continue
+                items = parse_list(h)["items"]
+                row[k] = {"rows": len(items), "overlap": sum(1 for i in items if i["id"] in base),
+                          "hits": sum(1 for i in items if kw in i["title"] or kw in i["dept"])}
             except jwxt.NetworkError:
-                row[k] = -1
+                row[k] = {"rows": -1}
+        cjk, rare = row["cjk"], row["rare"]
+        row["filters"] = (rare.get("rows") == 0 and cjk.get("rows", 0) > 0
+                          and cjk.get("hits") == cjk.get("rows")
+                          and (cjk.get("overlap", 0) < cjk["rows"] or not base))
         out[v[0]] = row
+    out["base_rows"] = len(base)
     return out
 
 
 def pick_search(client) -> Optional[tuple]:
+    """仅当某变体通过过滤检查才用服务端搜索；否则返回 None → 本地跨页过滤。"""
     global _search_pref
     if _search_pref is None:
         res = search_variants(client)
-        ok = [v for v in SEARCH_VARIANTS if res[v[0]]["cjk"] > 0] or \
-             [v for v in SEARCH_VARIANTS if res[v[0]]["ascii"] > 0]
+        ok = [v for v in SEARCH_VARIANTS if res[v[0]]["filters"]]
         _search_pref = ok[0] if ok else ()
     return _search_pref or None
 
@@ -303,13 +323,14 @@ def fetch_notices(client, channel: str = DEFAULT_CHANNEL, keyword: str = "", lim
             break
         items += new
         if keyword:
-            if len([i for i in items if keyword in i["title"]]) >= limit:
+            if len([i for i in items if keyword in i["title"] or keyword in i["dept"]]) >= limit:
                 break
         elif len(items) >= limit:
             break
     if keyword:
         items = [i for i in items if keyword in i["title"] or keyword in i["dept"]]
-    return {"channel": channel, "channel_name": channels.get(channel) or KNOWN_CHANNELS.get(channel, ""),
+    return {"search": "server" if variant else ("local" if keyword else "none"),
+            "pages_scanned": page, "channel": channel, "channel_name": channels.get(channel) or KNOWN_CHANNELS.get(channel, ""),
             "fetched_at": dt.datetime.now().isoformat(timespec="seconds"), "count": min(len(items), limit),
             "items": items[:limit], "channels": channels}
 
