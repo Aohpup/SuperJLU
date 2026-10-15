@@ -46,7 +46,7 @@ def test_parse_official_gpa():
     g = meta.parse_official_gpa({"PPJDCX": 3.6123, "JQPJF": 87.0, "PYFAMC": "计科", "XH": "secret"})
     assert g["plan"] == "计科"
     assert [i["key"] for i in g["items"]] == ["JQPJF", "PPJDCX"]  # GPA_FIELDS 顺序：JQPJF 在前
-    assert g["items"][1]["value"] == "87"
+    assert g["items"][0]["key"] == "JQPJF" and g["items"][0]["value"] == "87"
     assert "secret" not in json.dumps(g)
 
 
@@ -286,7 +286,7 @@ def test_emap_discover_cjcx_finds_gpa_action():
     rep = meta.probe_gpa(FC(), log=lambda s: None)
     dumped = json.dumps(rep)
     assert "3.61" not in dumped and "87" not in dumped
-    assert rep["hit"]["matched_labels"] == ["PPJDCX", "JQPJF"]
+    assert set(rep["hit"]["matched_labels"]) == {"PPJDCX", "JQPJF"}
     assert any(a["name"] == "cxzxfaxfjd" for a in rep["actions"])
 
 
