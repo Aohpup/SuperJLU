@@ -478,3 +478,16 @@ def test_sync_does_not_promote_cxxscj(tmp_path):
     assert g.get("source") != "official" or "cxxscj" not in (g.get("endpoint") or "")
     # 应回退 jw_point 或 available false
     assert g.get("source") in ("grades_jw_point", None) or g.get("available") is False or g.get("source") == "grades_jw_point"
+
+
+def test_zgcjgpa_row_accepted_and_xm_dropped():
+    row = {"ZGCJGPA": "3.75", "CJDPM": "12", "XM": "张三", "WID": "w", "SFFB": "1",
+           "XZNJ": "2024", "XZNJ_DISPLAY": "2024级", "YXDM": "01", "YXDM_DISPLAY": "计算机学院",
+           "ZYDM": "x", "ZYDM_DISPLAY": "计科", "BJDM": "b", "BJDM_DISPLAY": "1班"}
+    assert meta.is_summary_gpa_row(row)
+    g = meta.parse_official_gpa(row)
+    keys = [i["key"] for i in g["items"]]
+    assert keys[:2] == ["ZGCJGPA", "CJDPM"]
+    assert "XM" not in keys and "WID" not in keys
+    vals = {i["key"]: i["value"] for i in g["items"]}
+    assert vals["YXDM"] == "计算机学院" and vals["XZNJ"] == "2024级"

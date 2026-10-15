@@ -143,7 +143,15 @@ def main():
             _cmd_gpa_probe(x)
         else:
             if not x.csv:
-                print("请提供成绩 CSV，或使用 --probe", file=sys.stderr); sys.exit(2)
+                from . import ui
+                f = ui.data_dir() / "official_gpa.json"
+                if not f.exists():
+                    print("尚无官方绩点；先运行 jlu-toolkit sync，或提供成绩 CSV", file=sys.stderr); sys.exit(2)
+                d = json.loads(f.read_text(encoding="utf-8"))
+                print(f"来源：{d.get('source')}  {d.get('endpoint') or ''}")
+                for i in d.get("items", []):
+                    print(f"  {i['label']}：{i['value']}")
+                return
             print(json.dumps(core.gpa(core.load_grades(x.csv), x.term), ensure_ascii=False))
     elif x.cmd == "today":
         for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):

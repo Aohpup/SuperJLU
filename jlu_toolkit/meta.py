@@ -58,6 +58,7 @@ SUMMARY_GPA_KEYS = frozenset({
     "GPA", "PJJD", "JQPJF", "PJF", "XQPJF", "SSPJF",
     "SYBXKGPA", "SYBXXXKGPA", "XQBXKGPA", "XQBXXXKGPA",
     "PPJDCX", "PPJDZG", "BXKPPJD", "XWKPJJDCX", "XWKPJJDZG", "XWKJQPJF",
+    "ZGCJGPA",  # 吉大 rxylgpacxcx：最高成绩 GPA（官方）
 })
 COURSE_GPA_BLOCK = ("cxxscj", "xscjcx", "/xscj/", "cxxszhxqkb")  # 单科成绩/课表，绝不当官方绩点
 EP_PLAN_COURSES = "/jwapp/sys/jwpubapp/modules/pyfa/kzkccx.do"
@@ -71,6 +72,13 @@ EP_COMPLETION_GROUPS = "/jwapp/sys/xywccx/modules/xywccx/cxscfakz.do"
 
 # 官方绩点字段 → 中文标签（吉大 cxxspjjdxx + ysu-sdk 同款）
 GPA_FIELDS = [
+    # —— 吉大 rxylgpacxcx（官方，浏览器实测）——
+    ("ZGCJGPA", "官方GPA（最高成绩）"),
+    ("CJDPM", "成绩排名"),
+    ("XZNJ", "年级"),
+    ("YXDM", "学院"),
+    ("ZYDM", "专业"),
+    ("BJDM", "班级"),
     # —— 吉大成绩页「平均绩点信息」cxxspjjdxx ——
     ("PJJD", "平均绩点"),
     ("JQPJF", "加权平均分"),
@@ -177,7 +185,7 @@ def parse_periods(rows: list) -> dict:
 
 _CODE_FIELD = re.compile(r"^[A-Z][A-Z0-9_]{1,30}$")
 _SKIP_GPA_KEYS = frozenset({
-    "XH", "WID", "XNXQDM", "XNXQ", "XN", "XQ", "PYFADM", "PYFAMC", "TJLX",
+    "XH", "XM", "WID", "SFFB", "XNXQDM", "XNXQ", "XN", "XQ", "PYFADM", "PYFAMC", "TJLX",
     "pageSize", "pageNumber", "totalSize", "extParams",
 })
 
@@ -706,11 +714,37 @@ def fetch_rxyl_captions(client) -> dict:
     return caps
 
 
+_RXYL_OK_PATH = None
+
+
+def _rxyl_cache_file():
+    return jwxt.config_dir() / "data" / "gpa_endpoint.txt"
+
+
+def _load_rxyl_path():
+    try:
+        return _rxyl_cache_file().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def _save_rxyl_path(path: str) -> None:
+    try:
+        f = _rxyl_cache_file(); f.parent.mkdir(parents=True, exist_ok=True); f.write_text(path, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def fetch_rxyl_official_gpa(client, captions: Optional[dict] = None) -> Optional[dict]:
     """浏览器实测：POST ``.../modules*cjcx/rxylgpacx/rxylgpacxcx.do``，body=pageSize&pageNumber。"""
     form = {"pageSize": "10", "pageNumber": "1"}
     caps = captions if captions is not None else fetch_rxyl_captions(client)
-    for path in _star_paths(EP_GPA_RXYL, EP_GPA_RXYL_ENC, EP_GPA_RXYL_SLASH, EP_GPA_RXYL_ALT):
+    global _RXYL_OK_PATH
+    order = [EP_GPA_RXYL_ENC, EP_GPA_RXYL, EP_GPA_RXYL_SLASH, EP_GPA_RXYL_ALT]  # 实测 %2A 可用
+    cached = _load_rxyl_path()
+    if cached in order:
+        order.remove(cached); order.insert(0, cached)
+    for path in order:
         try:
             code, obj = _request_json(client, path, "POST", form)
         except jwxt.JwxtError:
@@ -749,6 +783,7 @@ def fetch_rxyl_official_gpa(client, captions: Optional[dict] = None) -> Optional
         g["endpoint"] = path
         g["variant"] = "POST:pageSize+pageNumber"
         g["rows"] = len(rows)
+        _save_rxyl_path(path)
         return g
     return None
 
