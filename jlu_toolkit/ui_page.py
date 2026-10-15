@@ -115,6 +115,12 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 #oa-ch button{flex:none;white-space:nowrap;padding:7px 14px}.oaf{display:flex;gap:8px;flex-wrap:wrap}.oaf input{flex:2;min-width:160px}.oaf select{flex:1;min-width:120px}
 .oad h2{font-size:18px;line-height:1.45}.oad .body{white-space:pre-wrap;line-height:1.8;margin:14px 0;word-break:break-word}.oad .att{display:flex;flex-direction:column;gap:6px;margin-top:8px}.oad .att a{color:var(--pri);text-decoration:none;font-weight:550}.oad .att a:hover{text-decoration:underline}
 .soon{display:inline-block;background:var(--pri2);color:var(--pri);font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;vertical-align:2px;margin-left:6px}
+/* 校园服务 */
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.lk{display:flex;flex-direction:column;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:14px}
+.lk .hd{display:flex;align-items:center;gap:10px}.lk .ic{width:34px;height:34px;border-radius:10px;background:var(--pri2);color:var(--pri);display:grid;place-items:center;font-size:17px;flex:none}
+.lk .hd b{flex:1;font-size:15px}.lk .lg{font-size:12.5px;color:var(--sub)}.lk .row{margin-top:4px}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:0 8px;border-radius:999px;line-height:1.7;background:var(--warn2);color:var(--warn)}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head>
 <body>
@@ -172,6 +178,8 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
  <div id="oa-detail-v" hidden></div>
 </section>
 <section class="tab" id="t-sz">
+ <div class="card" id="links"><h2>校园服务 <span class="sub">不常用但用得到的入口</span></h2><div id="links-b"><p class="sub" style="margin:0">读取中…</p></div></div>
+ <h2 style="margin:18px 4px 10px;font-size:14px;color:var(--sub)">设置</h2>
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
   <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
  <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
@@ -179,7 +187,7 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用终端登录时保存的会话；会话失效时请在终端运行 <code>jlu-toolkit fetch --force-login</code>。</p></div>
 </section>
 </main>
-<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>⚙</b>设置</button></nav>
+<nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>☰</b>更多</button></nav>
 <div id="toast"></div>
 <script>
 "use strict";
@@ -189,7 +197,7 @@ const COLORS=["#3b6fd4","#d4573b","#2e9e6a","#9b51e0","#d48a1e","#1f8fa8","#c241
 let D=null, week=1, include=new Set(), current="__all__", dirty=false;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",2600)}
 function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
-async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){D=Object.assign(D||{},{session_expired:true});try{renderSession()}catch(_){}}if(!r.ok||j.ok===false)throw new Error(j.error||(r.status===401?"登录会话已过期":r.status));return j}
+async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});try{renderSession()}catch(_){}}if(!r.ok||j.ok===false)throw new Error(j.error||(r.status===401?"登录会话已过期":r.status));return j}
 function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
 function maxWeek(){return Math.max((D.calendar&&D.calendar.total_weeks)||16,...D.courses.flatMap(c=>c.weeks))}
 function color(name){let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;return COLORS[h%COLORS.length]}
@@ -272,7 +280,7 @@ function renderAll(){
 async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll()}
 function sessionInfo(d){const s=d&&d.session;if(!s&&!(d&&d.session_expired))return null;const exp=(d&&d.session_expired===true)||(s&&(s.expired===true||s.valid===false||/^(expired|invalid)$/i.test(String(s.status||s.state||""))));return exp?(s||{}):null}
 function renderSession(){const box=$("#sess"),s=sessionInfo(D);if(!s){box.hidden=true;box.innerHTML="";return}box.hidden=false;
- box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>登录会话已过期，请重新登录</b><p class="sub">${s.message?esc(s.message)+" · ":""}在终端运行 <code>jlu-toolkit fetch --force-login</code> 后点“刷新”。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div></div>`}
+ box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>${D&&D.session_site?esc(SITEN(D.session_site))+" ":""}登录会话已过期，请重新登录</b><p class="sub">${s.message?esc(s.message)+" · ":""}在终端运行 <code>jlu-toolkit fetch --force-login</code> 后点“刷新”。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div></div>`}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0)});
 $("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
 $("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
@@ -336,6 +344,18 @@ async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET",
  b.querySelectorAll("[data-del]").forEach(x=>x.onclick=async()=>{if(!confirm("删除这条订阅？"))return;try{await subReq("DELETE","/api/oa/subscriptions/"+encodeURIComponent(x.dataset.del))}catch(e){if(!/404/.test(e.message)&&!e.noapi)return toast(e.message)}loadSubs()});
  b.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>openOA(li.dataset.id))}
 document.querySelector('nav button[data-t="oa"]').addEventListener("click",()=>{if(!OA){loadOA().then(loadSubs)}});
+let SITES=null,LINKN={};const SITEN=id=>(SITES&&SITES[id]&&SITES[id].name)||LINKN[id]||id;
+const SST={ok:["已登录","done"],expired:["已过期","miss"],missing:["未登录","chip"],unknown:["未知","chip"]};
+async function loadSessions(){try{const r=await fetch("/api/sessions");if(!r.ok)return null;const j=await r.json();if(!j||j.ok===false||!Array.isArray(j.sites))return null;const m={};j.sites.forEach(s=>{if(s&&s.id)m[s.id]=s});return m}catch(_){return null}}
+function stBadge(s){if(!s)return"";const t=SST[s.state]||SST.unknown;return`<span class="${t[1]}" title="${esc(s.message||"")}">${t[0]}</span>`}
+const LKOK=u=>{try{const p=new URL(u);return p.protocol==="https:"&&/(^|\.)jlu\.edu\.cn$/.test(p.hostname)}catch(_){return false}};
+const lkA=(u,t,c)=>LKOK(u)?`<a class="btn ${c}" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:"";
+async function loadLinks(){const b=$("#links-b");let j;try{j=await api("/api/links")}catch(e){b.innerHTML=`<p class="sub" style="margin:0">读取失败：${esc(e.message)}</p>`;return}
+ const L=(j.links||[]).filter(x=>LKOK(x.url));L.forEach(x=>LINKN[x.id]=x.name);SITES=await loadSessions();const S=id=>SITES&&SITES[id];
+ L.forEach(x=>{const s=S(x.id);if(!x.vpn_url&&s&&typeof s.vpn_url==="string"&&LKOK(s.vpn_url))x.vpn_url=s.vpn_url});if(!L.length){b.innerHTML='<p class="sub" style="margin:0">没有可显示的入口。</p>';return}
+ b.innerHTML=`<div class="lgrid">${L.map(x=>`<div class="lk"><div class="hd"><span class="ic" aria-hidden="true">${esc(x.icon||"↗")}</span><b>${esc(x.name)}</b>${x.campus_only?'<span class="tag">校内网</span>':""}${stBadge(S(x.id))}</div>${S(x.id)&&S(x.id).checked_at?`<div class="lg">状态检查于 ${esc(String(S(x.id).checked_at).replace("T"," ").slice(0,16))}</div>`:""}<div class="sub">${esc(x.purpose||"")}</div>${x.login?`<div class="lg">🔑 ${esc(x.login)}</div>`:""}${x.campus_only&&!x.vpn_url?'<div class="lg">校外请先连接校园 VPN</div>':""}<div class="row">${lkA(x.url,"打开 ↗","pri")}${x.vpn_url?lkA(x.vpn_url,"经 VPN 打开 ↗","ghost"):""}</div></div>`).join("")}</div>`+
+ `<p class="sub" style="margin:12px 0 0">链接在新窗口打开，账号在对应网站登录，本工具不保存这些网站的密码。可在 <code>~/.config/jlu-toolkit/campus_links.json</code> 增改入口（仅 jlu.edu.cn）。${j.warning?" ⚠ "+esc(j.warning):""}</p>`}
+document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(!window.__lk){window.__lk=1;loadLinks()}});
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
 load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});
