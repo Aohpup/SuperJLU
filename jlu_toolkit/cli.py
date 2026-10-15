@@ -48,6 +48,10 @@ def _main(argv=None):
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    ss = sub.add_parser("sessions", help="各校园站点会话状态（不联网）；clear <site> 清除某站会话")
+    ss.add_argument("action", nargs="?", default="list", choices=["list", "clear", "check"])
+    ss.add_argument("site", nargs="?", default="")
+    ss.add_argument("--json", action="store_true")
     st = sub.add_parser("status", help="查看登录会话状态（默认不联网；--check 访问教务一次验证）")
     st.add_argument("--check", action="store_true", help="访问教务一次确认会话是否仍有效")
     st.add_argument("--json", action="store_true")
@@ -228,6 +232,8 @@ def _main(argv=None):
     elif x.cmd == "today":
         for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
+    elif x.cmd == "sessions":
+        _cmd_sessions(x)
     elif x.cmd == "status":
         _cmd_status(x)
     elif x.cmd == "fetch":
@@ -861,6 +867,29 @@ def _cmd_oa(x):
     print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
     for i in res["items"]:
         print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")
+
+def _cmd_sessions(x):
+    from . import sessions
+    try:
+        if x.action in ("clear", "check"):
+            if not x.site:
+                raise ValueError(f"用法：jlu-toolkit sessions {x.action} <site>（{', '.join(sessions.SITES)}）")
+            if x.action == "clear":
+                sessions.clear(x.site)
+                print(f"已清除 {x.site} 的会话")
+                return
+            r = sessions.check(x.site)
+            print(json.dumps(r, ensure_ascii=False) if x.json else f"{r['id']}: {r['state']}  {r['message']}")
+            return
+        res = sessions.all_status()
+    except ValueError as e:
+        print(f"sessions: {e}", file=sys.stderr)
+        sys.exit(2)
+    if x.json:
+        print(json.dumps(res, ensure_ascii=False))
+        return
+    for r in res["sites"]:
+        print(f"{r['id']:<7}{r['name']:<8}{r['state']:<9}{r['message']}")
 
 if __name__ == "__main__":
     main()

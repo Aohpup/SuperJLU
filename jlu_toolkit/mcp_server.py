@@ -64,6 +64,12 @@ def main():
         return {"count": len(cs), "courses": cs}
 
     @mcp.tool()
+    def sessions_status() -> dict:
+        """各校园站点（教务/缴费/选课/学在吉大/VPN/图书馆）的登录会话状态。只读本地记录，不联网。"""
+        from . import sessions
+        return sessions.all_status()
+
+    @mcp.tool()
     def session_status() -> dict:
         """教务登录会话状态（只读本地记录，不联网）。needs_login 为 true 时请提示用户在终端重新登录。"""
         from . import jwxt

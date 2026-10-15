@@ -265,3 +265,33 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 ```
 
 `GET /api/oa/channels` → `{"channels": [{"id": "179577", "name": "校内通知"}]}`；出错 `{"ok": false, "error": "...", "login_needed": true}`。
+
+## 校园站点会话（sessions）
+
+`jlu_toolkit/sessions.py` 统一管理各站点登录会话（只读本地，不后台轮询，不绕过验证码）。
+
+| id | 站点 | host | 认证 |
+|---|---|---|---|
+| jwxt | 教务系统 | iedu.jlu.edu.cn | CAS（沿用原有 session.enc） |
+| pay | 校园缴费 | ip.jlu.edu.cn | CAS，只读 |
+| xsxk | 选课系统 | icourses.jlu.edu.cn | CAS |
+| ilearn | 学在吉大 | ilearntec.jlu.edu.cn | 自有（邮箱+密码+验证码） |
+| vpn | WebVPN | vpn.jlu.edu.cn | CAS |
+| lib | 图书馆 | lib.jlu.edu.cn | 无需登录 |
+
+**策略**：cookie 一律经 `secure_store` 加密保存为 `session-<id>.enc`；状态文件 `sessions_status.json` 只记 `state/checked_at/reason`；
+从不保存任何支付信息，缴费站只读；带验证码的站点不保存密码（除非用户明确选择保存）；教务凭据行为不变。
+
+```
+jlu-toolkit sessions [--json]          # 各站状态
+jlu-toolkit sessions check <id>        # 用户触发：跑一次存活检查（有钩子时）
+jlu-toolkit sessions clear <id>
+```
+
+- HTTP：`GET /api/sessions` → `{"ok":true,"sites":[{"id","name","host","auth","vpn","captcha","state","checked_at","needs_login","message","has_check"}]}`，
+  `state` ∈ ok/expired/missing/unknown。任何 `POST /api/*` 遇到某站会话过期返回 401：`{"ok":false,"error":"...","session_expired":true,"site":"<id>"}`（教务为 `"jwxt"`）。
+- MCP：`sessions_status()`，返回同上。
+- 钩子：可选模块 `jlu_toolkit/campus.py` 提供 `check_<id>(session) -> {"logged_in": True/False/None, "reason": str}`
+  （session 是带该站 cookie 的 `JwxtClient`，只发一次无副作用 GET；None → unknown）与 `vpn_url(url)`；
+  也可 `sessions.register_check(id, fn)` / `sessions.register_vpn_url(fn)`。`vpn_url` 未实现时抛 `NotImplementedError`。
+- 站点代码抛 `sessions.SiteSessionExpired("<id>")`，并可调用 `sessions.mark_expired(id, reason)`。

@@ -359,6 +359,9 @@ def make_handler(store: Store):
             if path in ("/", "/index.html"):
                 return self._send(200, PAGE.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
+            if path == "/api/sessions":  # 各校园站点会话状态（只读本地）
+                from . import sessions
+                return self._json(sessions.all_status())
             if path == "/api/session":
                 # 新增（可选）：会话状态，供前端显示「请重新登录」横幅；只读本地文件，不访问教务
                 return self._json(jwxt.session_status())
@@ -423,7 +426,8 @@ def make_handler(store: Store):
                     return self._send(404, b"not found", "text/plain")
                 return self._json({"ok": True, **store.snapshot()})
             except jwxt.SessionExpiredError as e:
-                return self._json({"ok": False, "error": str(e), "session_expired": True}, 401)
+                return self._json({"ok": False, "error": str(e), "session_expired": True,
+                                   "site": getattr(e, "site", "jwxt")}, 401)
             except (ValueError, jwxt.JwxtError) as e:
                 return self._json({"ok": False, "error": str(e)}, 400)
             except Exception as e:  # noqa: BLE001
