@@ -14,6 +14,7 @@ class Course:
 class Grade:
     name: str; credit: float; score: str; term: str
     jw_point: "float | None" = None  # 教务返回的单科绩点（若有）
+    nature: str = ""
 
 def parse_weeks(s):
     out = []
@@ -38,10 +39,10 @@ def load_grades(path):
         for r in csv.DictReader(f):
             jp = (r.get("教务绩点") or "").strip()
             out.append(Grade(r["课程"], float(r["学分"]), r["成绩"].strip(), r.get("学期",""),
-                             float(jp) if jp else None))
+                             float(jp) if jp else None, r.get("课程性质", "")))
         return out
 
-LEVEL = {"优秀":95,"良好":85,"中等":75,"及格":65,"不及格":0,"通过":None,"不通过":0}
+LEVEL = {"优秀":95,"良好":85,"中等":75,"及格":65,"不及格":55,"通过":None,"不通过":0}
 
 def score_to_point(score):
     """百分制：60 分记 1.0，每多 1 分加 0.1，90 分及以上记 4.0；等级制先换算成分数。具体规则请以学校规定为准。"""

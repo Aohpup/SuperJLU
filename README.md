@@ -4,7 +4,7 @@
 
 <p align="center"><b>SuperJLU —— 吉大人的一站式服务</b></p>
 
-<p align="center">课表 · 成绩 · 绩点 · 考试 · 空教室 · 培养方案 · OA 与学院通知 · 校园站点一键直达</p>
+<p align="center">课表 · 成绩加权分析 · 绩点 · 考试 · 空教室 · 培养方案 · OA 与学院通知 · 校园站点一键直达</p>
 
 > 原名 JLU Toolkit。为兼容，Python 包名仍为 `jlu_toolkit`，命令行仍是 `jlu-toolkit`（等价别名 `superjlu`），配置目录不变。
 
@@ -12,20 +12,20 @@
 
 ## 下载安装
 
-到 [Releases](https://github.com/Runa-Asahi/JLU-Toolkit/releases/latest) 下载最新版：
+到 [Releases](https://github.com/Runa-Asahi/SuperJLU/releases/latest) 下载最新版：
 
 | 平台 | 文件 | 用法 |
 | --- | --- | --- |
 | Windows | `SuperJLU.exe` | 双击即可：后台启动服务并自动打开浏览器界面，托盘图标可重新打开或退出；已在运行时再双击只会打开现有界面。 |
-| Android | `SuperJLU-<版本>.apk` | 直接安装。装过旧版 JLU Toolkit 的请先卸载（包名不同，无法覆盖安装）。 |
+| Android | `SuperJLU-<版本>.apk` | 直接安装。同签名可覆盖安装；装过旧版「JLU Toolkit」（包名不同）的请先卸载。 |
 | 命令行 / 开发者 | pip | 见下方。 |
 
 每个文件都附带 `.sha256` 校验值（PowerShell：`Get-FileHash 文件名`）。
 
 ```bash
 # 推荐装在独立环境里（uv 或 pipx 二选一）
-uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
-pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+uv tool install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/SuperJLU"
+pipx install "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/SuperJLU"
 # 需要 MCP 时把 [captcha] 换成 [captcha,mcp]
 
 jlu-toolkit ui --open        # 打开网页界面
@@ -37,6 +37,7 @@ jlu-toolkit ui --open        # 打开网页界面
 
 - **一次登录，长期有效**：账号 + 密码 → 微信验证码，图形验证码全自动识别；登录状态加密保存，过期时用统一认证自动续登。
 - **课表与成绩**：从教务自动同步，并缓存在本地，断网或登录失效时也能查看；导出 iCal 日历（课前 15 分钟提醒）。
+- **成绩加权分析**：保研 / 奖学金 / 全部课程模板，自定义规则，搜索筛选排序；可选导入 Excel/CSV 成绩单临时预览，不覆盖教务缓存。不及格按 55 分计入加权。
 - **绩点与培养方案**：学分加权绩点、官方绩点、各课组已修/在修/未修课程。
 - **考试安排**、**空教室查询**（六个校区直接选，按日期/周次、节次、座位数筛选）。
 - **通知聚合**：吉大 OA 校内通知 + 软件学院、计算机学院官网通知，支持搜索和关键词订阅提醒。
@@ -151,7 +152,7 @@ jlu-toolkit exams exams.csv             # 离线查看考试倒计时
 ```bash
 pkg install python git python-pillow python-cryptography   # cryptography 用 pkg 的预编译包，免去在手机上编译
 termux-setup-storage
-pip install -U "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+pip install -U "jlu-toolkit[captcha] @ git+https://github.com/Runa-Asahi/SuperJLU"
 # Termux 没有系统钥匙串：会话以 600 权限明文保存在 ~/.config/jlu-toolkit/，首次会打印一条警告，属正常
 jlu-toolkit fetch --probe
 jlu-toolkit fetch --user 你的邮箱前缀 --force-login
@@ -170,6 +171,14 @@ jlu-toolkit ui                 # 手机浏览器打开 http://127.0.0.1:8765/
 jlu-toolkit ui            # 浏览器打开 http://127.0.0.1:8765/
 jlu-toolkit ui --demo     # 用示例数据先看看效果
 ```
+
+成绩页支持加权成绩、加权绩点，以及保研加权（不含限选课程）、奖学金加权、所有课程三个内置模板。模板规则参考 [JLU-score-calculator](https://github.com/Aohpup/JLU-score-calculator)，仅作起点；不同学院政策不同，请核对当年规定，逐门调整后另存为自定义模板。模板保留基础规则与手动覆盖，新增课程按基础规则选择；原有方案仍可使用。
+
+可导入或拖入 Excel / CSV 成绩单（最多 25 MB，支持中英文表头、标题行、多工作表、UTF-8 / GB18030 CSV）。成绩页默认读取当前登录账号的教务成绩，并在已登录时自动同步。文件导入收在“其他方式 · 文件导入（可选）”中；导入数据单独保存在当前数据目录的 `imported_grades.json`，不覆盖教务成绩，可随时点击“返回教务成绩”。重新打开页面或登录后回到教务成绩，已导入文件仍可从可选入口重新查看。`--demo` 使用临时目录，正式启动使用本机数据目录。
+
+搜索、学期与性质多选、成绩 / 绩点 / 学分范围、计入状态和成绩状态只改变显示；加权结果始终统计所有已计入课程。批量计入 / 排除只作用于筛选结果，点击列标题可排序。不及格课程整行标红。教务课程优先使用提供的单科绩点，缺失时标明“估算”；导入成绩单缺少绩点时显示“—”。原教务的“通过”类课程不参与加权。
+
+成绩页右上角“？”提供规则、学院官网与政策查询关键词；首次打开成绩页会提醒核对政策。所有导入、模板和计算都在本机进行。
 
 - **课表**：周视图，左右滑动或按钮切换周次，今日高亮；首页顶部显示下一场考试倒计时
 - **成绩**：顶部显示教务官方「学分绩点统计」（只读）；下方每门课一个勾选框，实时计算所选课程的绩点；可把勾选结果另存为命名方案（如「保研」「综测」）
@@ -232,8 +241,10 @@ v2 会额外用内存中的学号/方案代码探测官方绩点与课组明细�
 绝不调用选课、退课、报名、评教提交等写接口。
 
 ## 接入 AI 助手（MCP）
+
+MCP 依赖需要 Python 3.10 或更高版本；普通 CLI / Web UI 仍支持 Python 3.9。Python 3.9 安装时会跳过不兼容的可选 MCP 依赖，以免影响基础功能和 `uv` 的跨版本依赖解析。
 ```bash
-pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/JLU-Toolkit"
+pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/SuperJLU"
 ```
 ```json
 {"mcpServers": {"jlu": {"command": "jlu-toolkit-mcp",
