@@ -13,6 +13,7 @@ class Course:
 @dataclass
 class Grade:
     name: str; credit: float; score: str; term: str
+    jw_point: "float | None" = None  # 教务返回的单科绩点（若有）
 
 def parse_weeks(s):
     out = []
@@ -33,7 +34,12 @@ def load_courses(path):
 
 def load_grades(path):
     with open(path, encoding="utf-8-sig") as f:
-        return [Grade(r["课程"], float(r["学分"]), r["成绩"].strip(), r.get("学期","")) for r in csv.DictReader(f)]
+        out = []
+        for r in csv.DictReader(f):
+            jp = (r.get("教务绩点") or "").strip()
+            out.append(Grade(r["课程"], float(r["学分"]), r["成绩"].strip(), r.get("学期",""),
+                             float(jp) if jp else None))
+        return out
 
 LEVEL = {"优秀":95,"良好":85,"中等":75,"及格":65,"不及格":0,"通过":None,"不通过":0}
 

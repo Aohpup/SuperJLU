@@ -24,6 +24,8 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
             s[name] = fn()
         except jwxt.LoginError:
             raise
+        except meta.Unavailable as e:
+            s[name] = {"ok": True, "available": False, "note": str(e)[:300]}
         except (jwxt.JwxtError, ValueError, KeyError) as e:
             s[name] = {"ok": False, "error": str(e)[:200]}
 
@@ -35,10 +37,14 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
         jwxt.export_courses_csv(cs, str(root / "schedule.csv"))
         return {"ok": True, "count": len(cs)}
 
+    grades_cache: list = []
+
     def _grades():
         gs = client.fetch_grades()
+        grades_cache.extend(gs)
         jwxt.export_grades_csv(gs, str(root / "grades.csv"))
-        return {"ok": True, "count": len(gs)}
+        return {"ok": True, "count": len(gs),
+                "with_jw_point": sum(1 for g in gs if getattr(g, "jw_point", None) is not None)}
 
     def _exams():
         es = client.fetch_exams(term)
@@ -56,15 +62,21 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
         return {"ok": True, "count": len(p), "first": p.get("1"), "last_section": max(map(int, p))}
 
     def _gpa():
-        g = meta.fetch_official_gpa(client)
+        try:
+            g = meta.fetch_official_gpa(client, grades=grades_cache)
+        except meta.Unavailable as e:
+            _wjson(root / "official_gpa.json", {"available": False, "note": str(e)[:300], "items": []})
+            raise
         _wjson(root / "official_gpa.json", g)
-        return {"ok": True, "fields": [i["key"] for i in g["items"]]}
+        return {"ok": True, "source": g.get("source"), "fields": [i["key"] for i in g["items"]]}
 
     def _prog():
-        c = meta.fetch_completion(client)
+        c = meta.fetch_completion(client, grades=grades_cache)
         _wjson(root / "completion.json", c)
         return {"ok": True, "groups": len(c["groups"]),
-                "has_required": c["required"] is not None, "has_earned": c["earned"] is not None}
+                "has_required": c["required"] is not None, "has_earned": c["earned"] is not None,
+                "groups_with_earned": sum(1 for g in c["groups"] if g.get("earned") is not None),
+                "groups_derived": c.get("groups_derived", 0)}
 
     for name, fn in (("schedule", _courses), ("grades", _grades), ("exams", _exams),
                      ("calendar", _cal), ("periods", _periods),

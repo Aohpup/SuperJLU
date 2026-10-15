@@ -28,6 +28,19 @@ APP_XYWCCX = "https://iedu.jlu.edu.cn/jwapp/sys/xywccx/*default/index.do"
 EP_CALENDAR = "/jwapp/sys/wdkb/modules/xskcb/cxxljc.do"
 EP_PERIODS = "/jwapp/sys/wdkb/modules/jshkcb/jc.do"
 EP_GPA = "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do"
+# 吉大实测 cxzxfaxfjd 返回 {"code":"404"}；依次尝试候选（探测用，均为只读查询）
+GPA_CANDIDATES = [
+    (EP_GPA, "XH1..6"),
+    (EP_GPA, "XH"),
+    ("/jwapp/sys/cjcx/modules/cjcx/cxxsjdtj.do", "XH"),
+    ("/jwapp/sys/cjcx/modules/cjcx/cxpjxfjd.do", "XH"),
+    ("/jwapp/sys/cjcx/modules/cjcx/xspjxfjd.do", "XH"),
+]
+EP_PLAN_COURSES = "/jwapp/sys/jwpubapp/modules/pyfa/kzkccx.do"
+
+
+class Unavailable(jwxt.JwxtError):
+    """接口在吉大不存在/无数据：不是故障。"""
 EP_PLAN = "/jwapp/sys/xsfacx/modules/pyfacxepg/grpyfacx.do"
 EP_COMPLETION = "/jwapp/sys/xywccx/modules/xywccx/cxxsscfa.do"
 EP_COMPLETION_GROUPS = "/jwapp/sys/xywccx/modules/xywccx/cxscfakz.do"
@@ -137,7 +150,7 @@ def parse_completion(summary: dict, plan: dict, groups: list) -> dict:
     gs = []
     for g in groups:
         req, done = _f(g.get("YQXF")), _f(g.get("WCXF"))
-        missing = max(0.0, (req or 0) - (done or 0)) if req is not None else None
+        missing = max(0.0, req - done) if req is not None and done is not None else None
         passed = _s(g.get("SFTG")) in ("1", "是", "true", "通过")
         gs.append({
             "name": _s(g.get("KZM")) or _s(g.get("KCXZDM_DISPLAY")) or "未命名课组",
@@ -147,6 +160,7 @@ def parse_completion(summary: dict, plan: dict, groups: list) -> dict:
             "required": req,
             "earned": done,
             "courses_done": int(_f(g.get("WCMS")) or 0),
+            "earned_source": "jw" if done is not None else None,
             "passed": passed,
             "missing": round(missing, 2) if missing is not None else None,
         })
@@ -162,6 +176,64 @@ def parse_completion(summary: dict, plan: dict, groups: list) -> dict:
         "calculated_at": _s(summary.get("CZSJ")),
         "groups": sorted(gs, key=lambda g: (g["passed"], -(g["missing"] or 0))),
     }
+
+
+def _passed(score: str) -> bool:
+    from . import core
+    s = (score or "").strip()
+    if s in ("通过", "合格"):
+        return True
+    p = core.score_to_point(s) if s else None
+    return bool(p and p > 0)
+
+
+def derive_group_earned(completion: dict, plan_courses: list, grades) -> dict:
+    """教务课组无 WCXF 时：按「培养方案课程 → 课组」映射 + 已通过成绩推算各课组已获学分。
+
+    课程按课程名匹配（成绩 CSV 无课程号）；父课组（FKZH）汇总子课组。
+    """
+    passed: dict = {}
+    for g in grades or []:
+        if _passed(g.score):
+            passed[g.name.strip()] = max(passed.get(g.name.strip(), 0.0), float(g.credit))
+    direct: dict = {}
+    seen: set = set()
+    for c in plan_courses:
+        kzh, name = _s(c.get("KZH")), _s(c.get("KCM"))
+        if not kzh or not name or (kzh, name) in seen:
+            continue
+        seen.add((kzh, name))
+        if name in passed:
+            direct[kzh] = direct.get(kzh, 0.0) + passed[name]
+    groups = completion.get("groups") or []
+    children: dict = {}
+    for g in groups:
+        if g.get("parent"):
+            children.setdefault(g["parent"], []).append(g["code"])
+
+    memo: dict = {}
+
+    def total(code, depth=0):
+        if code in memo:
+            return memo[code]
+        v = direct.get(code, 0.0)
+        if depth < 10:
+            v += sum(total(ch, depth + 1) for ch in children.get(code, []))
+        memo[code] = v
+        return v
+
+    changed = 0
+    for g in groups:
+        if g.get("earned") is None and g.get("code"):
+            g["earned"] = round(total(g["code"]), 2)
+            g["earned_source"] = "derived"
+            if g.get("required") is not None:
+                g["missing"] = round(max(0.0, g["required"] - g["earned"]), 2)
+                g["passed"] = g["missing"] == 0
+            changed += 1
+    completion["groups"] = sorted(groups, key=lambda g: (g["passed"], -(g["missing"] or 0)))
+    completion["groups_derived"] = changed
+    return completion
 
 
 # ───────────────────────── 网络（需会话） ─────────────────────────
@@ -205,19 +277,67 @@ def _plan_row(client) -> dict:
     return rows[0] if rows else {}
 
 
-def fetch_official_gpa(client, xh: Optional[str] = None) -> dict:
+def gpa_from_jw_points(grades) -> Optional[dict]:
+    """用教务返回的单科绩点按学分加权（与自算公式无关）。无教务绩点则 None。"""
+    tot = pts = 0.0
+    n = 0
+    for g in grades or []:
+        jp = getattr(g, "jw_point", None)
+        if jp is None or not g.credit:
+            continue
+        tot += g.credit
+        pts += jp * g.credit
+        n += 1
+    if not n:
+        return None
+    return {"plan": "", "source": "grades_jw_point",
+            "items": [{"key": "JW_WEIGHTED", "label": "教务单科绩点学分加权（全部课程）",
+                       "value": f"{pts / tot:.3f}"},
+                      {"key": "JW_COUNT", "label": "含教务绩点的课程数", "value": str(n)}]}
+
+
+def fetch_official_gpa(client, xh: Optional[str] = None, grades=None) -> dict:
     xh = xh or _s(_plan_row(client).get("XH"))
-    if not xh:
-        raise jwxt.JwxtError("无法取得学号（培养方案接口无 XH）")
-    client.enter_emap_app(APP_CJCX)
-    data = _post(client, EP_GPA, {f"XH{i}": xh for i in range(1, 7)}, APP_CJCX)
-    rows = _rows(data, "cxzxfaxfjd")
-    if not rows:
-        raise jwxt.JwxtError("学分绩点统计为空")
-    return parse_official_gpa(rows[0])
+    tried = []
+    if xh:
+        client.enter_emap_app(APP_CJCX)
+        for path, style in GPA_CANDIDATES:
+            fields = {f"XH{i}": xh for i in range(1, 7)} if style == "XH1..6" else {"XH": xh}
+            try:
+                data = _post(client, path, fields, APP_CJCX)
+            except jwxt.LoginError:
+                raise
+            except jwxt.JwxtError as e:
+                tried.append(f"{path.rsplit('/', 1)[-1]}:{str(e)[-8:]}")
+                continue
+            for blk in (data.get("datas") or {}).values():
+                rows = blk.get("rows") if isinstance(blk, dict) else None
+                if rows:
+                    g = parse_official_gpa(rows[0])
+                    if g["items"]:
+                        g["source"] = path
+                        return g
+            tried.append(f"{path.rsplit('/', 1)[-1]}:code={_s(data.get('code')) or 'empty'}")
+    alt = gpa_from_jw_points(grades)
+    if alt:
+        return alt
+    raise Unavailable("吉大教务未提供学分绩点统计接口（已尝试：" + "; ".join(tried) + "）")
 
 
-def fetch_completion(client) -> dict:
+def fetch_plan_courses(client, pyfadm: str, page_size: int = 500) -> list:
+    out: list = []
+    for page in range(1, 6):
+        data = _post(client, EP_PLAN_COURSES, {"PYFADM": pyfadm, "pageSize": str(page_size),
+                                               "pageNumber": str(page)}, APP_XSFACX)
+        rows = _rows(data, "kzkccx")
+        out += rows
+        total = ((data.get("datas") or {}).get("kzkccx") or {}).get("totalSize") or 0
+        if not rows or len(out) >= int(total or 0):
+            break
+    return out
+
+
+def fetch_completion(client, grades=None) -> dict:
     plan = _plan_row(client)
     client.enter_emap_app(APP_XYWCCX)
     rows = _rows(_post(client, EP_COMPLETION, {"SCLBDM": "04", "*order": "-CZSJ"}, APP_XYWCCX), "cxxsscfa")
@@ -235,4 +355,15 @@ def fetch_completion(client) -> dict:
             groups = []
     if not summary and not plan:
         raise jwxt.JwxtError("学业完成与培养方案均为空")
-    return parse_completion(summary, plan, groups)
+    comp = parse_completion(summary, plan, groups)
+    if grades is not None and any(g["earned"] is None for g in comp["groups"]):
+        pyfadm = _s(summary.get("PYFADM") or plan.get("PYFADM"))
+        if pyfadm:
+            try:
+                client.enter_emap_app(APP_XSFACX)
+                comp = derive_group_earned(comp, fetch_plan_courses(client, pyfadm), grades)
+            except jwxt.LoginError:
+                raise
+            except jwxt.JwxtError:
+                pass
+    return comp

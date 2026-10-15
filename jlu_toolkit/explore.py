@@ -100,6 +100,17 @@ PROBES: list[Probe] = [
           lambda t, c=None: {"XNXQDM": t, "pageSize": "5", "pageNumber": "1"}),
     Probe("代码表 校区", "kxjscx", "/jwapp/code/83a986fc-e677-400e-99a4-c7bb39c2ca35.do"),
     Probe("代码表 教学楼", "kxjscx", "/jwapp/code/82101c45-a7d3-414d-988b-24744db9f5ea.do"),
+    # v3：成绩行字段（找教务单科绩点字段名）与绩点候选
+    Probe("成绩行字段(1行)", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/xscjcx.do",
+          lambda t, c=None: {"pageSize": "1", "pageNumber": "1"}),
+    Probe("绩点候选 cxzxfaxfjd(XH)", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/cxzxfaxfjd.do",
+          lambda t, c=None: {"XH": c["XH"]}, needs=("XH",)),
+    Probe("绩点候选 cxxsjdtj", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/cxxsjdtj.do",
+          lambda t, c=None: {"XH": c["XH"]}, needs=("XH",)),
+    Probe("绩点候选 cxpjxfjd", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/cxpjxfjd.do",
+          lambda t, c=None: {"XH": c["XH"]}, needs=("XH",)),
+    Probe("绩点候选 xspjxfjd", "cjcx", "/jwapp/sys/cjcx/modules/cjcx/xspjxfjd.do",
+          lambda t, c=None: {"XH": c["XH"]}, needs=("XH",)),
     # 个人信息
     Probe("学生基本信息", "xsjbxxgl", "/jwapp/sys/xsjbxxgl/modules/xsjbxx/cxxsjbxxlb.do"),
     # 选课结果（只看入口，不碰选课接口）
@@ -128,6 +139,9 @@ def summarize_json(obj) -> dict:
     out["keys"] = sorted(obj.keys())
     if "code" in obj and isinstance(obj["code"], (str, int)) and len(str(obj["code"])) <= 6:
         out["code"] = str(obj["code"])
+    if isinstance(obj.get("msg"), str) and "datas" not in obj:
+        # 服务端错误文案（非个人数据）；截断并抹去长数字串以防回显学号
+        out["msg"] = re.sub(r"\d{5,}", "#", obj["msg"])[:60]
     datas = obj.get("datas")
     if isinstance(datas, dict):
         blocks = {}
@@ -246,8 +260,8 @@ def _capture_ctx(parsed, ctx: dict) -> None:
                     ctx[k] = str(v)
 
 
-DISCOVER_APPS = ("kxjscx", "kxjas")
-_DO_RE = re.compile(r"""["'(]((?:/jwapp/sys/|\./|modules/|[\w-]+/)[\w/*.-]*?\.do)\b""")
+DISCOVER_APPS = ("kxjscx", "kxjas", "cjcx")
+_DO_RE = re.compile(r"""["'(]([\w./*-]*?\.do)\b""")
 _SRC_RE = re.compile(r"""(?:src|href)\s*=\s*["']([^"'#?]+\.(?:js|json))""", re.I)
 
 
@@ -266,11 +280,31 @@ def discover_app(client, app: str, max_files: int = 12) -> dict:
     except Exception as e:  # noqa: BLE001
         return {"error": type(e).__name__}
     paths = set(extract_do_paths(html))
+    out["html_bytes"] = len(html or "")
+    all_src = [urllib.parse.urlparse(urllib.parse.urljoin(final or base, s)).path
+               for s in _SRC_RE.findall(html or "")]
+    out["script_srcs"] = all_src[:40]  # 静态资源路径（代码，非个人数据）
     srcs = []
     for s in _SRC_RE.findall(html or ""):
         url = urllib.parse.urljoin(final or base, s)
-        if f"/jwapp/sys/{app}/" in url and url not in srcs:
+        if (f"/jwapp/sys/{app}/" in url or f"/{app}" in url) and url not in srcs:
             srcs.append(url)
+    # EMAP 页面配置（含模块/动作名）
+    for cfg in (f"https://iedu.jlu.edu.cn/jwapp/sys/emappagelog/config/{app}.do",
+                f"https://iedu.jlu.edu.cn/jwapp/sys/{app}/config/app.json"):
+        try:
+            c, txt, _, _ = client._request(cfg, headers={"Referer": APP.format(app)})
+            if c == 200 and txt:
+                out.setdefault("config_ok", []).append(urllib.parse.urlparse(cfg).path)
+                paths.update(extract_do_paths(txt))
+                try:
+                    cj = json.loads(txt)
+                    out.setdefault("config_keys", {})[urllib.parse.urlparse(cfg).path] = (
+                        sorted(cj.keys())[:40] if isinstance(cj, dict) else type(cj).__name__)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
     # EMAP 约定的配置/路由文件
     for extra in ("config.json", "public/js/routes.js", "routes.js", "index.js", "pages/index.js"):
         u = base + extra

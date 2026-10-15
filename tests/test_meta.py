@@ -189,3 +189,61 @@ def test_explore_skips_when_ctx_missing():
         rep = explore.run_explore(client, "2026-2027-1", log=lambda s: None)
     skipped = [p for p in rep["probes"] if p.get("skipped")]
     assert {p["label"] for p in skipped} >= {"学分绩点统计(XH1..6)", "学业完成课组明细"}
+
+
+def test_group_earned_none_means_missing_unknown():
+    c = meta.parse_completion({"YQXF": 10, "WCXF": 4}, {}, [{"KZM": "A", "KZH": "A", "YQXF": 6, "WCXF": None}])
+    assert c["groups"][0]["missing"] is None and c["groups"][0]["earned"] is None
+
+
+def test_derive_group_earned_rollup():
+    comp = meta.parse_completion({"YQXF": 20, "WCXF": 7}, {}, [
+        {"KZM": "专业课", "KZH": "P", "YQXF": 12},
+        {"KZM": "专业必修", "KZH": "P1", "FKZH": "P", "YQXF": 8},
+        {"KZM": "专业选修", "KZH": "P2", "FKZH": "P", "YQXF": 4},
+        {"KZM": "通识", "KZH": "G", "YQXF": 8},
+    ])
+    plan = [{"KZH": "P1", "KCM": "数据结构"}, {"KZH": "P1", "KCM": "操作系统"},
+            {"KZH": "P2", "KCM": "机器学习"}, {"KZH": "G", "KCM": "体育"}, {"KZH": "G", "KCM": "军事理论"}]
+    grades = [core.Grade("数据结构", 4, "90", "t"), core.Grade("操作系统", 4, "55", "t"),
+              core.Grade("机器学习", 2, "良好", "t"), core.Grade("体育", 1, "通过", "t"),
+              core.Grade("军事理论", 2, "不及格", "t")]
+    out = meta.derive_group_earned(comp, plan, grades)
+    by = {g["code"]: g for g in out["groups"]}
+    assert by["P1"]["earned"] == 4 and by["P2"]["earned"] == 2 and by["P"]["earned"] == 6
+    assert by["G"]["earned"] == 1 and by["G"]["missing"] == 7
+    assert by["P"]["earned_source"] == "derived" and out["groups_derived"] == 4
+
+
+def test_official_gpa_unavailable_then_jw_points(tmp_path):
+    routes = dict(ROUTES)
+    routes[meta.EP_GPA] = {"code": "404"}
+    fc = FakeClient(routes)
+    with pytest.raises(meta.Unavailable):
+        meta.fetch_official_gpa(fc)
+    gs = [core.Grade("a", 2, "90", "t", 4.0), core.Grade("b", 2, "70", "t", 2.0)]
+    g = meta.fetch_official_gpa(fc, grades=gs)
+    assert g["source"] == "grades_jw_point" and g["items"][0]["value"] == "3.000"
+
+
+def test_sync_unavailable_gpa_is_not_failure(tmp_path):
+    routes = dict(ROUTES)
+    routes[meta.EP_GPA] = {"code": "404"}
+    fc = FakeClient(routes)
+    s = sync.sync_all(fc, tmp_path)
+    assert s["official_gpa"]["ok"] and s["official_gpa"]["available"] is False
+    assert json.loads((tmp_path / "official_gpa.json").read_text(encoding="utf-8"))["available"] is False
+
+
+def test_grade_jw_point_roundtrip(tmp_path):
+    g = jwxt.row_to_grade({"KCM": "x", "XF": 2.0, "ZCJ": 91.0, "XFJD": 4.1})
+    assert g.jw_point == 4.1
+    p = tmp_path / "g.csv"
+    jwxt.export_grades_csv([g, core.Grade("y", 1, "通过", "t")], str(p))
+    back = core.load_grades(str(p))
+    assert back[0].jw_point == 4.1 and back[1].jw_point is None
+
+
+def test_summarize_msg_redacts_numbers():
+    s = explore.summarize_json({"code": "1", "msg": "学号20240001无权限访问"})
+    assert "20240001" not in s["msg"] and "无权限" in s["msg"]
