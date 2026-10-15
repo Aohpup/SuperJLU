@@ -138,3 +138,31 @@ def test_plan_via_recorded_on_fallback_and_through_sync(data_dir, monkeypatch):
     sync._wjson(data_dir / "p.json", plan.fetch_plan(ReplayClient()))
     d = json.loads((data_dir / "p.json").read_text(encoding="utf-8"))
     assert d["source"]["plan"]["via"] == "known" and d["source"]["tree"]["via"] == "known"
+
+
+def test_known_plan_sends_same_params_as_discovery_variant():
+    """回归：服务端在缺 BYNJDM/SCLBDM 时返回 0 行（PC 实测 known_courses=0）。"""
+    c = ReplayClient()
+    orig = c.post_raw
+
+    def strict(path, form, ref):
+        if path.endswith("cxscfakzkc.do") and not (form.get("BYNJDM") and form.get("SCLBDM")):
+            return 200, json.dumps({"code": "0", "datas": {"cxscfakzkc": {"totalSize": 0, "rows": []}}}), ""
+        return orig(path, form, ref)
+    c.post_raw = strict
+    ctx = plan._context(c)
+    form = endpoints.build_form(endpoints.get("plan_courses"), ctx)
+    disc = dict(list(plan._variants(ctx, "x/cxscfakzkc.do"))).get("page+XH+PYFADM")
+    assert set(form) | {"pageSize", "pageNumber"} == set(disc)
+    p = plan.fetch_plan(c)
+    assert p["source"]["plan"]["via"] == "known" and p["count"] == 6
+
+
+def test_debug_known_counts_only(capsys):
+    d = plan.debug_known(ReplayClient())
+    s = json.dumps(d)
+    assert s.isascii() and not any(x in s for x in PRIVATE)
+    by = {x["name"]: x for x in d["calls"]}
+    assert by["plan_courses"]["param_names"] == ["BYNJDM", "PYFADM", "SCLBDM", "XH"]
+    assert by["plan_courses"]["total"] == 6 and by["plan_courses"]["rows"] == 6
+    assert by["plan_tree"]["param_names"] == ["querySetting"] and by["plan_tree"]["rows"] == 5

@@ -106,7 +106,8 @@ def fetch_paged(client, path: str, form: dict, referer: str, page_size: int = 20
     return out
 
 
-def call_known(client, name: str, ctx: Optional[dict] = None, paged: bool = True) -> Optional[list]:
+def call_known(client, name: str, ctx: Optional[dict] = None, paged: bool = True,
+               trace: Optional[list] = None) -> Optional[list]:
     """调用 endpoints.KNOWN[name]；缺少上下文或失败返回 None（调用方据此回退到发现）。"""
     from . import endpoints as E
     ep = E.get(name)
@@ -116,16 +117,31 @@ def call_known(client, name: str, ctx: Optional[dict] = None, paged: bool = True
         raise
     except jwxt.JwxtError:
         return None
+    rec: dict = {"name": name, "path": ep.path, "entered": True}
+    if trace is not None:
+        trace.append(rec)
     if ep.paged and paged:
         form = E.build_form(ep, ctx)
+        rec["param_names"] = sorted(form) if form is not None else None
         if form is None:
+            rec["skipped"] = "missing_ctx"
             return None
-        return fetch_paged(client, ep.path, form, ep.referer)
+        if trace is not None:  # 先单独取第 1 页记录 total（仅计数）
+            code, obj = post_json(client, ep.path, {**form, "pageSize": "200", "pageNumber": "1"}, ep.referer)
+            hit = rows_any(obj) if code == 200 else None
+            rec.update({"status": code, "code": str((obj or {}).get("code", ""))[:8] if isinstance(obj, dict) else None,
+                        "rows_page1": len(hit[1]) if hit else None, "total": hit[2] if hit else None})
+        rows = fetch_paged(client, ep.path, form, ep.referer)
+        rec["rows"] = len(rows)
+        return rows
     form = E.build_form(ep, ctx)
+    rec["param_names"] = sorted(form) if form is not None else None
     if form is None:
+        rec["skipped"] = "missing_ctx"
         return None
     code, obj = post_json(client, ep.path, form, ep.referer)
     hit = rows_any(obj) if code == 200 else None
+    rec.update({"status": code, "rows": len(hit[1]) if hit else None, "total": hit[2] if hit else None})
     if hit is None:
         return None
     if hit[2] is not None and hit[2] > E.MAX_TOTAL:

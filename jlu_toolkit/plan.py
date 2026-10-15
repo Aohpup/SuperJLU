@@ -305,8 +305,25 @@ def _cache_path():
     return jwxt.config_dir() / "data" / "plan_profile2.json"
 
 
+def debug_known(client) -> dict:
+    """只读诊断：每个已知接口发送的参数名、响应行数/total；上下文只报键名。不含任何值。"""
+    ctx = _context(client)
+    trace: list = []
+    for name in ("student_info", "student_plan", "plan_courses", "plan_tree"):
+        try:
+            emap.call_known(client, name, ctx, trace=trace)
+        except emap.TooLarge:
+            trace[-1]["error"] = "TooLarge"
+        except jwxt.JwxtError as e:
+            if trace and trace[-1].get("name") == name:
+                trace[-1]["error"] = type(e).__name__
+            else:
+                trace.append({"name": name, "error": type(e).__name__})
+    return {"ctx_keys": sorted(ctx), "calls": trace}
+
+
 def fetch_known(client, grades=None, courses_now=None) -> Optional[dict]:
-    """已知接口优先：xywccx/cxscfakzkc(XH+PYFADM) + xsfacx/kzcx(querySetting PYFADM)。空/失败返回 None。"""
+    """已知接口优先：xywccx/cxscfakzkc(XH+PYFADM+BYNJDM+SCLBDM) + xsfacx/kzcx(querySetting PYFADM)。空/失败返回 None。"""
     ctx = _context(client)
     try:
         raw = emap.call_known(client, "plan_courses", ctx)

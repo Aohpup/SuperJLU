@@ -24,6 +24,7 @@ class Endpoint:
     ctx: tuple = ()           # 需从上下文注入的参数名（如 XH、PYFADM）
     query_setting: tuple = () # 以 querySetting JSON 传入的上下文参数名
     paged: bool = False       # 支持 pageSize/pageNumber
+    defaults: dict = field(default_factory=dict)  # 上下文缺失时的默认值（与发现成功的变体一致）
     referer_hash: str = ""    # Referer 的 #/route（部分接口需要）
     note: str = ""
 
@@ -62,10 +63,14 @@ KNOWN: dict[str, Endpoint] = {
     # —— 学业完成 xywccx ——
     "completion": _e("xywccx", "modules/xywccx/cxxsscfa.do", "cxxsscfa", fixed={"SCLBDM": "04", "*order": "-CZSJ"}),
     "completion_groups": _e("xywccx", "modules/xywccx/cxscfakz.do", "cxscfakz",
-                            ctx=("XH", "PYFADM", "BYNJDM", "SCLBDM")),
+                            ctx=("XH", "PYFADM", "BYNJDM", "SCLBDM"), defaults={"BYNJDM": "-", "SCLBDM": "04"}),
     "student_info": _e("xywccx", "modules/xywccx/cxxsjbxx.do", "cxxsjbxx", fixed={"pageSize": "10", "pageNumber": "1"}),
     "student_plan": _e("xywccx", "modules/xywccx/cxscfa.do", "cxscfa", fixed={"pageSize": "10", "pageNumber": "1"}),
-    "plan_courses": _e("xywccx", "modules/xywccx/cxscfakzkc.do", "cxscfakzkc", ctx=("XH", "PYFADM"), paged=True),
+    # PC 实测：发现成功的变体是 page+XH+PYFADM，并同时带 BYNJDM（缺省 "-"）与 SCLBDM（缺省 "04"）；
+    # 只带 XH+PYFADM 时服务端返回 0 行。
+    "plan_courses": _e("xywccx", "modules/xywccx/cxscfakzkc.do", "cxscfakzkc",
+                       ctx=("XH", "PYFADM", "BYNJDM", "SCLBDM"), paged=True,
+                       defaults={"BYNJDM": "-", "SCLBDM": "04"}),
     # —— 个人培养方案 xsfacx（前端路由 #/ckgrpyfa）——
     "plan_row": _e("xsfacx", "modules/pyfacxepg/grpyfacx.do", "grpyfacx"),
     "plan_tree": _e("xsfacx", "modules/pyfacxepg/kzcx.do", "kzcx", query_setting=("PYFADM",), paged=True,
@@ -86,6 +91,8 @@ def build_form(ep: Endpoint, ctx: Optional[dict] = None, page: Optional[int] = N
     for k in ep.ctx:
         if ctx.get(k):
             form[k] = ctx[k]
+        elif k in ep.defaults:
+            form[k] = ep.defaults[k]
         elif k in ("XH", "PYFADM", "XNXQDM"):
             return None  # 必需上下文缺失
     if ep.query_setting:
