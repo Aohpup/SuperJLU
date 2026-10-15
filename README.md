@@ -265,3 +265,55 @@ jlu-toolkit oa notices --category 179577 --keyword 放假 --limit 20 [--json]
 ```
 
 `GET /api/oa/channels` → `{"channels": [{"id": "179577", "name": "校内通知"}]}`；出错 `{"ok": false, "error": "...", "login_needed": true}`。
+
+## 校园站点会话（sessions）
+
+`jlu_toolkit/sessions.py` 统一管理各站点登录会话（只读本地，不后台轮询，不绕过验证码）。
+
+| id | 站点 | host | 认证 |
+|---|---|---|---|
+| jwxt | 教务系统 | iedu.jlu.edu.cn | CAS（沿用原有 session.enc） |
+| pay | 校园缴费 | ip.jlu.edu.cn | 自有（卡号+密码+验证码），只读 |
+| xsxk | 选课系统 | icourses.jlu.edu.cn | 自有（AES 密码+验证码，token 头） |
+| ilearn | 学在吉大 | ilearntec.jlu.edu.cn | 自有（邮箱+密码+验证码；课程中心或经 CAS，待确认） |
+| vpn | WebVPN | vpn.jlu.edu.cn | CAS |
+| lib | 图书馆 | lib.jlu.edu.cn | 首页无需登录；个人中心 CAS（optional_login） |
+
+> 探测备注（`campus --probe`，2026-10）：`pay` / `xsxk` 实际是自有表单+验证码（非 CAS）；
+> `ilearn` 课程中心会经 `ilearn.jlu.edu.cn/cas-server` 桥到 `cas.jlu.edu.cn`；
+> `lib` 门户匿名，个人中心走 CAS `service=.../sso/login/3rd/30569`。上表认证列待 sessions 注册表后续对齐。
+
+**策略**：cookie 一律经 `secure_store` 加密保存为 `session-<id>.enc`；状态文件 `sessions_status.json` 只记 `state/checked_at/reason`；
+从不保存任何支付信息，缴费站只读；带验证码的站点不保存密码（除非用户明确选择保存）；教务凭据行为不变。
+
+```
+jlu-toolkit sessions [--json]          # 各站状态
+jlu-toolkit sessions check <id>        # 用户触发：跑一次存活检查（有钩子时）
+jlu-toolkit sessions clear <id>
+```
+
+- HTTP：`GET /api/sessions` → `{"ok":true,"sites":[{"id","name","host","auth","vpn","captcha","optional_login","state","checked_at","needs_login","message","has_check"}]}`，
+  `state` ∈ ok/expired/missing/unknown。任何 `POST /api/*` 遇到某站会话过期返回 401：`{"ok":false,"error":"...","session_expired":true,"site":"<id>"}`（教务为 `"jwxt"`）。
+- MCP：`sessions_status()`，返回同上。
+- 钩子：`jlu_toolkit/campus.py`（`feat/campus-probe`）提供 `check_<id>(session) -> {"logged_in": True/False/None, "reason": str}`
+  （session 是带该站 cookie 的 `JwxtClient`，只发一次无副作用 GET；判定过期时先 `mark_expired` 再抛 `SiteSessionExpired`；
+  None → unknown）与 `vpn_url(url)`（AES-128-CFB / key=`Didida1127Didida` → `https://vpn.jlu.edu.cn/{scheme}/{token}{path}`）；
+  也可 `sessions.register_check(id, fn)` / `sessions.register_vpn_url(fn)`。无 campus 且未注册时 `vpn_url` 抛 `NotImplementedError`。
+- 探测：`jlu-toolkit campus --probe [--json]`（只读，无个人数值）。
+- 站点代码抛 `sessions.SiteSessionExpired("<id>")`，并可调用 `sessions.mark_expired(id, reason)`。
+
+## 登录保持与离线缓存
+
+统一认证要微信验证码，所以**不做**用密码静默重登。改为：
+
+- **CAS 单点登录持久化**：每次 `save_session()` 后，把 `cas.jlu.edu.cn` 主机上的全部 cookie（含 TGC 类长期票据，不假设具体名字）加密保存为站点 `cas`。
+  登录表单若有 `remember*` / `rememberMe` 字段会自动开启。
+- **静默换票** `sessions.refresh_via_cas(site)`：仅 `auth == "cas"` 且已知 service 的站点（目前只有 `jwxt`）。
+  教务会话过期时（`session_alive` / 接口请求落到登录页）自动尝试一次：带 CAS cookie 访问 `tpass/login?service=…`，回到教务则保存新会话；
+  落在 CAS 登录页则把 `cas` 标记为过期，照常抛 `SessionExpiredError`（界面显示应用内登录）。
+- **保活** `sessions.keepalive()`：一次轻量 GET。`jlu-toolkit sessions keepalive [--json]`（失效退出码 3）；
+  `POST /api/session/keepalive`（App 前台约每 15 分钟调用；Python 端没有后台循环）。
+- **加密数据缓存**：`secure_store.save_json(path, obj)` / `load_json(path, default)` / `json_exists(path)`。
+  `official_gpa.json`、`completion.json`、`plan_courses.json` 改为加密 `.enc`（旧明文首次读取时迁移）；
+  每次写入在 `data/cache_meta.json` 记 `updated_at`。课表/成绩/考试 CSV 与设置、OA 缓存暂保持原格式。
+- **离线标记**：`GET /api/session`、`GET /api/data` 增加 `offline`（教务会话不是 ok 但本地有缓存）与 `cached_at`（ISO 时间）。

@@ -1,5 +1,7 @@
 """端到端：真实跑 cli._cmd_plan 与 MCP plan_courses，只模拟网络，防止引用不存在的辅助函数。"""
 import json
+
+from jlu_toolkit import secure_store
 import sys
 import types
 
@@ -45,7 +47,7 @@ def test_cmd_plan_refresh_json_end_to_end(env, monkeypatch, capsys):
     assert j["count"] == 2 and j["source"]["plan"]["action"].endswith("cxscfakzkc.do")
     st = {c["code"]: c["status"] for c in j["courses"]}
     assert st == {"A1": "已修", "B2": "未修"}
-    comp = json.loads((env / "completion.json").read_text(encoding="utf-8"))
+    comp = secure_store.load_json(env / "completion.json")
     assert comp["groups"][0]["earned"] == 5
 
 
