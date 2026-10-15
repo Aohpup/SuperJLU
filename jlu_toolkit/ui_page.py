@@ -202,7 +202,7 @@ dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
  <div id="lg1"><label for="lgu">账号</label><input type="text" id="lgu" autocomplete="username" autocapitalize="off" spellcheck="false">
   <label for="lgp">密码</label><input type="password" id="lgp" autocomplete="current-password" placeholder="已记住的账号可留空">
   <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lgr" checked>记住我（会话失效时免输密码）</label></div>
- <div id="lg2" hidden><label for="lgc">图形验证码（点图片换一张）</label><div class="cap"><input type="text" id="lgc" autocomplete="off" inputmode="latin" style="flex:1"><img id="lgi" alt="验证码"></div>
+ <div id="lg2" hidden><p class="sub" id="lgh" style="margin:8px 0 0">点「发送微信验证码」，验证码会发到「智慧吉大」的「统一身份认证」消息里。</p>
   <div id="lg3" hidden><label for="lgw">微信验证码（到「智慧吉大」查看「统一身份认证」消息）</label><input type="text" id="lgw" inputmode="numeric" autocomplete="one-time-code"></div></div>
  <p class="err" id="lge" role="alert"></p>
  <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="lgx">取消</button><span style="flex:1"></span><button type="submit" class="btn pri" id="lgo">登录</button></div>
@@ -381,22 +381,20 @@ document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
 load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});
-// ---- 应用内登录（统一身份认证：账号密码 → 图形验证码 → 微信验证码） ----
+// ---- 应用内登录（统一身份认证：账号密码 → 微信验证码；图形验证码由服务端自动识别，界面不显示） ----
 let LG={step:"pw"};
 function lgErr(m){$("#lge").textContent=m||""}
-function lgView(){$("#lg2").hidden=LG.step==="pw";$("#lg3").hidden=LG.step!=="code";$("#lgo").textContent=LG.step==="pw"?"登录":LG.step==="cap"?"发送微信验证码":"完成登录"}
-function lgCap(j){if(j&&j.captcha){$("#lgi").src=j.captcha;$("#lgc").value=""}}
+function lgView(){$("#lg2").hidden=LG.step==="pw";$("#lg3").hidden=LG.step!=="code";$("#lgo").textContent=LG.step==="pw"?"登录":LG.step==="cap"?(LG.retry?"重新发送":"发送微信验证码"):"完成登录"}
 async function openLogin(){LG={step:"pw"};lgErr("");$("#lgp").value="";$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
 async function lgPost(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false)throw new Error(j.error||("HTTP "+r.status));return j}
 async function lgDone(){$("#login").close();toast("登录成功，正在刷新…");D=Object.assign(D||{},{session_expired:false,session:null});try{renderSession()}catch(_){}try{const j=await lgPost("/api/refresh",{});D=j;renderAll();toast("已刷新")}catch(e){toast("登录成功，刷新失败："+e.message)}}
 async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.disabled=true;try{
- if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success")return lgDone();LG.step="cap";lgCap(j)}
- else if(LG.step==="cap"){const j=await lgPost("/api/login/send_code",{captcha:$("#lgc").value.trim()});if(j.step==="code_sent"){LG.step="code";toast("微信验证码已发送")}else{lgCap(j);lgErr(j.error||"")}}
- else{const j=await lgPost("/api/login/verify",{captcha:$("#lgc").value.trim(),wechat_code:$("#lgw").value.trim()});if(j.step==="success")return lgDone();lgErr(j.error||"验证码不正确")}
+ if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success")return lgDone();LG.step="cap";LG.retry=false}
+ else if(LG.step==="cap"){const j=await lgPost("/api/login/send_code",{});if(j.step==="code_sent"){LG.step="code";toast("微信验证码已发送")}else{LG.retry=true;lgErr(j.error||"发送失败，请重试")}}
+ else{const j=await lgPost("/api/login/verify",{wechat_code:$("#lgw").value.trim()});if(j.step==="success")return lgDone();lgErr(j.error||"验证码不正确")}
 }catch(e){lgErr(e.message);if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
 $("#lgf").addEventListener("submit",lgSubmit);
 $("#lgx").onclick=()=>{fetch("/api/login/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});$("#login").close()};
-$("#lgi").onclick=async()=>{try{lgCap(await lgPost("/api/login/captcha",{}))}catch(e){lgErr(e.message)}};
 $("#lgbtn").onclick=openLogin;
 </script></body></html>
 """

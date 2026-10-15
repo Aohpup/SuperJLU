@@ -2,10 +2,11 @@
 
 流程（都在 127.0.0.1 本机服务上）：
   1. ``start(username, password, remember)``：提交统一认证账号密码；
-     成功则直接落盘会话，需要二次认证则返回一张图形验证码（data URI）。
-  2. ``captcha()``：换一张图形验证码。
-  3. ``send_code(captcha)``：用图形验证码请求微信验证码（「智慧吉大」里查看）。
-  4. ``verify(captcha, wechat_code)``：完成二次认证，进入教务应用并保存会话。
+     成功则直接落盘会话，需要二次认证则返回 ``need_second_factor``。
+  2. ``send_code()``：CAS 发微信验证码前必须带图形验证码，这里和 CLI 一样用
+     ``captcha_solver`` 自动识别，失败就换一张重试（最多 ``AUTO_TRIES`` 次）。
+     界面上从不显示图形验证码；一直识别不了只返回一条错误，用户点重试即可。
+  3. ``verify(wechat_code)``：带上刚才识别出的图形验证码 + 微信验证码完成二次认证。
 
 会话与（勾选「记住我」时的）账号密码都走 jwxt 的 secure_store：
 Android 上由 Android Keystore 保护的 AES-GCM 密钥加密，桌面端用系统钥匙串。
@@ -13,11 +14,16 @@ Android 上由 Android Keystore 保护的 AES-GCM 密钥加密，桌面端用系
 """
 from __future__ import annotations
 
-import base64
 import threading
 from typing import Callable, Optional
 
-from . import jwxt
+from . import captcha, jwxt
+
+AUTO_TRIES = 6
+
+
+class _Stop(Exception):
+    pass
 
 
 class LoginFlow:
@@ -27,14 +33,13 @@ class LoginFlow:
         self._client: Optional[jwxt.JwxtClient] = None
         self._cred: Optional[tuple[str, str]] = None
         self._remember = False
+        self._captcha = ""
 
     # ---- helpers ----
-    def _captcha_uri(self) -> str:
+    def _fetch_captcha(self) -> bytes:
         c = self._client
         path = c.download_captcha()
-        raw = c.last_captcha_bytes or path.read_bytes()
-        mime = "image/png" if raw[:4] == b"\x89PNG" else "image/jpeg"
-        return f"data:{mime};base64," + base64.b64encode(raw).decode()
+        return c.last_captcha_bytes or (path.read_bytes() if path else b"")
 
     def _finish(self) -> dict:
         c = self._client
@@ -52,6 +57,7 @@ class LoginFlow:
         self._client = None
         self._cred = None
         self._remember = False
+        self._captcha = ""
 
     def _need(self) -> "jwxt.JwxtClient":
         if self._client is None:
@@ -83,42 +89,50 @@ class LoginFlow:
             if step == jwxt.LoginStep.SUCCESS:
                 return self._finish()
             if step == jwxt.LoginStep.NEED_SECOND_FACTOR:
-                return {"step": "need_second_factor", "captcha": self._captcha_uri()}
+                return {"step": "need_second_factor"}
             err = getattr(self._client, "last_error_text", "") or ""
             self._reset()
             if step == jwxt.LoginStep.WRONG_PASSWORD:
                 raise ValueError(err or "用户名或密码错误（账号用邮箱前缀，不是学号）")
             raise ValueError(err or f"登录未完成（{step.value}）")
 
-    def captcha(self) -> dict:
-        with self._lock:
-            self._need()
-            return {"step": "need_second_factor", "captcha": self._captcha_uri()}
-
-    def send_code(self, captcha: str) -> dict:
-        captcha = (captcha or "").strip()
-        if not captcha:
-            raise ValueError("请输入图形验证码")
+    def send_code(self, _ignored: str = "") -> dict:
+        """自动识别图形验证码并请求微信验证码。旧的图形验证码参数仅为兼容旧前端，忽略。"""
         with self._lock:
             c = self._need()
-            r = c.request_wechat_code(captcha)
-            if r == jwxt.WechatCodeResult.SUCCESS:
-                return {"step": "code_sent"}
-            if r == jwxt.WechatCodeResult.CAPTCHA_ERROR:
-                return {"step": "need_second_factor", "error": "图形验证码错误", "captcha": self._captcha_uri()}
-            if r == jwxt.WechatCodeResult.TOO_FREQUENT:
-                raise ValueError("发送太频繁，请稍后再试")
-            self._reset()
-            if r == jwxt.WechatCodeResult.SESSION_EXPIRED:
-                raise ValueError("二次认证会话已失效，请重新输入账号密码")
-            raise ValueError(f"发送微信验证码失败（{r.value}）")
+            fatal = []
 
-    def verify(self, captcha: str, wechat_code: str) -> dict:
+            def submit(code: str) -> bool:
+                r = c.request_wechat_code(code)
+                if r == jwxt.WechatCodeResult.SUCCESS:
+                    return True
+                if r == jwxt.WechatCodeResult.CAPTCHA_ERROR:
+                    return False
+                fatal.append(r)
+                raise _Stop()
+
+            try:
+                got = captcha.solve_with_retry(self._fetch_captcha, submit, AUTO_TRIES, skip=(jwxt.JwxtError,))
+            except _Stop:
+                r = fatal[0]
+                if r == jwxt.WechatCodeResult.TOO_FREQUENT:
+                    raise ValueError("发送太频繁，请稍后再试")
+                self._reset()
+                if r == jwxt.WechatCodeResult.SESSION_EXPIRED:
+                    raise ValueError("二次认证会话已失效，请重新输入账号密码")
+                raise ValueError(f"发送微信验证码失败（{r.value}）")
+            if got:
+                self._captcha = got
+                return {"step": "code_sent"}
+            return {"step": "need_second_factor", "retry": True,
+                    "error": "暂时没能自动通过校验，请点「重新发送」再试一次"}
+
+    def verify(self, _ignored: str = "", wechat_code: str = "") -> dict:
         if not (wechat_code or "").strip():
             raise ValueError("请输入微信验证码")
         with self._lock:
             c = self._need()
-            step = c.login_second_factor((captcha or "").strip(), wechat_code.strip())
+            step = c.login_second_factor(self._captcha, wechat_code.strip())
             if step == jwxt.LoginStep.SUCCESS:
                 return self._finish()
             return {"step": "code_sent", "error": "微信验证码不正确或已过期"}
