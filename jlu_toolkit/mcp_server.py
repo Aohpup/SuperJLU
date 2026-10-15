@@ -57,11 +57,18 @@ def main():
         from . import ui
         from .cli import filter_plan
         f = ui.Store(ui.data_dir()).p("plan_courses.json")
-        if not f.exists():
+        from . import secure_store
+        p = secure_store.load_json(f)
+        if p is None:
             return {"error": "尚无 plan_courses.json，请先运行 jlu-toolkit sync"}
-        p = _j.loads(f.read_text(encoding="utf-8"))
         cs = filter_plan(p.get("courses", []), status, term, nature)
         return {"count": len(cs), "courses": cs}
+
+    @mcp.tool()
+    def sessions_status() -> dict:
+        """各校园站点（教务/缴费/选课/学在吉大/VPN/图书馆）的登录会话状态。只读本地记录，不联网。"""
+        from . import sessions
+        return sessions.all_status()
 
     @mcp.tool()
     def session_status() -> dict:

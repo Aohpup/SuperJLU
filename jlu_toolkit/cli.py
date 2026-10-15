@@ -48,6 +48,13 @@ def _main(argv=None):
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    ss = sub.add_parser("sessions", help="各校园站点会话状态（不联网）；clear <site> 清除某站会话")
+    ss.add_argument("action", nargs="?", default="list", choices=["list", "clear", "check", "keepalive"])
+    ss.add_argument("site", nargs="?", default="")
+    ss.add_argument("--json", action="store_true")
+    camp = sub.add_parser("campus", help="校园站点探测（只读 GET；pay/xsxk/ilearn/vpn/lib）")
+    camp.add_argument("--probe", action="store_true", help="匿名探测登录类型/重定向/候选只读接口（无个人数值）")
+    camp.add_argument("--json", action="store_true", help="输出完整 JSON 报告")
     st = sub.add_parser("status", help="查看登录会话状态（默认不联网；--check 访问教务一次验证）")
     st.add_argument("--check", action="store_true", help="访问教务一次确认会话是否仍有效")
     st.add_argument("--json", action="store_true")
@@ -225,9 +232,10 @@ def _main(argv=None):
             if not x.csv:
                 from . import ui
                 f = ui.data_dir() / "official_gpa.json"
-                if not f.exists():
+                from . import secure_store
+                d = secure_store.load_json(f)
+                if d is None:
                     print("尚无官方绩点；先运行 jlu-toolkit sync，或提供成绩 CSV", file=sys.stderr); sys.exit(2)
-                d = json.loads(f.read_text(encoding="utf-8"))
                 print(f"来源：{d.get('source')}  {d.get('endpoint') or ''}")
                 for i in d.get("items", []):
                     print(f"  {i['label']}：{i['value']}")
@@ -236,6 +244,10 @@ def _main(argv=None):
     elif x.cmd == "today":
         for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
+    elif x.cmd == "sessions":
+        _cmd_sessions(x)
+    elif x.cmd == "campus":
+        _cmd_campus(x)
     elif x.cmd == "status":
         _cmd_status(x)
     elif x.cmd == "fetch":
@@ -657,15 +669,15 @@ def _cmd_plan(x):
             print(json.dumps(pl.debug_known(client)))
             client.save_session()
             return
-        if x.probe or x.refresh or not f.exists():
+        from . import secure_store
+        if x.probe or x.refresh or not secure_store.json_exists(f):
             client = jwxt.JwxtClient(debug=bool(x.debug))
             if not client.load_session():
                 raise jwxt.LoginError("没有已保存的会话")
             if x.probe:
                 rep, found = pl.explore(client, log=err)
                 cf = store.p("completion.json")
-                comp_groups = (json.loads(cf.read_text(encoding="utf-8")).get("groups")
-                               if cf.exists() else None)
+                comp_groups = (secure_store.load_json(cf) or {}).get("groups")
                 try:
                     rep["diagnostics"] = pl.diagnose(client, found, comp_groups)
                 except jwxt.JwxtError as e:
@@ -684,13 +696,13 @@ def _cmd_plan(x):
             courses_now = core.load_courses(str(store.p("schedule.csv"))) if store.p("schedule.csv").exists() else []
             p = pl.fetch_plan(client, grades, courses_now, use_cache=not x.refresh)
             from .endpoints import scrub
-            f.write_text(json.dumps(scrub(p), ensure_ascii=False, indent=1), encoding="utf-8")
+            secure_store.save_json(f, scrub(p))
             cf = store.p("completion.json")
-            if cf.exists():
-                cf.write_text(json.dumps(pl.attach_to_completion(json.loads(cf.read_text(encoding="utf-8")), p),
-                                         ensure_ascii=False, indent=1), encoding="utf-8")
+            comp = secure_store.load_json(cf)
+            if comp is not None:
+                secure_store.save_json(cf, pl.attach_to_completion(comp, p))
             client.save_session()
-        p = json.loads(f.read_text(encoding="utf-8"))
+        p = secure_store.load_json(f, {})
     except jwxt.LoginError as e:
         err(f"会话失效：{e}；请运行 jlu-toolkit fetch --force-login"); _json_err(x, e); sys.exit(1)
     except jwxt.JwxtError as e:
@@ -924,6 +936,61 @@ def _cmd_oa(x):
     print(f"{res['channel_name'] or res['channel']}  共 {res['count']} 条")
     for i in res["items"]:
         print(f"{'[顶] ' if i['top'] else ''}{i['time']}  {i['title']}  （{i['dept']}）")
+
+
+def _cmd_campus(x):
+    from . import campus, jwxt
+    if not x.probe:
+        print("用法：jlu-toolkit campus --probe [--json]", file=sys.stderr)
+        sys.exit(2)
+    try:
+        rep = campus.probe(jwxt.JwxtClient())
+    except jwxt.NetworkError as e:
+        print(f"campus: {e}", file=sys.stderr)
+        sys.exit(1)
+    if x.json:
+        print(json.dumps(rep, ensure_ascii=False, indent=2))
+        return
+    print(campus.probe_table(rep))
+    print()
+    print(f"vpn_url 格式：{rep.get('vpn_format')}")
+    print(f"vpn_key：{rep.get('vpn_key')}")
+    for s in rep.get("sites") or []:
+        need = s.get("needs_login_to_confirm") or []
+        if need:
+            print(f"  [{s.get('id')}] 仍需登录确认：{', '.join(need)}")
+
+
+def _cmd_sessions(x):
+    from . import sessions
+    try:
+        if x.action == "keepalive":
+            r = sessions.keepalive()
+            print(json.dumps(r, ensure_ascii=False) if x.json else
+                  ("会话有效" + ("（已通过统一认证续期）" if r["refreshed_via_cas"] else "")) if r["alive"]
+                  else r["session"]["message"])
+            if not r["alive"]:
+                sys.exit(3)
+            return
+        if x.action in ("clear", "check"):
+            if not x.site:
+                raise ValueError(f"用法：jlu-toolkit sessions {x.action} <site>（{', '.join(sessions.SITES)}）")
+            if x.action == "clear":
+                sessions.clear(x.site)
+                print(f"已清除 {x.site} 的会话")
+                return
+            r = sessions.check(x.site)
+            print(json.dumps(r, ensure_ascii=False) if x.json else f"{r['id']}: {r['state']}  {r['message']}")
+            return
+        res = sessions.all_status()
+    except ValueError as e:
+        print(f"sessions: {e}", file=sys.stderr)
+        sys.exit(2)
+    if x.json:
+        print(json.dumps(res, ensure_ascii=False))
+        return
+    for r in res["sites"]:
+        print(f"{r['id']:<7}{r['name']:<8}{r['state']:<9}{r['message']}")
 
 if __name__ == "__main__":
     main()

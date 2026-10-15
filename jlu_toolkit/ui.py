@@ -39,12 +39,19 @@ class Store:
         return self.root / name
 
     def _json(self, name: str, default):
+        from . import secure_store
+        if name in secure_store.PERSONAL_CACHES:
+            return secure_store.load_json(self.p(name), default)
         try:
             return json.loads(self.p(name).read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError):
             return default
 
     def _write_json(self, name: str, obj) -> None:
+        from . import secure_store
+        if name in secure_store.PERSONAL_CACHES:
+            secure_store.save_json(self.p(name), obj)
+            return
         self.p(name).write_text(json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
 
     def courses(self) -> list[core.Course]:
@@ -129,7 +136,20 @@ class Store:
             "gpa_all": core.gpa(gs),
             "updated": (dt.datetime.fromtimestamp(max(mtimes)).isoformat(timespec="minutes")
                         if mtimes else None),
+            **cache_info(self),
         }
+
+
+def cache_info(store: Store) -> dict:
+    """{offline, cached_at}：教务会话不可用（过期/未登录）但本地有缓存时 offline=True。只读本地。"""
+    from . import secure_store
+    times = [v.get("updated_at") for v in secure_store.cache_meta(store.root).values() if isinstance(v, dict)]
+    for n in ("schedule.csv", "grades.csv", "exams.csv"):
+        if store.p(n).exists():
+            times.append(dt.datetime.fromtimestamp(store.p(n).stat().st_mtime).isoformat(timespec="seconds"))
+    cached_at = max((t for t in times if t), default=None)
+    st = jwxt.session_status()
+    return {"offline": bool(cached_at) and st["state"] != jwxt.SESSION_OK, "cached_at": cached_at}
 
 
 def refresh_from_jwxt(store: Store) -> dict:
@@ -321,6 +341,78 @@ def oa_refresh_api(store: Store, body: dict) -> dict:
     return oa_notices_api(store, {"category": ch})
 
 
+LINK_FIELDS = ("id", "name", "icon", "url", "purpose", "login", "campus_only", "vpn_url")
+
+
+def _link_ok(u) -> bool:
+    import urllib.parse
+    try:
+        p = urllib.parse.urlsplit(str(u or ""))
+    except ValueError:
+        return False
+    h = (p.hostname or "").lower()
+    return p.scheme == "https" and (h == "jlu.edu.cn" or h.endswith(".jlu.edu.cn")) and not p.username
+
+
+def _vpn_rewriter():
+    """露娜 #18 的 campus.vpn_url（WebVPN 主机 AES-CFB 加密）；还没合进来时返回 None。"""
+    try:
+        from .campus import vpn_url  # type: ignore
+    except Exception:  # noqa: BLE001 — 模块不存在或缺 cryptography 都当作暂不支持
+        return None
+    return vpn_url
+
+
+def campus_links_api(override: Optional[Path] = None) -> dict:
+    """GET /api/links —— 内置 data/campus_links.json + 可选用户覆盖（config_dir/campus_links.json）。
+
+    覆盖规则：同 id 合并字段；"hidden": true 隐藏；新 id 追加。只返回 https://*.jlu.edu.cn 链接。
+    """
+    base = json.loads((Path(__file__).parent / "data" / "campus_links.json").read_text(encoding="utf-8"))
+    items = {x["id"]: dict(x) for x in base.get("links", [])}
+    order = list(items)
+    override = override or jwxt.config_dir() / "campus_links.json"
+    src, err = "builtin", None
+    if override.exists():
+        try:
+            o = json.loads(override.read_text(encoding="utf-8"))
+            for x in (o.get("links", []) if isinstance(o, dict) else o):
+                if not isinstance(x, dict) or not x.get("id"):
+                    continue
+                i = str(x["id"])
+                if i not in items:
+                    order.append(i)
+                items[i] = {**items.get(i, {}), **x}
+            src = "override"
+        except (json.JSONDecodeError, OSError, AttributeError, TypeError) as e:
+            err = f"覆盖文件无效，已忽略：{e}"
+    out, dropped = [], 0
+    rewrite = _vpn_rewriter()
+    for i in order:
+        x = items[i]
+        if x.get("hidden"):
+            continue
+        if not _link_ok(x.get("url")):
+            dropped += 1
+            continue
+        y = {k: x[k] for k in LINK_FIELDS if k in x}
+        if "vpn_url" in y and not _link_ok(y["vpn_url"]):
+            y.pop("vpn_url")
+        y["campus_only"] = bool(y.get("campus_only"))
+        if y["campus_only"] and "vpn_url" not in y and rewrite is not None:
+            try:
+                v = rewrite(y["url"])
+            except Exception:  # noqa: BLE001
+                v = None
+            if v and v != y["url"] and _link_ok(v):
+                y["vpn_url"] = v
+        out.append(y)
+    r = {"ok": True, "links": out, "source": src, "dropped": dropped}
+    if err:
+        r["warning"] = err
+    return r
+
+
 def make_handler(store: Store):
     class H(BaseHTTPRequestHandler):
         server_version = "JLUToolkitUI"
@@ -383,9 +475,12 @@ def make_handler(store: Store):
             if path in ("/", "/index.html"):
                 return self._send(200, PAGE.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
+            if path == "/api/sessions":  # 各校园站点会话状态（只读本地）
+                from . import sessions
+                return self._json(sessions.all_status())
             if path == "/api/session":
-                # 新增（可选）：会话状态，供前端显示「请重新登录」横幅；只读本地文件，不访问教务
-                return self._json(jwxt.session_status())
+                # 会话状态 + 离线缓存信息（offline/cached_at），供前端显示「请重新登录」/「离线数据」；只读本地
+                return self._json({**jwxt.session_status(), **cache_info(store)})
             if path.startswith("/api/oa/"):
                 import urllib.parse
                 q = {k: v[0] for k, v in urllib.parse.parse_qs(self.path.partition("?")[2]).items()}
@@ -399,6 +494,8 @@ def make_handler(store: Store):
                         return self._json(r or {"ok": False, "error": "本地没有这条通知"}, 200 if r else 404)
                 except ValueError as e:
                     return self._json({"ok": False, "error": str(e)}, 400)
+            if path == "/api/links":
+                return self._json(campus_links_api())
             if path == "/api/data":
                 return self._json(store.snapshot())
             if path == "/api/ics":
@@ -443,13 +540,20 @@ def make_handler(store: Store):
                         raise
                     except jwxt.LoginError as e:
                         return self._json({"ok": False, "error": str(e), "login_needed": True}, 400)
+                elif self.path == "/api/session/keepalive":  # App 前台约 15 分钟调用一次
+                    from . import sessions
+                    r = sessions.keepalive()
+                    if r["session"].get("session_expired"):
+                        raise jwxt.SessionExpiredError()
+                    return self._json({**r, **cache_info(store)})
                 elif self.path == "/api/refresh":
                     return self._json({"ok": True, "result": refresh_from_jwxt(store), **store.snapshot()})
                 else:
                     return self._send(404, b"not found", "text/plain")
                 return self._json({"ok": True, **store.snapshot()})
             except jwxt.SessionExpiredError as e:
-                return self._json({"ok": False, "error": str(e), "session_expired": True}, 401)
+                return self._json({"ok": False, "error": str(e), "session_expired": True,
+                                   "site": getattr(e, "site", "jwxt")}, 401)
             except (ValueError, jwxt.JwxtError) as e:
                 return self._json({"ok": False, "error": str(e)}, 400)
             except Exception as e:  # noqa: BLE001
