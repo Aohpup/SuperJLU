@@ -87,7 +87,7 @@ tbody tr:hover td{background:var(--card2)}
 tr.off td{opacity:.42}
 .term td{background:var(--pri2)!important;font-size:12px;color:var(--pri);font-weight:650;padding:6px 10px}
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri)}
-select,input[type=text],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
+select,input[type=text],input[type=password],input[type=date],input[type=number],input:not([type]){font:inherit;font-size:14px;padding:8px 11px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card2);color:var(--txt);min-height:38px;transition:border-color .15s,box-shadow .15s}
 select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px var(--pri2)}
 .chip{display:inline-block;font-size:11.5px;padding:1px 9px;border-radius:99px;background:var(--pri2);color:var(--pri);font-weight:550;line-height:1.6}
 /* 考试 */
@@ -109,6 +109,13 @@ details.tn{border-left:2px solid var(--line);padding:6px 0 6px 12px;margin-top:6
 details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))}
 @media(max-width:520px){main{padding:6px 10px 12px}.card{padding:14px;border-radius:16px}.gpa b{font-size:22px}.big{font-size:28px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+dialog#login{border:0;border-radius:16px;padding:20px;width:min(92vw,380px);background:var(--card,#fff);color:inherit;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+dialog#login::backdrop{background:rgba(0,0,0,.4)}
+dialog#login label{display:block;margin:10px 0 4px;font-size:13px;opacity:.8}
+dialog#login input[type=text],dialog#login input[type=password]{width:100%;box-sizing:border-box}
+dialog#login .cap{display:flex;gap:8px;align-items:center}dialog#login .cap img{height:40px;image-rendering:pixelated;border-radius:6px;cursor:pointer;background:#fff}
+dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
 </style></head>
 <body>
 <header><span class="logo" aria-hidden="true">J</span><h1>JLU Toolkit <small id="upd"></small></h1>
@@ -157,11 +164,22 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
   <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
  <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
+ <div class="card"><h2>账号</h2><p class="sub" id="lginfo">登录统一身份认证后才能刷新课表和成绩。</p><button class="btn pri" id="lgbtn" type="button">登录 / 重新登录</button></div>
  <div class="card"><h2>导出</h2><p class="sub">导出 iCal 后可导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
- <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用终端登录时保存的会话；会话失效时请在终端运行 <code>jlu-toolkit fetch --force-login</code>。</p></div>
+ <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据保存在本机 <code>~/.config/jlu-toolkit/data/</code>。网页只在 127.0.0.1 上运行，不加载任何外部资源。“刷新”使用已保存的登录会话；会话失效时点下面的按钮在应用内重新登录。</p></div>
 </section>
 </main>
 <nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="sz"><b>⚙</b>设置</button></nav>
+<dialog id="login" aria-labelledby="lgt"><form method="dialog" id="lgf" autocomplete="on">
+ <h2 id="lgt" style="margin:0 0 4px">登录统一身份认证</h2><p class="sub" style="margin:0">账号是邮箱前缀（不是学号）。登录状态加密保存在本机，下次打开不用重登。</p>
+ <div id="lg1"><label for="lgu">账号</label><input type="text" id="lgu" autocomplete="username" autocapitalize="off" spellcheck="false">
+  <label for="lgp">密码</label><input type="password" id="lgp" autocomplete="current-password" placeholder="已记住的账号可留空">
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lgr" checked>记住我（会话失效时免输密码）</label></div>
+ <div id="lg2" hidden><label for="lgc">图形验证码（点图片换一张）</label><div class="cap"><input type="text" id="lgc" autocomplete="off" inputmode="latin" style="flex:1"><img id="lgi" alt="验证码"></div>
+  <div id="lg3" hidden><label for="lgw">微信验证码（到「智慧吉大」查看「统一身份认证」消息）</label><input type="text" id="lgw" inputmode="numeric" autocomplete="one-time-code"></div></div>
+ <p class="err" id="lge" role="alert"></p>
+ <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="lgx">取消</button><span style="flex:1"></span><button type="submit" class="btn pri" id="lgo">登录</button></div>
+</form></dialog>
 <div id="toast"></div>
 <script>
 "use strict";
@@ -254,7 +272,7 @@ function renderAll(){
 async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll()}
 function sessionInfo(d){const s=d&&d.session;if(!s&&!(d&&d.session_expired))return null;const exp=(d&&d.session_expired===true)||(s&&(s.expired===true||s.valid===false||/^(expired|invalid)$/i.test(String(s.status||s.state||""))));return exp?(s||{}):null}
 function renderSession(){const box=$("#sess"),s=sessionInfo(D);if(!s){box.hidden=true;box.innerHTML="";return}box.hidden=false;
- box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>登录会话已过期，请重新登录</b><p class="sub">${s.message?esc(s.message)+" · ":""}在终端运行 <code>jlu-toolkit fetch --force-login</code> 后点“刷新”。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div></div>`}
+ box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>登录会话已过期，请重新登录</b><p class="sub">${s.message?esc(s.message)+" · ":""}点「重新登录」完成后会自动刷新。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div><button class="btn pri" type="button" onclick="openLogin()">重新登录</button></div>`}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0)});
 $("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
 $("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
@@ -288,5 +306,22 @@ $("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查�
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
 load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});
+// ---- 应用内登录（统一身份认证：账号密码 → 图形验证码 → 微信验证码） ----
+let LG={step:"pw"};
+function lgErr(m){$("#lge").textContent=m||""}
+function lgView(){$("#lg2").hidden=LG.step==="pw";$("#lg3").hidden=LG.step!=="code";$("#lgo").textContent=LG.step==="pw"?"登录":LG.step==="cap"?"发送微信验证码":"完成登录"}
+function lgCap(j){if(j&&j.captcha){$("#lgi").src=j.captcha;$("#lgc").value=""}}
+async function openLogin(){LG={step:"pw"};lgErr("");$("#lgp").value="";$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
+async function lgPost(path,body){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false)throw new Error(j.error||("HTTP "+r.status));return j}
+async function lgDone(){$("#login").close();toast("登录成功，正在刷新…");D=Object.assign(D||{},{session_expired:false,session:null});try{renderSession()}catch(_){}try{const j=await lgPost("/api/refresh",{});D=j;renderAll();toast("已刷新")}catch(e){toast("登录成功，刷新失败："+e.message)}}
+async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.disabled=true;try{
+ if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success")return lgDone();LG.step="cap";lgCap(j)}
+ else if(LG.step==="cap"){const j=await lgPost("/api/login/send_code",{captcha:$("#lgc").value.trim()});if(j.step==="code_sent"){LG.step="code";toast("微信验证码已发送")}else{lgCap(j);lgErr(j.error||"")}}
+ else{const j=await lgPost("/api/login/verify",{captcha:$("#lgc").value.trim(),wechat_code:$("#lgw").value.trim()});if(j.step==="success")return lgDone();lgErr(j.error||"验证码不正确")}
+}catch(e){lgErr(e.message);if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
+$("#lgf").addEventListener("submit",lgSubmit);
+$("#lgx").onclick=()=>{fetch("/api/login/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});$("#login").close()};
+$("#lgi").onclick=async()=>{try{lgCap(await lgPost("/api/login/captcha",{}))}catch(e){lgErr(e.message)}};
+$("#lgbtn").onclick=openLogin;
 </script></body></html>
 """

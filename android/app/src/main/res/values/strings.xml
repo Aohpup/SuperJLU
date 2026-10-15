@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SuperJLU</string>
+    <string name="app_subtitle">吉大人的一站式服务</string>
+    <string name="starting">正在启动本地服务…</string>
+    <string name="offcampus_banner">连不上教务 / OA：校外请先连接学校 VPN（vpn.jlu.edu.cn）。点此关闭</string>
+</resources>
