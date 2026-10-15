@@ -1,0 +1,8 @@
+{
+ "links": [
+  {"name": "软件学院", "url": "https://csw.jlu.edu.cn/index.htm"},
+  {"name": "计算机科学与技术学院", "url": "https://ccst.jlu.edu.cn/index.htm"},
+  {"name": "人工智能学院", "url": "https://sai.jlu.edu.cn/"},
+  {"name": "商学与管理学院", "url": "https://sg.jlu.edu.cn/"}
+ ]
+}

@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import base64
+import binascii
 import json
 import re
 import shutil
@@ -74,6 +76,57 @@ class Store:
     def schemes(self) -> dict:
         return self._json("schemes.json", {})
 
+    def grade_records(self, source: str = "jwxt") -> list[dict]:
+        from . import grade_calculator as calc
+        imported = self._json("imported_grades.json", None) if source == "import" else None
+        grades = [core.Grade(**g) for g in imported["grades"]] if imported else self.grades()
+        plan = self._json("plan_courses.json", {}) or {}
+        occurrences = {}
+        records = []
+        for g in grades:
+            nature = g.nature
+            if not nature and not imported:
+                matches = [c for c in plan.get("courses", []) if c.get("name") == g.name
+                           and (not c.get("term") or c.get("term") == g.term)]
+                labels = {c.get("nature") or c.get("category") for c in matches}
+                if len(labels) == 1:
+                    nature = next(iter(labels)) or ""
+            nature = nature or "未标注"
+            signature = (g.term, g.name, nature)
+            ordinal = occurrences.get(signature, 0) + 1
+            occurrences[signature] = ordinal
+            key = json.dumps([*signature, ordinal], ensure_ascii=False, separators=(",", ":"))
+            score = calc.parse_score(g.score)
+            ungraded = not imported and g.score == "通过"
+            point = g.jw_point if g.jw_point is not None else (None if imported else core.score_to_point(g.score))
+            course = calc.Course(key, g.term, g.name, nature, g.score, score or 0, g.credit,
+                                 point or 0, score is not None, point is not None)
+            records.append({**g.__dict__, "key": key, "legacy_key": f"{g.term}|{g.name}",
+                            "nature": nature, "numeric_score": score, "score_valid": score is not None,
+                            "ungraded": ungraded,
+                            "point": point, "point_source": ("reported" if g.jw_point is not None
+                                                            else "missing" if imported else "estimated"),
+                            "required": calc.nature_category(nature) == "必修",
+                            "builtin": course.as_dict()["builtin"]})
+        return records
+
+    def import_grades(self, filename: str, payload: str) -> None:
+        from . import grade_calculator as calc
+        if not isinstance(filename, str) or not isinstance(payload, str):
+            raise ValueError("无效的成绩单")
+        try:
+            data = base64.b64decode(payload, validate=True)
+        except (ValueError, binascii.Error) as e:
+            raise ValueError("成绩单编码无效") from e
+        if len(data) > calc.MAX_UPLOAD_BYTES:
+            raise ValueError("成绩单超过 25 MB")
+        courses = calc.courses_from_bytes(filename, data)
+        grades = [core.Grade(c.name, c.credit, c.grade, c.term,
+                            c.gpa if c.gpa_valid else None, c.nature).__dict__ for c in courses]
+        with self.lock:
+            self._write_json("imported_grades.json", {"filename": Path(filename).name,
+                             "grades": grades, "notes": courses.import_notes})
+
     def settings(self) -> dict:
         return self._json("settings.json", {})
 
@@ -87,20 +140,43 @@ class Store:
         """手动覆盖优先，否则用教务校历。"""
         return self.settings().get("first_monday") or self.calendar().get("first_monday") or None
 
-    def save_scheme(self, name: str, keys: list[str]) -> None:
+    def save_scheme(self, name: str, keys: list[str], base: Optional[str] = None,
+                    source: str = "jwxt") -> None:
         name = (name or "").strip()[:40]
         if not name:
             raise ValueError("方案名不能为空")
+        if name in ("__postgraduate__", "__scholarship__", "__all__"):
+            raise ValueError("请使用其他模板名称")
+        if base is not None and base not in ("postgraduate", "scholarship", "comprehensive"):
+            raise ValueError("未知的基础模板")
+        if not isinstance(keys, list) or any(not isinstance(k, str) for k in keys):
+            raise ValueError("无效的课程选择")
         with self.lock:
             s = self.schemes()
             s[name] = sorted({str(k) for k in keys})
             self._write_json("schemes.json", s)
+            rules = self._json("scheme_rules.json", {})
+            if base:
+                previous = rules.get(name, {})
+                overrides = dict(previous.get("overrides", {})) if previous.get("base") == base else {}
+                for g in self.grade_records(source):
+                    if (g["key"] in keys) != g["builtin"][base]:
+                        overrides[g["key"]] = g["key"] in keys
+                    else:
+                        overrides.pop(g["key"], None)
+                rules[name] = {"base": base, "overrides": overrides}
+            else:
+                rules.pop(name, None)
+            self._write_json("scheme_rules.json", rules)
 
     def delete_scheme(self, name: str) -> None:
         with self.lock:
             s = self.schemes()
             s.pop(name, None)
             self._write_json("schemes.json", s)
+            rules = self._json("scheme_rules.json", {})
+            rules.pop(name, None)
+            self._write_json("scheme_rules.json", rules)
 
     def save_settings(self, upd: dict) -> None:
         fm = upd.get("first_monday")
@@ -119,16 +195,22 @@ class Store:
             s.update({k: v for k, v in upd.items() if k in ("first_monday",)})
             self._write_json("settings.json", s)
 
-    def snapshot(self) -> dict:
+    def snapshot(self, source: str = "jwxt") -> dict:
         gs = self.grades()
+        saved_import = self._json("imported_grades.json", None)
+        imported = saved_import if source == "import" else None
         mtimes = [self.p(n).stat().st_mtime for n in ("schedule.csv", "grades.csv", "exams.csv")
                   if self.p(n).exists()]
         return {
             "courses": [c.__dict__ for c in self.courses()],
-            "grades": [dict(g.__dict__, key=f"{g.term}|{g.name}",
-                            point=core.score_to_point(g.score)) for g in gs],
+            "grades": self.grade_records(source),
+            "grade_source": "import" if imported else "jwxt",
+            "has_imported_grades": saved_import is not None,
+            "grade_filename": imported["filename"] if imported else None,
+            "grade_notes": imported.get("notes", []) if imported else [],
             "exams": [e.to_dict() for e in ex.upcoming(self.exams(), dt.datetime(1970, 1, 1))],
             "schemes": self.schemes(),
+            "scheme_rules": self._json("scheme_rules.json", {}),
             "settings": self.settings(),
             "calendar": self.calendar(),
             "periods": self.periods(),
@@ -163,14 +245,25 @@ def refresh_from_jwxt(store: Store) -> dict:
 
     client = jwxt.JwxtClient()
     if not client.load_session():
-        raise jwxt.LoginError("没有已保存的会话，请先在终端运行 jlu-toolkit fetch 登录一次")
+        raise jwxt.LoginError("没有已保存的会话，请在「更多 → 账号」中登录")
     return sync_all(client, store.root)
+
+
+def refresh_grades_from_jwxt(store: Store) -> dict:
+    """Refresh the current login's transcript without fetching unrelated modules."""
+    client = _client()
+    grades = client.fetch_grades()
+    # Only replace the cache after the request succeeds; retain it while offline.
+    with store.lock:
+        jwxt.export_grades_csv(grades, str(store.p("grades.csv")))
+    client.save_session()
+    return {"ok": True, "count": len(grades)}
 
 
 def _client() -> "jwxt.JwxtClient":
     c = jwxt.JwxtClient()
     if not c.load_session():
-        raise jwxt.LoginError("没有已保存的会话，请先在终端运行 jlu-toolkit fetch 登录一次")
+        raise jwxt.LoginError("没有已保存的会话，请在「更多 → 账号」中登录")
     return c
 
 
@@ -510,7 +603,8 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
 
         def _body(self) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
-            if n > 1_000_000:
+            limit = 36_000_000 if self.path == "/api/grades/import" else 1_000_000
+            if n < 0 or n > limit:
                 raise ValueError("请求过大")
             return json.loads(self.rfile.read(n) or b"{}")
 
@@ -591,7 +685,12 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                                    "accounts": login.accounts(),
                                    "session": jwxt.session_status()})
             if path == "/api/data":
-                return self._json(store.snapshot())
+                from urllib.parse import parse_qs
+                source = parse_qs(self.path.partition("?")[2]).get("grade_source", ["jwxt"])[0]
+                return self._json(store.snapshot("import" if source == "import" else "jwxt"))
+            if path == "/api/grades/colleges":
+                links = json.loads((Path(__file__).parent / "data" / "grade_colleges.json").read_text(encoding="utf-8"))
+                return self._json({"ok": True, "links": [x for x in links["links"] if _link_ok(x["url"])]})
             if path == "/api/ics":
                 fm = store.first_monday()
                 if not fm:
@@ -609,7 +708,17 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             try:
                 body = self._body()
                 if self.path == "/api/schemes":
-                    store.save_scheme(body.get("name", ""), body.get("include") or [])
+                    store.save_scheme(body.get("name", ""), body.get("include") or [], body.get("base"),
+                                      body.get("grade_source", "jwxt"))
+                elif self.path == "/api/grades/import":
+                    store.import_grades(body.get("filename", ""), body.get("data", ""))
+                    return self._json({"ok": True, **store.snapshot("import")})
+                elif self.path == "/api/grades/source":
+                    source = "import" if body.get("grade_source") == "import" else "jwxt"
+                    return self._json({"ok": True, **store.snapshot(source)})
+                elif self.path == "/api/grades/refresh":
+                    return self._json({"ok": True, "grade_result": refresh_grades_from_jwxt(store),
+                                       **store.snapshot()})
                 elif self.path == "/api/schemes/delete":
                     store.delete_scheme(body.get("name", ""))
                 elif self.path == "/api/settings":
@@ -653,7 +762,7 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                     return self._json({"ok": True, "result": refresh_from_jwxt(store), **store.snapshot()})
                 else:
                     return self._send(404, b"not found", "text/plain")
-                return self._json({"ok": True, **store.snapshot()})
+                return self._json({"ok": True, **store.snapshot(body.get("grade_source", "jwxt"))})
             except jwxt.SessionExpiredError as e:
                 return self._json({"ok": False, "error": str(e), "session_expired": True,
                                    "site": getattr(e, "site", "jwxt")}, 401)
