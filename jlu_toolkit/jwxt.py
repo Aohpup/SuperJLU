@@ -834,7 +834,7 @@ class JwxtClient:
             return LoginStep.SUCCESS
         return LoginStep.FAILED
 
-    def download_captcha(self, path: Optional[Path] = None) -> Path:
+    def download_captcha(self, path: Optional[Path] = None, save: bool = True) -> Optional[Path]:
         """GET /tpass/code → 校验为真实图片后多路径保存。
 
         二次认证页的 codeImage 仍指向 /tpass/code（与登录页相同）。
@@ -876,6 +876,10 @@ class JwxtClient:
             ) from e
 
         self.last_captcha_bytes = raw
+        if not save:
+            # 应用内自动识别只需要内存里的字节，不往工作目录（如桌面）写文件
+            self.last_captcha_paths = []
+            return None
         if path is not None:
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

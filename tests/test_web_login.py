@@ -28,7 +28,8 @@ class FakeClient:
         return self.first if p == "good" else jwxt.LoginStep.WRONG_PASSWORD
 
 
-    def download_captcha(self):
+    def download_captcha(self, path=None, save=True):
+        self.saved_flags = getattr(self, "saved_flags", []) + [save]
         a = self.answers.pop(0) if self.answers else ""
         self.last_captcha_bytes = a.encode()
         return None
@@ -154,3 +155,18 @@ def test_start_uses_saved_password_for_other_account(monkeypatch):
     f = LoginFlow(lambda: fc)
     f.start("b", "", remember=True)
     assert ("pw", "b", "good") in fc.calls
+
+
+def test_app_login_never_saves_captcha_files(tmp_path, monkeypatch):
+    from jlu_toolkit import jwxt as j
+    monkeypatch.chdir(tmp_path)
+    c = j.JwxtClient()
+    c.last_captcha_paths = ["x"]
+    c.pending = None
+    c.last_content_type = "image/jpeg"
+    jpg = bytes.fromhex("ffd8ffe000104a464946") + b"\0" * 200 + bytes.fromhex("ffd9")
+    monkeypatch.setattr(j.captcha_util, "validate_captcha_bytes", lambda *a, **k: ("jpeg", 70, 36))
+    c._request = lambda *a, **k: (200, "", "", jpg)
+    assert c.download_captcha(save=False) is None
+    assert c.last_captcha_bytes == jpg and c.last_captcha_paths == []
+    assert list(tmp_path.iterdir()) == []
