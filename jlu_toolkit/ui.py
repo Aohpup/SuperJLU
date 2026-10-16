@@ -815,6 +815,8 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             except (ValueError, jwxt.JwxtError) as e:
                 return self._json({"ok": False, "error": str(e)}, 400)
             except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger("superjlu.desktop").exception("POST %s 失败", self.path)
                 return self._json({"ok": False, "error": f"{type(e).__name__}: {e}"}, 500)
 
     return H

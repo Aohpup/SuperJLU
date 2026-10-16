@@ -29,9 +29,14 @@ def solve(image_bytes: bytes) -> str:
 
 
 def solve_with_retry(fetch: Callable[[], bytes], submit: Callable[[str], bool],
-                     tries: int = 6, skip: tuple = ()) -> Optional[str]:
-    """反复取图→识别→提交，成功返回所用验证码，全失败返回 None。``skip`` 内的异常视为本次失败继续。"""
-    for _ in range(max(1, tries)):
+                     tries: int = 6, skip: tuple = (), budget: Optional[float] = None) -> Optional[str]:
+    """反复取图→识别→提交，成功返回所用验证码，全失败返回 None。``skip`` 内的异常视为本次失败继续。
+    ``budget``：总耗时上限（秒），超过后不再开始新一轮，避免单个请求挂几分钟。"""
+    import time
+    t0 = time.monotonic()
+    for i in range(max(1, tries)):
+        if budget is not None and i and time.monotonic() - t0 > budget:
+            break
         try:
             code = solve(fetch())
         except skip:

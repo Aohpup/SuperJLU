@@ -20,6 +20,7 @@ from typing import Callable, Optional
 from . import captcha, jwxt
 
 AUTO_TRIES = 6
+SEND_BUDGET = 30.0  # 秒；超过就先返回让用户点重发，而不是让请求挂几分钟
 
 
 class _Stop(Exception):
@@ -38,8 +39,9 @@ class LoginFlow:
     # ---- helpers ----
     def _fetch_captcha(self) -> bytes:
         c = self._client
-        path = c.download_captcha()
-        return c.last_captcha_bytes or (path.read_bytes() if path else b"")
+        c.download_captcha(save=False)
+        raw, c.last_captcha_bytes = c.last_captcha_bytes or b"", None  # 取走即清，内存里不留图片
+        return raw
 
     def _finish(self) -> dict:
         c = self._client
@@ -125,8 +127,13 @@ class LoginFlow:
                 fatal.append(r)
                 raise _Stop()
 
+            import logging
+            import time
+            log, t0 = logging.getLogger("superjlu.desktop"), time.monotonic()
+            log.info("send_code 开始")
             try:
-                got = captcha.solve_with_retry(self._fetch_captcha, submit, AUTO_TRIES, skip=(jwxt.JwxtError,))
+                got = captcha.solve_with_retry(self._fetch_captcha, submit, AUTO_TRIES, skip=(jwxt.JwxtError,),
+                                               budget=SEND_BUDGET)
             except _Stop:
                 r = fatal[0]
                 if r == jwxt.WechatCodeResult.TOO_FREQUENT:
@@ -135,6 +142,7 @@ class LoginFlow:
                 if r == jwxt.WechatCodeResult.SESSION_EXPIRED:
                     raise ValueError("二次认证会话已失效，请重新输入账号密码")
                 raise ValueError(f"发送微信验证码失败（{r.value}）")
+            log.info("send_code 结束：%s，用时 %.1fs", "成功" if got else "未通过", time.monotonic() - t0)
             if got:
                 self._captcha = got
                 return {"step": "code_sent"}
