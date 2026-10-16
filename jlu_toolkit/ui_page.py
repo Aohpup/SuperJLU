@@ -406,7 +406,9 @@ $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新
 $("#refresh").onclick=()=>fullRefresh({}).catch(()=>{});
 (function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);$("#rwd").value=String(new Date().getDay()||7)})();
 let RM="date",RR=[],RS={k:"name",d:1};
-document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>{RM=b.dataset.m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll(".m-date").forEach(e=>e.hidden=RM!=="date");document.querySelectorAll(".m-week").forEach(e=>e.hidden=RM!=="week")});
+document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>{RM=b.dataset.m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll(".m-date").forEach(e=>e.hidden=RM!=="date");document.querySelectorAll(".m-week").forEach(e=>e.hidden=RM!=="week");syncRoomMode()});
+// 切换模式时让日期与周次/星期互相对应，避免两边条件不一致
+function syncRoomMode(){if(!D||!D.first_monday)return;const fm=new Date(D.first_monday+"T00:00:00");if(RM==="week"&&$("#rd").value){const d=new Date($("#rd").value+"T00:00:00");const w=Math.floor((d-fm)/864e5/7)+1;if(w>0)$("#rw").value=String(w);$("#rwd").value=String((d.getDay()+6)%7+1)}else if(RM==="date"){const w=parseInt($("#rw").value);if(w>0){const d=new Date(fm);d.setDate(d.getDate()+(w-1)*7+(+$("#rwd").value)-1);$("#rd").value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}}}
 const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
 async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
 // 六个校区固定（教务代码表 01–06，已与真实 campuses.json 核对），不再需要「加载」
