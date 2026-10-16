@@ -20,6 +20,7 @@ from typing import Callable, Optional
 from . import captcha, jwxt
 
 AUTO_TRIES = 6
+SEND_BUDGET = 30.0  # 秒；超过就先返回让用户点重发，而不是让请求挂几分钟
 
 
 class _Stop(Exception):
@@ -130,7 +131,8 @@ class LoginFlow:
             log, t0 = logging.getLogger("superjlu.desktop"), time.monotonic()
             log.info("send_code 开始")
             try:
-                got = captcha.solve_with_retry(self._fetch_captcha, submit, AUTO_TRIES, skip=(jwxt.JwxtError,))
+                got = captcha.solve_with_retry(self._fetch_captcha, submit, AUTO_TRIES, skip=(jwxt.JwxtError,),
+                                               budget=SEND_BUDGET)
             except _Stop:
                 r = fatal[0]
                 if r == jwxt.WechatCodeResult.TOO_FREQUENT:
