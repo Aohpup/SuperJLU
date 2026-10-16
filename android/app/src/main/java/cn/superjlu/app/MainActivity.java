@@ -13,6 +13,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import android.view.View;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -49,6 +50,9 @@ public class MainActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + " SuperJLU-Android");
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(false);
+        // Without a WebChromeClient, WebView silently returns false for confirm(),
+        // preventing template switches whenever there are unsaved selections.
+        web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
