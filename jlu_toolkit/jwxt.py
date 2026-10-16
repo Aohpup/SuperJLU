@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import csv
+import http.client
 import json
 import os
 import re
@@ -582,6 +583,16 @@ class JwxtClient:
             raise NetworkError(f"无法连接 {url}: {e.reason}") from e
         except TimeoutError as e:
             raise NetworkError(f"连接超时 {url}") from e
+        except (ConnectionError, http.client.HTTPException, ssl.SSLError) as e:
+            # 手机切换网络/VPN 时常见 ConnectionAbortedError [Errno 103]：GET 静默重试一次
+            if data is None and (method or "GET") == "GET" and not getattr(self, "_retrying", False):
+                self._retrying = True
+                try:
+                    return self._request(url, data=data, headers=headers, method=method,
+                                         allow_redirects=allow_redirects)
+                finally:
+                    self._retrying = False
+            raise NetworkError(f"网络连接被中断（{type(e).__name__}），请检查网络或 VPN 后重试") from e
 
     def save_session(self, path: Optional[Path] = None) -> Path:
         """保存 cookie（加密存储见 secure_store），并把会话状态记为 ok。"""
