@@ -170,3 +170,18 @@ def test_app_login_never_saves_captcha_files(tmp_path, monkeypatch):
     assert c.download_captcha(save=False) is None
     assert c.last_captcha_bytes == jpg and c.last_captcha_paths == []
     assert list(tmp_path.iterdir()) == []
+
+
+def test_solve_with_retry_respects_budget(monkeypatch):
+    import time
+    from jlu_toolkit import captcha
+    t = [0.0]
+    monkeypatch.setattr(time, "monotonic", lambda: t[0])
+    calls = []
+
+    def fetch():
+        calls.append(1); t[0] += 20
+        return b"x"
+    monkeypatch.setattr(captcha, "solve", lambda b: "abcd")
+    assert captcha.solve_with_retry(fetch, lambda c: False, tries=6, budget=30) is None
+    assert len(calls) == 2
