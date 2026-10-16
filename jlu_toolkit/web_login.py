@@ -40,7 +40,8 @@ class LoginFlow:
     def _fetch_captcha(self) -> bytes:
         c = self._client
         c.download_captcha(save=False)
-        return c.last_captcha_bytes or b""
+        raw, c.last_captcha_bytes = c.last_captcha_bytes or b"", None  # 取走即清，内存里不留图片
+        return raw
 
     def _finish(self) -> dict:
         c = self._client
