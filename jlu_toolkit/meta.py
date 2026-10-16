@@ -313,13 +313,15 @@ def derive_group_earned(completion: dict, plan_courses: list, grades) -> dict:
 
     changed = 0
     for g in groups:
-        if g.get("earned") is None and g.get("code"):
-            g["earned"] = round(total(g["code"]), 2)
-            g["earned_source"] = "derived"
-            if g.get("required") is not None:
-                g["missing"] = round(max(0.0, g["required"] - g["earned"]), 2)
-                g["passed"] = g["missing"] == 0
-            changed += 1
+        if g.get("code") and g.get("earned") in (None, 0):
+            got = round(total(g["code"]), 2)
+            if g.get("earned") is None or got > 0:
+                g["earned"] = got
+                g["earned_source"] = "derived"
+                changed += 1
+                if g.get("required") is not None:
+                    g["missing"] = round(max(0.0, g["required"] - g["earned"]), 2)
+                    g["passed"] = g["missing"] == 0
     completion["groups"] = sorted(groups, key=lambda g: (g["passed"], -(g["missing"] or 0)))
     completion["groups_derived"] = changed
     return completion
@@ -888,7 +890,7 @@ def fetch_completion(client, grades=None) -> dict:
     if not summary and not plan:
         raise jwxt.JwxtError("学业完成与培养方案均为空")
     comp = parse_completion(summary, plan, groups)
-    if grades is not None and any(g["earned"] is None for g in comp["groups"]):
+    if grades is not None and any(g.get("earned") in (None, 0) for g in comp["groups"]):
         pyfadm = _s(summary.get("PYFADM") or plan.get("PYFADM"))
         if pyfadm:
             try:
