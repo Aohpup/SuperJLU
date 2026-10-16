@@ -256,7 +256,10 @@ def needs_bootstrap(store: Store) -> bool:
     # 全量同步完成过一次就不再每次启动重来（有的同学没有考试或课组数据，对应缓存永远不会生成）
     if store.p("bootstrap_done").exists():
         return False
-    return any(not store.p(n).exists() for n in BOOTSTRAP_CACHE_FILES)
+    from . import secure_store
+    # completion.json 等个人缓存加密后落盘为 *.enc，必须用 secure_store 判断是否存在
+    return any(not (store.p(n).exists() or secure_store.json_exists(store.p(n)))
+               for n in BOOTSTRAP_CACHE_FILES)
 
 
 def cache_info(store: Store) -> dict:

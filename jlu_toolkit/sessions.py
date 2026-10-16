@@ -36,6 +36,7 @@ class Site:
     readonly: bool = True  # 本工具只读
     optional_login: bool = False  # 不登录也能用基本功能（登录只为个人中心）
     service: str = ""      # CAS service URL（refresh_via_cas 用；空 = 尚未探明，不刷新）
+    follows: str = ""      # 登录状态跟随另一站点（如学在吉大经教务统一认证免登进入）
 
 
 SITES: Dict[str, Site] = {s.id: s for s in (
@@ -44,7 +45,8 @@ SITES: Dict[str, Site] = {s.id: s for s in (
     Site("pay", "校园缴费", "ip.jlu.edu.cn", "own", captcha=True),      # 卡号+密码+验证码
     Site("xsxk", "选课系统", "icourses.jlu.edu.cn", "own", captcha=True),  # AES 加密密码+验证码，token 头鉴权
     # 邮箱+密码+验证码；课程中心入口可能走 CAS，尚未确认
-    Site("ilearn", "学在吉大", "ilearntec.jlu.edu.cn", "own", captcha=True),
+    # 经 /api/sso/jump 用统一认证免登进入，登录状态与教务一致
+    Site("ilearn", "学在吉大", "ilearntec.jlu.edu.cn", "own", captcha=True, follows="jwxt"),
     Site("vpn", "WebVPN", "vpn.jlu.edu.cn", "cas", vpn=False),
     # 首页无需登录；个人中心走 CAS（optional_login：没登录也算可用）
     Site("lib", "图书馆", "lib.jlu.edu.cn", "cas", optional_login=True),
@@ -154,6 +156,10 @@ def mark_expired(site_id: str, reason: str = "") -> None:
 
 def status(site_id: str) -> dict:
     s = site(site_id)
+    if s.follows:
+        src = status(s.follows)
+        return {**src, "id": s.id, "name": s.name, "host": s.host, "auth": s.auth, "vpn": s.vpn,
+                "captcha": s.captcha, "follows": s.follows, "has_check": False}
     if site_id == "jwxt":
         j = jwxt.session_status()
         state, checked, reason = j["state"], j.get("checked_at"), ""
