@@ -306,23 +306,42 @@ def _filters(q: RoomQuery, f: set) -> tuple[dict, list]:
     return form, cond
 
 
+_DATE_KEYS = ("KXRQ", "RQ", "CXRQ", "KXSJ")
+_WEEK_KEYS = ("ZC", "SKZC", "KXZC", "XQ", "XQJ", "SKXQ")
+
+SPECIAL_ROOM_WORDS = ("实验", "机房", "计算机", "语音", "画室", "琴房", "舞蹈", "研讨", "录播",
+                      "报告厅", "会议", "工作室", "制图", "体育", "专用")
+
+
+def is_special_room(r) -> bool:
+    """实验室、机房、语音室等专用教室（按教室类型和名称关键词判断）。"""
+    text = f"{getattr(r, 'kind', '') or ''} {getattr(r, 'name', '') or ''}"
+    return any(w in text for w in SPECIAL_ROOM_WORDS)
+
+
 def _with_filters(fn: Callable[[RoomQuery], dict], fields) -> Callable[[RoomQuery], dict]:
     f = set(fields or [])
 
     def build(q: RoomQuery) -> dict:
         d = dict(fn(q))
         if q.mode == "week":
-            d.pop("KXRQ", None); d.pop("RQ", None)
+            for k in _DATE_KEYS:
+                d.pop(k, None)
             wl = q.week_list
             for k in ("ZC", "SKZC", "KXZC"):
                 if k in d or k in f:
                     d[k] = wl
             d.setdefault("ZC", wl)
+        elif q.date and any(d.get(k) for k in _DATE_KEYS):
+            # 按日期：日期已唯一确定周次和星期，不再同时提交周次/星期，
+            # 避免校历首周一不准时 ZC/XQ 与日期互相矛盾导致查不到或查错。
+            for k in _WEEK_KEYS:
+                d.pop(k, None)
         form, cond = _filters(q, f)
         if "querySetting" in d:
             base = json.loads(d["querySetting"])
             if q.mode == "week":
-                base = [c for c in base if c["name"] not in ("KXRQ", "RQ")]
+                base = [c for c in base if c["name"] not in _DATE_KEYS]
                 base.append({"name": "ZC", "value": q.week_list, "linkOpt": "AND", "builder": "m_value_equal"})
                 base.append({"name": "XQ", "value": str(q.weekday), "linkOpt": "AND", "builder": "equal"})
             base += json.loads(_qs(cond)) if cond else []

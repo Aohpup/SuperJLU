@@ -346,8 +346,14 @@ def rooms_api(store: Store, body: dict) -> dict:
     c = _client()
     found, prof = rooms.query_rooms_any(c, q, store.p("rooms_profile.json"), store.first_monday())
     c.save_session()
-    return {"mode": q.mode, "date": q.date, "week": q.week, "weeks": q.weeks, "weekday": q.weekday,
-            "periods": [q.start, q.end], "total": prof.get("total"), "rooms": [r.to_dict() for r in found]}
+    hidden = 0
+    if body.get("hide_special"):
+        kept = [r for r in found if not rooms.is_special_room(r)]
+        hidden, found = len(found) - len(kept), kept
+    week = q.week if 1 <= (q.week or 0) <= 30 else 0
+    return {"mode": q.mode, "date": q.date, "week": week, "weeks": q.weeks, "weekday": q.weekday,
+            "periods": [q.start, q.end], "total": prof.get("total"), "hidden_special": hidden,
+            "rooms": [r.to_dict() for r in found]}
 
 
 def _cached(store: Store, name: str, fn):
