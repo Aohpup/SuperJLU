@@ -45,6 +45,8 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        // 原生层已按系统栏留白，网页据此不再叠加 safe-area 顶部内边距
+        s.setUserAgentString(s.getUserAgentString() + " SuperJLU-Android");
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(false);
         web.setWebViewClient(new WebViewClient() {

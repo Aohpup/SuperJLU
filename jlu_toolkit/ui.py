@@ -253,6 +253,9 @@ BOOTSTRAP_CACHE_FILES = (
 
 def needs_bootstrap(store: Store) -> bool:
     """本地还缺课表/成绩/考试/校历/学业任一缓存时，登录后应自动全量刷新。"""
+    # 全量同步完成过一次就不再每次启动重来（有的同学没有考试或课组数据，对应缓存永远不会生成）
+    if store.p("bootstrap_done").exists():
+        return False
     return any(not store.p(n).exists() for n in BOOTSTRAP_CACHE_FILES)
 
 
@@ -268,7 +271,7 @@ def cache_info(store: Store) -> dict:
     return {
         "offline": bool(cached_at) and st["state"] != jwxt.SESSION_OK,
         "cached_at": cached_at,
-        "needs_bootstrap": needs_bootstrap(store),
+        "needs_bootstrap": needs_bootstrap(store), "bootstrapped": store.p("bootstrap_done").exists(),
     }
 
 
@@ -279,7 +282,12 @@ def refresh_from_jwxt(store: Store) -> dict:
     client = jwxt.JwxtClient()
     if not client.load_session():
         raise jwxt.LoginError("没有已保存的会话，请在「更多 → 账号」中登录")
-    return sync_all(client, store.root)
+    result = sync_all(client, store.root)
+    try:
+        store.p("bootstrap_done").write_text(dt.datetime.now().isoformat(timespec="seconds"), encoding="utf-8")
+    except OSError:
+        pass
+    return result
 
 
 GRADE_AUTO_SYNC_INTERVAL = 600  # 秒；页面自动同步的最短间隔，手动同步不受限
