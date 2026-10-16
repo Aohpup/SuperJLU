@@ -199,6 +199,8 @@ class Store:
         with self.lock:
             s = self.settings()
             s.update({k: v for k, v in upd.items() if k in ("first_monday",)})
+            if "grade_help_seen" in upd:
+                s["grade_help_seen"] = bool(upd["grade_help_seen"])
             self._write_json("settings.json", s)
 
     def snapshot(self, source: str = "jwxt") -> dict:
@@ -239,8 +241,23 @@ class Store:
         }
 
 
+# 首次登录后全量同步所需的本地缓存；缺任一则 needs_bootstrap=True
+BOOTSTRAP_CACHE_FILES = (
+    "schedule.csv",
+    "grades.csv",
+    "exams.csv",
+    "calendar.json",
+    "completion.json",
+)
+
+
+def needs_bootstrap(store: Store) -> bool:
+    """本地还缺课表/成绩/考试/校历/学业任一缓存时，登录后应自动全量刷新。"""
+    return any(not store.p(n).exists() for n in BOOTSTRAP_CACHE_FILES)
+
+
 def cache_info(store: Store) -> dict:
-    """{offline, cached_at}：教务会话不可用（过期/未登录）但本地有缓存时 offline=True。只读本地。"""
+    """{offline, cached_at, needs_bootstrap}：教务会话不可用但本地有缓存时 offline=True。只读本地。"""
     from . import secure_store
     times = [v.get("updated_at") for v in secure_store.cache_meta(store.root).values() if isinstance(v, dict)]
     for n in ("schedule.csv", "grades.csv", "exams.csv"):
@@ -248,7 +265,11 @@ def cache_info(store: Store) -> dict:
             times.append(dt.datetime.fromtimestamp(store.p(n).stat().st_mtime).isoformat(timespec="seconds"))
     cached_at = max((t for t in times if t), default=None)
     st = jwxt.session_status()
-    return {"offline": bool(cached_at) and st["state"] != jwxt.SESSION_OK, "cached_at": cached_at}
+    return {
+        "offline": bool(cached_at) and st["state"] != jwxt.SESSION_OK,
+        "cached_at": cached_at,
+        "needs_bootstrap": needs_bootstrap(store),
+    }
 
 
 def refresh_from_jwxt(store: Store) -> dict:
@@ -346,8 +367,14 @@ def rooms_api(store: Store, body: dict) -> dict:
     c = _client()
     found, prof = rooms.query_rooms_any(c, q, store.p("rooms_profile.json"), store.first_monday())
     c.save_session()
-    return {"mode": q.mode, "date": q.date, "week": q.week, "weeks": q.weeks, "weekday": q.weekday,
-            "periods": [q.start, q.end], "total": prof.get("total"), "rooms": [r.to_dict() for r in found]}
+    hidden = 0
+    if body.get("hide_special"):
+        kept = [r for r in found if not rooms.is_special_room(r)]
+        hidden, found = len(found) - len(kept), kept
+    week = q.week if 1 <= (q.week or 0) <= 30 else 0
+    return {"mode": q.mode, "date": q.date, "week": week, "weeks": q.weeks, "weekday": q.weekday,
+            "periods": [q.start, q.end], "total": prof.get("total"), "hidden_special": hidden,
+            "rooms": [r.to_dict() for r in found]}
 
 
 def _cached(store: Store, name: str, fn):
