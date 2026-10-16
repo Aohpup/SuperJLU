@@ -546,16 +546,38 @@ def week_dates(weeks: str, weekday: int, first_monday: str) -> list[str]:
             for w in weeks.split(",") if w]
 
 
+WEEKDAY_CN = "一二三四五六日"
+
+
+def free_date_label(q: RoomQuery, first_monday: Optional[str] = None) -> str:
+    """「空闲日期」列统一由查询条件生成，与结果标题的日期/周次/星期保持一致。"""
+    if q.mode == "week":
+        wd = int(q.weekday or 1)
+        return f"第{q.weeks or q.week_list}周 周{WEEKDAY_CN[wd - 1]}"
+    wk, wd = week_and_weekday(q.date, first_monday)
+    return f"{q.date} 周{WEEKDAY_CN[wd - 1]}" + (f"（第{wk}周）" if wk > 0 else "")
+
+
+def label_free_date(rs: list, q: RoomQuery, first_monday: Optional[str] = None) -> list:
+    if not q.date and q.mode != "week":
+        return rs
+    lab = free_date_label(q, first_monday)
+    for r in rs:
+        r.free_date = lab
+    return rs
+
+
 def query_rooms_any(client, q: RoomQuery, profile_path: Optional[Path] = None,
                     first_monday: Optional[str] = None, meta: Optional[dict] = None):
     """按周次：先试服务端周次参数；失败或 0 间时按 校历首周一 换算成日期逐日查询取交集。"""
     if q.mode != "week":
-        return query_rooms(client, q, profile_path, meta)
+        found, prof = query_rooms(client, q, profile_path, meta)
+        return label_free_date(found, q, first_monday), prof
     try:
         found, prof = query_rooms(client, q, profile_path, meta)
         if found:
             prof = {**prof, "week_via": "server"}
-            return found, prof
+            return label_free_date(found, q, first_monday), prof
     except jwxt.JwxtError:
         pass
     if not first_monday:
@@ -568,9 +590,7 @@ def query_rooms_any(client, q: RoomQuery, profile_path: Optional[Path] = None,
         rs, prof = query_rooms(client, sub, profile_path, meta)
         cur = {(r.building, r.name): r for r in rs}
         keep = cur if keep is None else {k: v for k, v in keep.items() if k in cur}
-    out = list((keep or {}).values())
-    for r in out:
-        r.free_date = f"第{q.week_list}周 周{q.weekday}"
+    out = label_free_date(list((keep or {}).values()), q, first_monday)
     return out, {**prof, "week_via": "per-date", "total": len(out)}
 
 
