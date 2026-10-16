@@ -81,11 +81,21 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
 
     def _prog():
         c = meta.fetch_completion(client, grades=grades_cache)
+        # 先用本地已有培养方案挂上课程，避免 plan 步骤失败时留下「全是 0、点不开」的课组
+        from . import plan as pl, secure_store
+        prev = secure_store.load_json(root / "plan_courses.json")
+        if prev and (prev.get("courses") or prev.get("tree_nodes")):
+            try:
+                c = pl.attach_to_completion(c, prev)
+            except Exception:
+                pass
         _wjson(root / "completion.json", c)
         return {"ok": True, "groups": len(c["groups"]),
                 "has_required": c["required"] is not None, "has_earned": c["earned"] is not None,
                 "groups_with_earned": sum(1 for g in c["groups"] if g.get("earned") is not None),
-                "groups_derived": c.get("groups_derived", 0)}
+                "groups_derived": c.get("groups_derived", 0),
+                "has_tree": bool(c.get("tree")),
+                "groups_with_courses": sum(1 for g in c["groups"] if g.get("courses"))}
 
     def _plan():
         from . import plan as pl
