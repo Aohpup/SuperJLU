@@ -20,6 +20,64 @@ assert.equal(totals.credits,6);
 assert.equal(totals.score,80);
 assert.ok(Math.abs(totals.point - 17.2/6) < 1e-10);
 assert.equal(totals.estimated,1);
+assert.deepEqual(JSON.parse(JSON.stringify(context.gradeSelectionCount(rows,new Set(['A','B','C','stale'])))),{selected:3,total:4});
+assert.deepEqual(JSON.parse(JSON.stringify(context.gradeSelectionCount([],new Set(['stale'])))),{selected:0,total:0});
+const templateRows=Array.from({length:9},(_,i)=>({key:String(i),name:'课程'+i,builtin:{postgraduate:i===8,scholarship:i<2,comprehensive:true}}));
+const changes=context.gradeTemplateChanges(templateRows,new Set(['0','1','2','3','4','5','6','7']),'postgraduate');
+assert.equal(changes.added.length,8);
+assert.equal(changes.removed.length,1);
+assert.deepEqual(Array.from(changes.added,g=>g.key),['0','1','2','3','4','5','6','7']);
+// Undoing a selection change restores the saved state for every built-in.
+for(const base of ['postgraduate','scholarship','comprehensive']){
+  const saved=context.gradeSchemeSelection(templateRows,{base},null);
+  const selected=new Set(saved);
+  assert.equal(context.gradeSelectionChanged(templateRows,selected,saved),false);
+  selected.has('0')?selected.delete('0'):selected.add('0');
+  assert.equal(context.gradeSelectionChanged(templateRows,selected,saved),true);
+  selected.has('0')?selected.delete('0'):selected.add('0');
+  assert.equal(context.gradeSelectionChanged(templateRows,selected,saved),false);
+}
+// Compare custom templates against their saved overrides, not the base template.
+const customRule={base:'postgraduate',overrides:{'0':true,'8':false}};
+const customSaved=context.gradeSchemeSelection(templateRows,null,customRule);
+assert.deepEqual(Array.from(customSaved),['0']);
+assert.equal(context.gradeSelectionChanged(templateRows,context.gradeSchemeSelection(templateRows,{base:'postgraduate'},null),customSaved),true);
+const customSelection=new Set(customSaved);
+customSelection.add('1');
+assert.equal(context.gradeSelectionChanged(templateRows,customSelection,customSaved),true);
+customSelection.delete('1');
+assert.equal(context.gradeSelectionChanged(templateRows,customSelection,customSaved),false);
+customSelection.delete('0');
+assert.equal(context.gradeSelectionChanged(templateRows,customSelection,customSaved),true);
+customSelection.add('0');
+assert.equal(context.gradeSelectionChanged(templateRows,customSelection,customSaved),false);
+// Equal counts can still contain different courses; stale keys are not active courses.
+assert.equal(context.gradeSelectionChanged(templateRows,new Set(['1']),customSaved),true);
+assert.equal(context.gradeSelectionChanged(templateRows,new Set(['0','stale']),customSaved),false);
+const legacyRows=[{key:'new-key',legacy_key:'T1|旧课程',builtin:{postgraduate:false}}];
+const legacySaved=context.gradeSchemeSelection(legacyRows,null,null,['T1|旧课程']);
+assert.deepEqual(Array.from(legacySaved),['new-key']);
+assert.equal(context.gradeSelectionChanged(legacyRows,new Set(['new-key']),legacySaved),false);
+assert.equal(context.gradeSelectionChanged(legacyRows,new Set(),legacySaved),true);
+assert.equal(context.gradeSelectionChanged([],new Set(),new Set()),false);
+// Older Android WebViews have no Object.hasOwn. Custom overrides (including false)
+// and undo detection must still work without throwing during a render.
+const legacyWebView=vm.createContext({});
+vm.runInContext('Object.hasOwn=undefined;',legacyWebView);
+vm.runInContext('// Grade calculation helpers:' + pure,legacyWebView);
+const androidSaved=legacyWebView.gradeSchemeSelection(templateRows,null,customRule);
+assert.deepEqual(Array.from(androidSaved),['0']);
+const androidSelection=new Set(androidSaved);
+androidSelection.add('1');
+assert.equal(legacyWebView.gradeSelectionChanged(templateRows,androidSelection,androidSaved),true);
+androidSelection.delete('1');
+assert.equal(legacyWebView.gradeSelectionChanged(templateRows,androidSelection,androidSaved),false);
+for(const [base,name] of Object.entries({postgraduate:'保研加权',scholarship:'奖学金加权',comprehensive:'所有课程加权'})){
+  assert.equal(context.gradePolicy(base,true),`基于${name}的自定义模板。 不同学院政策不同，请核对当年规则。`);
+}
+assert.ok(context.gradePolicy('postgraduate',false).startsWith('排除选修、'));
+assert.ok(context.gradePolicy('scholarship',false).startsWith('只计必修，'));
+assert.ok(context.gradePolicy('comprehensive',false).startsWith('计入所有有学分课程。'));
 assert.equal(context.gradeTotals(rows,new Set(['A','D'])).point,null);
 assert.equal(context.gradeTotals(rows,new Set()).score,null);
 const filters = {q:'',term:'',terms:[],natures:[],inclusion:'',status:'',ranges:[]};
