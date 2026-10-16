@@ -199,6 +199,8 @@ class Store:
         with self.lock:
             s = self.settings()
             s.update({k: v for k, v in upd.items() if k in ("first_monday",)})
+            if "grade_help_seen" in upd:
+                s["grade_help_seen"] = bool(upd["grade_help_seen"])
             self._write_json("settings.json", s)
 
     def snapshot(self, source: str = "jwxt") -> dict:
