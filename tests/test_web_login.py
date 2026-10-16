@@ -185,3 +185,20 @@ def test_solve_with_retry_respects_budget(monkeypatch):
     monkeypatch.setattr(captcha, "solve", lambda b: "abcd")
     assert captcha.solve_with_retry(fetch, lambda c: False, tries=6, budget=30) is None
     assert len(calls) == 2
+
+
+def test_fetch_captcha_does_not_retain_bytes():
+    from jlu_toolkit.web_login import LoginFlow
+
+    class C:
+        last_captcha_bytes = None
+
+        def download_captcha(self, path=None, save=True):
+            assert save is False
+            self.last_captcha_bytes = b"img" * 700
+
+    f = LoginFlow(lambda: C())
+    f._client = C()
+    for _ in range(50):
+        assert f._fetch_captcha() == b"img" * 700
+        assert f._client.last_captcha_bytes is None
