@@ -449,9 +449,9 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
         n["earned"] = None
         if n["earned_tree"]:
             n["earned"], n["earned_source"] = n["earned_tree"], "jw_tree"
-    for g in comp_groups or []:  # 学业完成（cxscfakz）的 WCXF 按 KZH 优先
+    for g in comp_groups or []:  # 学业完成（cxscfakz）的 WCXF 按 KZH 优先；0 不当真
         n = idx.get(g.get("code"))
-        if n and g.get("earned") is not None and g.get("earned_source", "jw") == "jw":
+        if n and isinstance(g.get("earned"), (int, float)) and g["earned"] > 0 and g.get("earned_source", "jw") == "jw":
             n["earned"], n["earned_source"] = g["earned"], "jw"
         if n and n["required"] is None and g.get("required") is not None:
             n["required"] = g["required"]
@@ -621,7 +621,14 @@ def attach_to_completion(comp: dict, plan: dict) -> dict:
         if g is not None:
             g.setdefault("courses", []).append(c)
     for g in groups:
-        if g.get("earned") is None and g.get("courses"):
-            g["earned"] = round(sum(credit_of(c) for c in g["courses"] if is_done(c)), 2)
-            g["earned_source"] = "plan_courses"
+        if not g.get("courses"):
+            continue
+        from_courses = round(sum(credit_of(c) for c in g["courses"] if is_done(c)), 2)
+        # 教务 WCXF 常为 0 占位，不当真；与课组树 roll() 同一规则
+        srv = g["earned"] if isinstance(g.get("earned"), (int, float)) and g["earned"] > 0 else None
+        if srv is None or from_courses > srv:
+            g["earned"], g["earned_source"] = from_courses, "plan_courses"
+            if g.get("required") is not None:
+                g["missing"] = round(max(0.0, g["required"] - g["earned"]), 2)
+                g["passed"] = g["missing"] == 0
     return comp
