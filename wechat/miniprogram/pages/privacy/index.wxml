@@ -1,0 +1,19 @@
+<view class="container">
+  <view class="eyebrow">PRIVACY &amp; OPEN SOURCE</view><view class="title">你的数据，由你掌握</view>
+  <view class="card">
+    <view class="section">手机浏览器辅助同步</view>
+    <view class="muted">由本人在 Safari 学校页面登录并查询。同步书签仅在学校教务页面运行，不复制登录 Cookie、密码或验证码，不向云端上传结果。本人主动复制的课表、成绩等数据经预览确认后保存在此设备；本地缓存未额外加密。结果会暂留剪贴板，导入后可主动清空。这是手动读取与本机导入，不会后台自动刷新，也不是学校签名证明。</view>
+    <view class="section">数据存在哪里</view>
+    <view class="muted" wx:if="{{browserOnly}}">当前配置仅使用手机浏览器导入。教务数据只保存在当前设备的小程序缓存中，不进行微信登录，不使用自建后端。演示模式使用明确标记的虚构数据。</view>
+    <view class="muted" wx:elif="{{hybrid}}">当前另行启用组合连接试验：经本人同意，手机号、验证码、学校账号或密码经所配置的后端提交给学校。认证 Cookie 在云端内存中保留，最长两小时，不保存密码和验证码。教务 Cookie 留在当前设备内存中；业务数据缓存在本机，未额外加密。</view>
+    <view class="muted" wx:elif="{{direct}}">当前另行启用校园网直连试验：凭据只提交学校，不调用自建后端。Cookie 和票据仅保存在小程序内存中；课表、成绩等业务数据缓存在本机，未额外加密。启动时会进行匿名学校连接检测。</view>
+    <view class="muted" wx:else>当前另行启用后端连接试验：凭据经所配置的后端提交学校，密码和验证码不保存。后端以微信身份隔离用户，通过每用户派生密钥和 AES-GCM 加密保存学校会话与业务缓存。本机另存业务缓存，未额外加密。后端运营者负责访问控制和服务配置。</view>
+    <view class="section">如何清除</view>
+    <view class="muted">「我的 → 清除本地教务缓存」可删除设备缓存。手机浏览器导入模式下，「清除教务数据与会话」也只处理本机数据。其他连接试验同时清除当前连接的学校会话；使用后端连接时，该操作需要后端在线。更换学校账号前会替换此前数据。</view>
+    <view class="section">功能边界</view>
+    <view class="muted">教务接口只用于查询。课程、考试和毕业要求请以学校通知为准；保研、奖学金计算规则需要按学院当年政策调整。校园站点通过复制地址访问，不会自动提交选课、缴费等操作。手机浏览器导入不提供实时空教室查询。</view>
+    <view class="section">源码与许可</view>
+    <view class="muted">本项目基于 Runa-Asahi / SuperJLU 的 MIT 许可源码改编，新增微信原生界面、手机浏览器同步和可选接入后端。成绩计算遵循上游包含的第三方许可。完整声明见项目 THIRD_PARTY_NOTICES.md 和 server/vendor/。</view>
+    <button class="ghost form-button" bindtap="copy">复制原始项目地址 ↗</button>
+  </view>
+</view>

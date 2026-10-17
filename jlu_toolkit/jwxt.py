@@ -528,6 +528,15 @@ class JwxtClient:
         """CAS 长期票据（通常名 CASTGC）。有则可对多个教务应用静默换票。"""
         return self._has_cookie("CASTGC") or self._has_cookie("TGC")
 
+    def has_cas_cookie(self) -> bool:
+        """jar 里有任何统一认证（cas.jlu.edu.cn）的 cookie。
+
+        学校 CAS 不一定下发 CASTGC（也可能改名），tpasssessionid 等同样能让 CAS 静默签发 ticket，
+        所以只要有 CAS cookie 就值得先试一次换票，失败再要求重新登录。
+        """
+        return self.has_cas_tgc() or any(
+            (c.domain or "").lstrip(".").lower() == "cas.jlu.edu.cn" for c in self.jar)
+
     def session_cookie_summary(self) -> dict:
         names = self._cookie_names()
         return {
@@ -1089,10 +1098,21 @@ class JwxtClient:
 
         on_cas = host == "cas.jlu.edu.cn" or 'id="loginForm"' in html or "id='loginForm'" in html
         if on_cas or (host != IEDU_HOST and code in (200, 302)):
-            if not self.has_cas_tgc():
+            if not self.has_cas_cookie():
+                # 教务会话里没有 CAS cookie 时，补上单独加密保存的 CAS 登录状态（站点 cas）再换票
+                try:
+                    from . import sessions
+                    sessions.migrate_cas_from_jwxt(self.jar)
+                    for ck in jar_from_list(sessions.load_cookies("cas") or []):
+                        self.jar.set_cookie(ck)
+                    self._rebuild_opener()
+                except Exception:  # noqa: BLE001
+                    pass
+            if not self.has_cas_cookie():
+                mark_session_expired("emap_no_cas_cookie")
                 raise LoginError(
-                    "进入教务应用时被送回统一认证，且本地会话没有 CASTGC，"
-                    "无法自动换票。请加 --force-login 重新登录。"
+                    "教务登录已过期，请在「更多 → 账号」中重新登录。"
+                    "（CLI：加 --force-login）"
                 )
             # 用 CASTGC 对「该应用入口」显式换票
             cas_url = f"{CAS_LOGIN}?service={urllib.parse.quote(app_index, safe='')}"
@@ -1114,10 +1134,12 @@ class JwxtClient:
                 **summary,
             )
             if host != IEDU_HOST or 'id="loginForm"' in html:
+                mark_session_expired("emap_cas_exchange_failed")
                 raise LoginError(
-                    "CASTGC 换票后仍未进入教务应用，票据可能已失效。"
-                    "请加 --force-login 重新登录。"
+                    "统一认证的登录状态已失效，请在「更多 → 账号」中重新登录。"
+                    "（CLI：加 --force-login）"
                 )
+            self.save_session()
 
         if code == 403:
             raise JwxtError(

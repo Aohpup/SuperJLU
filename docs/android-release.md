@@ -17,6 +17,23 @@ CI：`.github/workflows/release-android.yml`。推 `v*` 标签 → 签名 releas
 5. JDK 17、SDK platform 35（build-tools 35.0.0）、Chaquopy 16.1、CI 用 `android-actions/setup-android` 的最新 build-tools；Chaquopy `buildPython` 用 CI 里的 Python 3.13（`python3` 在 PATH 上）。
 6. 签名：CI 从 secrets `ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD` 还原 PKCS12 keystore（别名 `jlu-toolkit`，RSA 4096，30 年）。Gradle 不需要读这些变量。
 
+## 文件导入的原生回归
+
+在 `android/` 下运行 `./gradlew testDebugUnitTest`（Windows 使用 `gradlew.bat`）。
+首次运行需要下载 Robolectric 及 Android 测试运行库；测试依赖不打进 APK。
+
+`TranscriptChromeClientTest` 在 API 28 / 35 上验证系统文件选择器的调用、content URI 回传、
+取消后重选、连续请求、Activity 销毁时释放回调、ClipData，以及选择器缺失时的回退和提示。
+测试使用虚构 URI，不启动 Python 服务或读取真实账号、成绩文件。
+
+`WebView` 的文件输入必须由 `WebChromeClient.onShowFileChooser` 接入；仅设置一个默认
+`WebChromeClient` 会取消文件请求。实现使用系统文档选择器，不需要存储权限。
+部分教务导出文件的 MIME 类型不准确，所以选择器不按 MIME 隐藏文件，扩展名和 5 MB
+大小限制继续由网页、后端校验。参见 [Android 文件选择回调](https://developer.android.com/reference/android/webkit/WebChromeClient#onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient.FileChooserParams))。
+
+发布前仍应在真机上检查：选择下载目录内的 XLSX / XLS / CSV、取消后重选、未登录时导入，
+以及未保存修改时切换模板的确认弹窗。JVM 回归不能替代不同厂商文件管理器的实际验证。
+
 ## Chaquopy 与 cryptography
 
 `secure_store` 在 Android 下用 Android Keystore（别名 `jlu-toolkit-storage`，AES/GCM/NoPadding）包裹 32 字节主密钥，

@@ -1,0 +1,56 @@
+module.exports = [
+  {
+    "id": "jwxt",
+    "name": "教务系统",
+    "icon": "▦",
+    "url": "https://iedu.jlu.edu.cn/jwapp/sys/emaphome/portal/index.do",
+    "purpose": "课表、成绩、培养方案（本工具的数据来源）",
+    "login": "统一身份认证登录",
+    "campus_only": true
+  },
+  {
+    "id": "pay",
+    "name": "校园网缴费",
+    "icon": "₪",
+    "url": "https://ip.jlu.edu.cn/pay/",
+    "purpose": "校园网账号充值、缴费",
+    "login": "校园网账号登录",
+    "campus_only": true
+  },
+  {
+    "id": "xsxk",
+    "name": "选课",
+    "icon": "✎",
+    "url": "https://icourses.jlu.edu.cn/xsxk/profile/index.html",
+    "purpose": "本科生选课系统",
+    "login": "学号 + 密码登录（选课开放时段可用）",
+    "campus_only": true
+  },
+  {
+    "id": "ilearn",
+    "name": "学在吉大",
+    "icon": "✦",
+    "url": "https://ilearntec.jlu.edu.cn/",
+    "purpose": "课程平台：课件、作业、在线学习",
+    "login": "需先完成一次邮箱 + 密码 + 验证码登录，登录状态保留后才能进入",
+    "campus_only": false
+  },
+  {
+    "id": "vpn",
+    "name": "校园 VPN",
+    "icon": "⛨",
+    "url": "https://vpn.jlu.edu.cn/",
+    "purpose": "网页版 VPN，校外访问校内系统",
+    "login": "统一身份认证登录",
+    "campus_only": false
+  },
+  {
+    "id": "lib",
+    "name": "图书馆",
+    "icon": "▤",
+    "url": "https://lib.jlu.edu.cn/",
+    "purpose": "馆藏检索、借阅、数据库",
+    "login": "浏览无需登录；借阅/数据库需登录",
+    "campus_only": false
+  }
+];

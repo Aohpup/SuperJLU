@@ -1,0 +1,10 @@
+{"plan": "计算机科学与技术（示例）", "required": 165, "earned": 51, "selected": 74, "missing": 114, "passed": false, "calculated_at": "2026-10-14 03:00:00",
+ "groups": [
+  {"name": "专业必修课", "code": "A03", "parent": "", "nature": "必修", "required": 62, "earned": 14, "courses_done": 4, "passed": false, "missing": 48},
+  {"name": "专业选修课", "code": "A04", "parent": "", "nature": "选修", "required": 24, "earned": 0, "courses_done": 0, "passed": false, "missing": 24},
+  {"name": "学科基础课", "code": "A02", "parent": "", "nature": "必修", "required": 36, "earned": 20, "courses_done": 5, "passed": false, "missing": 16},
+  {"name": "通识教育选修课", "code": "B02", "parent": "", "nature": "选修", "required": 12, "earned": 3, "courses_done": 2, "passed": false, "missing": 9},
+  {"name": "实践教学环节", "code": "C01", "parent": "", "nature": "必修", "required": 10, "earned": 2, "courses_done": 1, "passed": false, "missing": 8},
+  {"name": "通识教育必修课", "code": "B01", "parent": "", "nature": "必修", "required": 21, "earned": 12, "courses_done": 6, "passed": false, "missing": 9}
+ ]}
+

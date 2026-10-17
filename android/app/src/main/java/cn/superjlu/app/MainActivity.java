@@ -13,7 +13,6 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import android.view.View;
-import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -25,6 +24,7 @@ import com.chaquo.python.android.AndroidPlatform;
 
 public class MainActivity extends Activity {
     private WebView web;
+    private TranscriptChromeClient chrome;
     private final Handler main = new Handler(Looper.getMainLooper());
     /** 前台时每 15 分钟调一次 POST /api/session/keepalive；退到后台停止。 */
     static final long KEEPALIVE_MS = 15 * 60 * 1000L;
@@ -52,7 +52,8 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         // Without a WebChromeClient, WebView silently returns false for confirm(),
         // preventing template switches whenever there are unsaved selections.
-        web.setWebChromeClient(new WebChromeClient());
+        chrome = new TranscriptChromeClient(this);
+        web.setWebChromeClient(chrome);
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
@@ -179,6 +180,19 @@ public class MainActivity extends Activity {
         resumed = false;
         main.removeCallbacks(keepalive);
         super.onPause();
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (chrome != null && chrome.onActivityResult(requestCode, resultCode, data)) return;
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (chrome != null) chrome.cancel();
+        super.onDestroy();
     }
 
     /** 本机地址留在 WebView 内，其余链接交给系统浏览器。 */

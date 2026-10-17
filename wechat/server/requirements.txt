@@ -1,0 +1,2 @@
+cryptography>=42,<47
+curl_cffi==0.16.3
