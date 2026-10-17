@@ -373,7 +373,7 @@ def test_enter_emap_app_requires_castgc_when_bounced_to_cas():
         )
 
     with mock.patch.object(client, "_request", side_effect=fake_request):
-        with pytest.raises(jwxt.LoginError, match="CASTGC"):
+        with pytest.raises(jwxt.LoginError, match="重新登录"):
             client.enter_emap_app(jwxt.REF_SCHEDULE)
 
 
