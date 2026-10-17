@@ -249,7 +249,7 @@ pip install "jlu-toolkit[mcp] @ git+https://github.com/Runa-Asahi/SuperJLU"
 
 ## Android
 
-Android 版（`android/`，Chaquopy + WebView）的构建与签名发布约定见 [docs/android-release.md](docs/android-release.md)。
+Android 版（`android/`，Chaquopy + WebView）的构建与签名发布约定见 [docs/android-release.md](android-release.md)。
 Android 下凭据用 Android Keystore 包裹的主密钥加密（`backend_name()` = `android-keystore`），需要 Chaquopy 提供的 `cryptography==42.0.8`。
 
 ## OA 校内通知（只读，实验性）
