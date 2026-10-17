@@ -1,0 +1,4 @@
+* text=auto eol=lf
+miniprogram/data/phone-bookmark.js linguist-generated=true
+miniprogram/services/school/des-tables.js linguist-generated=true
+server/vendor/** linguist-vendored=true

@@ -1,0 +1,16 @@
+<view class="container">
+  <view class="eyebrow">ACADEMIC OVERVIEW</view><view class="row"><view class="title">让成长，有迹可循</view><text class="badge {{mode === 'demo' ? 'warn' : ''}}">{{source === 'import' ? '导入预览' : mode === 'demo' ? '示例成绩' : '教务成绩'}}</text></view>
+  <view class="summary"><view class="row"><text class="small">已选 {{summary.count}} 门 · {{summary.credits}} 学分</text><text class="small" bindtap="save">保存方案 ＋</text></view><view class="grid2 summary-values"><view><view class="number">{{summary.average}}</view><text class="small">加权平均成绩</text></view><view><view class="number">{{summary.gpa}}</view><text class="small">学分加权绩点</text></view></view></view>
+  <view class="muted calculation-note">不及格按 55 分计入加权；通过类不计入。{{summary.estimated ? '部分绩点为估算。' : ''}}{{summary.missing ? '缺少课程绩点，无法计算整体绩点。' : ''}}此结果供个人参考。</view>
+  <view class="chips"><text class="chip {{template === 'comprehensive' ? 'active' : ''}}" bindtap="template" data-template="comprehensive">所有课程</text><text class="chip {{template === 'postgraduate' ? 'active' : ''}}" bindtap="template" data-template="postgraduate">保研参考</text><text class="chip {{template === 'scholarship' ? 'active' : ''}}" bindtap="template" data-template="scholarship">奖学金参考</text></view>
+  <view class="hint">各学院规则不同，使用模板后请逐门核对。搜索和学期筛选仅改变显示，统计所有勾选课程。</view>
+  <view wx:if="{{schemes.length}}" class="chips"><text wx:for="{{schemes}}" wx:key="name" class="chip" bindtap="useScheme" data-i="{{index}}">{{item.name}} ↗</text></view>
+  <view class="filter"><input placeholder="搜索课程名称" value="{{search}}" bindinput="search"/><picker range="{{terms}}" value="{{termIndex}}" bindchange="term"><view class="term">{{terms[termIndex]}} ▾</view></picker></view>
+  <view wx:for="{{visible}}" wx:key="key" class="grade-row {{item.failed ? 'failed' : ''}}" bindtap="toggle" data-key="{{item.key}}">
+    <view class="check {{item.checked ? 'checked' : ''}}">{{item.checked ? '✓' : ''}}</view>
+    <view class="grade-main"><view class="item-title">{{item.name}}</view><view class="muted">{{item.creditLabel}} · {{item.nature}} · {{item.term}}</view><view class="small muted">{{item.point_source === 'estimated' ? '估算绩点' : item.point_source === 'reported' ? '教务绩点' : '无绩点'}} {{item.pointLabel}}{{!item.counted ? ' · 不计入加权' : ''}}</view></view>
+    <view class="grade-score">{{item.score}}</view>
+  </view>
+  <view wx:if="{{!visible.length}}" class="empty">暂无符合条件的成绩。真实模式下请先绑定并同步教务。</view>
+  <view class="card"><view class="item-title">其他方式 · 文件导入</view><view class="muted">支持 UTF-8 CSV，含课程、学分、成绩列。导入成绩单单独预览，缺少绩点时显示「—」。</view><view class="row"><button class="ghost" bindtap="importFile">导入 CSV</button><button wx:if="{{source === 'import'}}" class="ghost" bindtap="school">返回教务成绩</button><button wx:elif="{{importedAvailable}}" class="ghost" bindtap="showImport">查看上次导入</button></view></view>
+</view>

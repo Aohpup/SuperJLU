@@ -1,0 +1,1 @@
+Page({data:{browserOnly:require('../../config').transport==='browser',hybrid:require('../../config').transport==='hybrid',direct:['direct','hybrid'].includes(require('../../config').transport)},copy(){wx.setClipboardData({data:'https://github.com/Runa-Asahi/SuperJLU'});}});

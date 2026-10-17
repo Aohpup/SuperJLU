@@ -1,0 +1,42 @@
+name: WeChat mini program
+
+on:
+  pull_request:
+    paths:
+      - 'wechat/**'
+      - '.github/workflows/wechat-tests.yml'
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'wechat/**'
+      - '.github/workflows/wechat-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wechat:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wechat
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native page structure and bindings
+        run: npm run check
+      - name: Client protocols, calculations and browser import
+        run: npm test
+      - name: Check generated bookmark is current
+        run: |
+          node scripts/build-phone-bookmark.js
+          git diff --exit-code -- miniprogram/data/phone-bookmark.js
+      - name: Optional backend dependencies
+        run: python -m pip install -r server/requirements.txt
+      - name: Optional backend suite (separate interpreter)
+        run: python -m unittest discover -s server -p 'test_*.py'
