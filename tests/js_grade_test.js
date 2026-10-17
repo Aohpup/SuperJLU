@@ -86,6 +86,37 @@ assert.deepEqual(rows.filter(g=>context.gradeMatches(g,{...filters,status:'fail'
 assert.deepEqual(rows.filter(g=>context.gradeMatches(g,{...filters,inclusion:'out',ranges:[['credit','1','2']]},chosen)).map(g=>g.key),['D']);
 assert.deepEqual(rows.filter(g=>context.gradeMatches(g,{...filters,q:'高数'},chosen)).map(g=>g.key),['A']);
 assert.equal(context.gradeTotals(rows,chosen).score,80); // Filtering never mutates the selection.
+// Pass/fail courses and zero-credit records must not be reported as weighted
+// score/GPA errors. Missing nature is still useful when checking a template.
+const issueRows=[...rows,
+  {key:'E',name:'待核对',nature:'未标注',credit:2,score_valid:false,numeric_score:0,point:null},
+  {key:'F',name:'零学分',nature:'必修',credit:0,score_valid:false,point:null}
+];
+const issueSelection=new Set(['A','C','D','E','F']);
+assert.deepEqual(JSON.parse(JSON.stringify(context.gradeDataIssues(issueRows,issueSelection))),{
+  unknown:1,'missing-point':2,'missing-nature':1,selectedUnknown:1,selectedMissingPoint:2
+});
+for(const [status,keys] of [['unknown',['E']],['missing-point',['D','E']],['missing-nature',['E']]]){
+  assert.deepEqual(issueRows.filter(g=>context.gradeMatches(g,{...filters,status},issueSelection)).map(g=>g.key),keys);
+}
+assert.deepEqual(Array.from(issueSelection),['A','C','D','E','F']); // Inspection never changes inclusion.
+const before=context.gradeTotals(rows,new Set(['A','B'])),after=context.gradeTotals(rows,new Set(['A']));
+const delta=context.gradeDelta(after,before);
+assert.equal(delta.score,10);
+assert.ok(Math.abs(delta.point-(3.8-17.2/6))<1e-10);
+assert.equal(context.gradeSignedDifference(delta.score),'+10.000');
+assert.equal(context.gradeSignedDifference(-.015),'-0.015');
+assert.equal(context.gradeSignedDifference(-.00001),'0.000');
+assert.equal(context.gradeSignedDifference(null),'—');
+assert.equal(context.gradeDelta(context.gradeTotals(rows,new Set(['D'])),before).point,null);
+assert.equal(context.gradeDelta(context.gradeTotals(rows,new Set()),before).score,null);
+// Restoring a saved custom rule removes temporary choices while retaining
+// its intentional overrides, even when those differ from the built-in base.
+const restoreSelection=new Set(customSaved);restoreSelection.add('3');
+const restored=context.gradeSchemeSelection(templateRows,null,customRule);
+assert.equal(context.gradeSelectionChanged(templateRows,restoreSelection,customSaved),true);
+assert.equal(context.gradeSelectionChanged(templateRows,restored,customSaved),false);
+assert.deepEqual(Array.from(restored),['0']);
 assert.deepEqual(rows.slice().sort((a,b)=>context.gradeCompare(a,b,{key:'point',dir:-1})).map(g=>g.key),['A','B','C','D']);
 assert.deepEqual(rows.slice().sort((a,b)=>context.gradeCompare(a,b,{key:'point',dir:1})).map(g=>g.key),['B','A','C','D']);
 console.log('Grade inline scripts parse; weighted totals, missing values, filters and sorting passed.');

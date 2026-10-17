@@ -228,7 +228,7 @@ def courses_from_raw(raw: list[list]) -> list[Course]:
 
 def courses_from_bytes(filename: str, data: bytes) -> list[Course]:
     if len(data) > MAX_UPLOAD_BYTES:
-        raise ValueError("成绩单超过 25 MB")
+        raise ValueError("成绩单超过 5 MB")
     suffix = Path(filename).suffix.lower()
     if suffix in {".xlsx", ".xls"}:
         workbook = None
@@ -236,6 +236,11 @@ def courses_from_bytes(filename: str, data: bytes) -> list[Course]:
             if suffix == ".xlsx":
                 from openpyxl import load_workbook
                 workbook = load_workbook(BytesIO(data), read_only=True, data_only=True)
+                # 教务直接下载的原始 Excel 有时已将 dimension 错误标为 A1，
+                # 实际却包含完整成绩表，并非用户编辑文件造成。依赖该范围的
+                # 读取器会漏掉表头和数据；按实际单元格读取，兼容这类教务导出。
+                for worksheet in workbook:
+                    worksheet.reset_dimensions()
                 sheets = [(name, lambda name=name: [list(row) for row in workbook[name].iter_rows(values_only=True)])
                           for name in workbook.sheetnames]
             else:
@@ -291,7 +296,7 @@ def courses_from_bytes(filename: str, data: bytes) -> list[Course]:
 def load_courses(file_path: str | Path) -> list[Course]:
     path = Path(file_path)
     if path.stat().st_size > MAX_UPLOAD_BYTES:
-        raise ValueError("成绩单超过 25 MB")
+        raise ValueError("成绩单超过 5 MB")
     return courses_from_bytes(path.name, path.read_bytes())
 
 
