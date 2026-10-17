@@ -113,13 +113,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4   # 先 checkout（会清空工作区），再下载产物
+        with:
+          sparse-checkout: .github
       - uses: actions/download-artifact@v4
         with:
           name: SuperJLU-android
           path: dist
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: .github
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:

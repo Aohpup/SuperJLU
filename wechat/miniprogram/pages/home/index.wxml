@@ -1,0 +1,28 @@
+<view class="container">
+  <view class="row"><view class="eyebrow">SUPERJLU · 校园日常</view><text class="badge {{mode === 'demo' ? 'warn' : ''}}">{{mode === 'demo' ? '演示模式' : '教务数据'}}</text></view>
+  <view class="greeting"><view>把校园生活，</view><view>安排得刚刚好。</view></view>
+  <view class="row subtitle"><text>{{date}} · {{weekday}}</text><text>{{inTerm ? '第 ' + week + ' 教学周' : '非教学周'}}</text></view>
+  <view wx:if="{{mode === 'demo'}}" class="hint">当前为虚构示例数据，可在「我的 → 手机浏览器同步」导入本人教务数据。</view>
+  <view wx:if="{{mode === 'real' && !bound && !browserSync}}" class="card"><view class="item-title">连接你的真实教务数据</view><view class="muted">{{browserOnly ? '在手机 Safari 登录学校并读取数据，回到这里预览并确认导入。' : direct ? '连接校园网，完成学校认证后，同步自己的课表、成绩与考试。' : '完成微信登录和学校认证后，同步自己的课表、成绩与考试。'}}</view><button wx:if="{{!browserOnly}}" class="primary form-button" bindtap="go" data-page="login">绑定教务账号</button><button class="secondary form-button" bindtap="go" data-page="browser-sync">使用手机浏览器辅助同步</button></view>
+  <view wx:if="{{browserSync}}" class="hint">数据由本人从手机学校网页读取，更新时间 {{updated}}。不会后台自动刷新。<button class="ghost" bindtap="go" data-page="browser-sync">重新读取学校数据 →</button></view>
+  <view wx:if="{{offline}}" class="hint warning">网络暂不可用，正在显示上次缓存。</view>
+  <view wx:if="{{network}}" class="hint" bindtap="go" data-page="login">{{network}}</view>
+  <view class="hero" wx:if="{{nextExam}}" bindtap="go" data-page="exams">
+    <view class="row"><text class="hero-tag">下一场考试</text><text class="hero-tag">{{nextExam.countdown}} ↗</text></view>
+    <view class="hero-title">{{nextExam.name}}</view><view class="hero-meta">{{nextExam.dateLabel}}</view><view class="hero-meta">{{nextExam.location}} · 座位 {{nextExam.seat || '待定'}}</view>
+  </view>
+  <view class="quick-grid">
+    <view class="quick" bindtap="go" data-page="rooms"><view class="quick-icon mint">▦</view><text>找空教室</text></view>
+    <view class="quick" bindtap="go" data-page="exams"><view class="quick-icon peach">◷</view><text>考试安排</text></view>
+    <view class="quick" bindtap="go" data-page="plan"><view class="quick-icon blue">▤</view><text>培养方案</text></view>
+    <view class="quick" bindtap="go" data-page="notices"><view class="quick-icon lilac">◉</view><text>校园通知</text></view>
+  </view>
+  <view class="row section"><text>今天的课程 <text class="muted">{{courses.length}} 门</text></text><text class="link" bindtap="schedule">完整课表 →</text></view>
+  <view wx:for="{{courses}}" wx:key="id" class="course-row">
+    <view class="course-time"><text>{{item.time}}</text><view class="small muted">{{item.start}}–{{item.end}} 节</view></view>
+    <view class="course-line"></view><view><view class="item-title">{{item.name}}</view><view class="muted">{{item.location}} · {{item.teacher}}</view></view>
+  </view>
+  <view wx:if="{{!courses.length}}" class="card empty">{{loading ? '正在加载校园日程…' : '今天没有课程，留一点时间给自己。'}}</view>
+  <view class="row sync-row"><text class="muted">更新于 {{updated}}</text><button class="ghost" loading="{{syncing}}" bindtap="refresh">同步教务 ↻</button></view>
+  <view class="footer">一站式吉大校园助手 · SUPERJLU</view>
+</view>

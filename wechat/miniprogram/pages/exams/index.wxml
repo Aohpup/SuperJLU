@@ -1,0 +1,4 @@
+<view class="container"><view class="eyebrow">EXAM PLANNER</view><view class="row"><view class="title">从容，迎接每一场</view><text class="badge warn" wx:if="{{mode === 'demo'}}">示例考试</text></view><view class="subtitle">提前安排复习，给自己留足准备时间。</view>
+<view class="chips"><text class="chip {{showPast ? 'active' : ''}}" bindtap="past">{{showPast ? '已显示历史考试' : '显示历史考试'}}</text></view>
+<view wx:for="{{items}}" wx:key="name" class="card exam-card {{item.urgent ? 'urgent' : ''}}"><view class="row"><text class="badge {{item.urgent ? 'warn' : ''}}">{{item.countdown}}</text><text class="muted">{{item.kind}}</text></view><view class="exam-name">{{item.name}}</view><view class="muted">{{item.dateLabel || '考试时间待定'}}</view><view class="divider"></view><view class="row"><text>{{item.location || '地点待定'}}</text><text class="muted">座位 {{item.seat || '待定'}}</text></view></view>
+<view class="empty" wx:if="{{!items.length}}">暂无考试安排。<view>考试信息以教务最新安排为准。</view></view></view>

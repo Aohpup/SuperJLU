@@ -1,0 +1,10 @@
+server/.env
+server/.data/
+server/.venv/
+**/__pycache__/
+*.pyc
+project.private.config.json
+node_modules/
+artifacts/
+*.zip
+.pytest_cache/

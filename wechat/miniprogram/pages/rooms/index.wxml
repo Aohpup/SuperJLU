@@ -1,0 +1,8 @@
+<view class="container"><view class="eyebrow">FIND YOUR STUDY SPOT</view><view class="title">找一间，安静的教室</view><view class="hint warning" wx:if="{{mode === 'demo'}}">演示查询结果为虚构示例，不代表实际空闲情况。</view>
+<view class="card"><view class="grid2"><view><view class="label">校区</view><picker range="{{campuses}}" value="{{campusIndex}}" bindchange="campus"><view class="picker">{{campuses[campusIndex]}} ▾</view></picker></view><view><view class="label">日期</view><picker mode="date" value="{{date}}" bindchange="date"><view class="picker">{{date}} ▾</view></picker></view></view>
+<view class="label">空闲节次</view><picker range="{{periods}}" value="{{periodIndex}}" bindchange="period"><view class="picker">第 {{periods[periodIndex]}} 节 ▾</view></picker>
+<view class="label">教学楼</view><picker range="{{buildings}}" range-key="name" value="{{buildingIndex}}" bindchange="building"><view class="picker">{{buildings[buildingIndex].name}} ▾</view></picker>
+<view class="label">最少座位数（可选）</view><input type="number" placeholder="例如：60" value="{{seats}}" bindinput="seats"/>
+<button class="primary form-button" loading="{{busy}}" disabled="{{busy}}" bindtap="query">查询空教室</button></view>
+<view class="row section" wx:if="{{queried}}"><text>空闲教室</text><text class="muted">{{rooms.length}} 间</text></view><view wx:for="{{rooms}}" wx:key="name" class="card"><view class="row"><view><view class="item-title">{{item.building}} · {{item.name}}</view><view class="muted">{{item.campus || campuses[campusIndex]}} · {{item.kind || '普通教室'}}</view></view><view class="badge">{{item.seats || '未知'}} 座</view></view><view class="muted">空闲节次：{{item.free_periods || periods[periodIndex]}}</view></view><view wx:if="{{queried && !rooms.length}}" class="empty">暂无满足条件的教室，试试其他日期或节次。</view>
+</view>

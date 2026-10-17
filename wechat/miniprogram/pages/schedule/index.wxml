@@ -1,0 +1,16 @@
+<view class="container">
+  <view class="eyebrow">MY TIMETABLE</view><view class="row"><view class="title">每一周，都有序</view><text class="badge {{mode === 'demo' ? 'warn' : ''}}">{{mode === 'demo' ? '示例课表' : '我的课表'}}</text></view>
+  <view class="hint warning" wx:if="{{!hasMonday}}">尚未取得校历，请在「我的」设置第一周周一。</view>
+  <view class="row week-bar"><button class="week-arrow" bindtap="changeWeek" data-delta="-1" disabled="{{week <= 1}}">‹</button><view bindtap="thisWeek"><view class="week-title">第 {{week}} 周</view><view class="small muted">点击回到本周</view></view><button class="week-arrow" bindtap="changeWeek" data-delta="1" disabled="{{week >= maxWeeks}}">›</button></view>
+  <view class="row"><text class="muted">课程时间以教务校历为准</text><view class="chips"><text class="chip {{layout === 'week' ? 'active' : ''}}" bindtap="layout" data-layout="week">周视图</text><text class="chip {{layout === 'list' ? 'active' : ''}}" bindtap="layout" data-layout="list">列表</text></view></view>
+  <view class="hint warning" wx:if="{{conflicts.length}}">存在时间重叠：{{conflicts}}。请核对教务安排。</view>
+  <scroll-view scroll-x wx:if="{{layout === 'week'}}" class="schedule-scroll">
+    <view class="schedule-head"><view></view><view wx:for="{{days}}" wx:key="day" class="day"><view>周{{item.label}}</view><view class="small muted">{{item.date}}</view></view></view>
+    <view class="schedule-grid">
+      <view wx:for="{{periods}}" wx:key="n" class="period" style="grid-column:1;grid-row:{{item.n}};"><view>{{item.n}}</view><text>{{item.time}}</text></view>
+      <view wx:for="{{courses}}" wx:key="id" class="lesson {{item.color}}" style="{{item.style}}" bindtap="detail" data-id="{{item.id}}"><view>{{item.name}}</view><text>{{item.location}}</text></view>
+    </view>
+  </scroll-view>
+  <block wx:else><view wx:for="{{days}}" wx:key="day" wx:for-item="day"><view class="section">周{{day.label}} <text class="muted">{{day.date}}</text></view><block wx:for="{{courses}}" wx:key="id"><view wx:if="{{item.weekday === day.day}}" class="card" bindtap="detail" data-id="{{item.id}}"><view class="row"><text class="item-title">{{item.name}}</text><text class="badge">{{item.start}}–{{item.end}} 节</text></view><view class="muted">{{item.time}} · {{item.location}}</view></view></block></view></block>
+  <view class="empty" wx:if="{{empty}}">本周暂无课程。真实模式下请先登录并同步。</view>
+</view>

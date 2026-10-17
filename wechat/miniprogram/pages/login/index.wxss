@@ -1,0 +1,1 @@
+.agreement{display:flex;align-items:center;flex-wrap:wrap;gap:8rpx;margin-top:26rpx;color:#74867b;font-size:24rpx}.agreement checkbox{transform:scale(.8)}.captcha{width:200rpx;height:85rpx;background:#f3f6f3}.success{text-align:center;padding:38rpx}.success-symbol{font-size:70rpx;color:#168069}.success .section{margin-top:14rpx}
