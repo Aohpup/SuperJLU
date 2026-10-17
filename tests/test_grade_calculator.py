@@ -2,10 +2,12 @@
 import base64
 import io
 import json
+import re
 import threading
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from zipfile import ZipFile
 
 import pytest
 from openpyxl import Workbook
@@ -89,6 +91,73 @@ def test_excel_uses_first_recognizable_sheet():
     courses = calc.courses_from_bytes("demo.xlsx", content.getvalue())
     assert courses[0].gpa == 3.4
     assert "成绩" in courses.import_notes[0]
+
+
+def excel_with_dimensions(dimension):
+    """Synthetic JWXT-style export; no real transcript data is included."""
+    original = io.BytesIO()
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["示例成绩单"])
+    sheet.append(["课程名", "总成绩", "学分", "绩点"])
+    sheet.append(["测试课程甲", 90, 2, 4])
+    sheet.append(["测试课程乙", 80, 3, 3])
+    workbook.save(original)
+    workbook.close()
+    output = io.BytesIO()
+    with ZipFile(io.BytesIO(original.getvalue())) as source, ZipFile(output, "w") as target:
+        for member in source.infolist():
+            data = source.read(member.filename)
+            if member.filename == "xl/worksheets/sheet1.xml":
+                data, count = re.subn(br'(<dimension\s+ref=")[^"]+("[^>]*>)',
+                                     lambda match: match[1] + dimension.encode() + match[2], data)
+                assert count == 1
+            target.writestr(member, data)
+    return output.getvalue()
+
+
+@pytest.mark.parametrize("dimension", ["A1", "A1:B3", "A1:XFD1048576"])
+def test_excel_reads_actual_cells_instead_of_declared_dimensions(dimension):
+    courses = calc.courses_from_bytes("synthetic.xlsx", excel_with_dimensions(dimension))
+    assert [course.name for course in courses] == ["测试课程甲", "测试课程乙"]
+    totals = calc.calculate_selection(courses, [True, True])
+    assert totals["credits"] == 5
+    assert totals["weighted_score"] == 84
+    assert totals["weighted_gpa"] == 3.4
+
+
+@pytest.mark.parametrize("state", ["ok", "missing", "expired"])
+def test_import_and_template_api_do_not_require_live_login(tmp_path, monkeypatch, state):
+    def forbid_network(*args, **kwargs):
+        raise AssertionError("Local transcript operations must not contact JWXT")
+    monkeypatch.setattr(ui, "_client", forbid_network)
+    monkeypatch.setattr(jwxt.JwxtClient, "_request", forbid_network)
+    monkeypatch.setattr(jwxt, "session_status", lambda: {
+        "state": state, "logged_in": state == "ok", "needs_login": state != "ok"})
+    store = ui.Store(tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui.make_handler(store))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def post(path, body):
+        request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}" + path,
+                                         json.dumps(body).encode(), {"Content-Type": "application/json"})
+        with opener.open(request, timeout=5) as response:
+            assert response.status == 200
+            return json.load(response)
+    try:
+        result = post("/api/grades/import", {"filename": "synthetic.xlsx",
+                      "data": base64.b64encode(excel_with_dimensions("A1")).decode()})
+        assert result["grade_source"] == "import"
+        assert len(result["grades"]) == 2
+        keys = [result["grades"][0]["key"]]
+        result = post("/api/schemes", {"name": "离线测试模板", "include": keys,
+                      "base": "comprehensive", "grade_source": "import"})
+        assert result["schemes"]["离线测试模板"] == keys
+        assert post("/api/grades/source", {"grade_source": "jwxt"})["grade_source"] == "jwxt"
+        assert post("/api/grades/source", {"grade_source": "import"})["grade_source"] == "import"
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_inference_rejects_ambiguous_scores():
