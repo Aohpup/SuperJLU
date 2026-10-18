@@ -106,6 +106,41 @@ def parse_periods_arg(s: str) -> tuple[int, int]:
     return a, b
 
 
+def _period_bounds(periods: dict) -> dict[int, tuple[str, str]]:
+    """把 {节次: [开始, 结束]} 规范成 {int: (HH:MM, HH:MM)}。"""
+    out: dict[int, tuple[str, str]] = {}
+    for k, v in (periods or {}).items():
+        try:
+            n = int(k)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(v, (list, tuple)) or len(v) < 2:
+            continue
+        a, b = str(v[0]), str(v[1])
+        if re.fullmatch(r"\d{1,2}:\d{2}", a) and re.fullmatch(r"\d{1,2}:\d{2}", b):
+            out[n] = (a.zfill(5), b.zfill(5))
+    return out
+
+
+def study_time_for_periods(periods: dict, start: int, end: int) -> Optional[tuple[str, str]]:
+    """节次范围 → 自习起止时间（第一节开始～最后一节结束）。"""
+    m = _period_bounds(periods)
+    if start not in m or end not in m or start > end:
+        return None
+    return m[start][0], m[end][1]
+
+
+def periods_for_study_time(periods: dict, start: str, end: str) -> Optional[tuple[int, int]]:
+    """自习时间 [start, end) 与之有重叠的节次范围；无重叠返回 None。"""
+    if not start or not end or start >= end:
+        return None
+    m = _period_bounds(periods)
+    hit = [n for n, (a, b) in m.items() if a < end and b > start]
+    if not hit:
+        return None
+    return min(hit), max(hit)
+
+
 def expand_weeks(s: str) -> str:
     """"6-8,10" → "6,7,8,10"。"""
     out: list[int] = []
