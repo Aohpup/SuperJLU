@@ -8,7 +8,7 @@
 2. `start()` 把 `XDG_CONFIG_HOME` 设为应用私有目录 `files/config`（数据在 `files/config/jlu-toolkit/data`），
    设置 `JLU_TOOLKIT_NO_KEYRING=1`，再用 `jlu_toolkit.ui.make_handler` 在 **127.0.0.1 的随机端口**起 `ThreadingHTTPServer`，不对局域网开放。
 3. 全屏 WebView 加载该地址（开启 JavaScript 和 DOM Storage）。非本机链接交给系统浏览器打开。
-4. 同时检测 `jwxt.jlu.edu.cn` / `oa.jlu.edu.cn` 能否连通，连不上就在底部显示提示，请用户先连学校 VPN（vpn.jlu.edu.cn）。提示不挡操作，点一下即可关闭。
+4. 同时检查 `iedu.jlu.edu.cn` 的实际 HTTPS 入口；直连不可达时显示可关闭提示。校园网内可选直连，校外在「更多 → 登录」选择应用内 WebVPN；OA 的访问限制单独说明，连接检测不等于账号验证。
 
 桌面端代码没有改动：`jlu_toolkit` 直接从仓库根目录打包（`app/build.gradle` 里的 `srcDir "../.."`），始终只有一份。
 
