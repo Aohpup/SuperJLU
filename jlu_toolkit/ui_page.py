@@ -520,17 +520,18 @@ document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTh
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=()=>fullRefresh({}).catch(()=>{});
-(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek();periodsToStudy()})();
 /* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期 */
 function rdToWeek(){const v=$("#rd").value;if(!v)return;const d=new Date(v+"T00:00:00");$("#rwd").value=String(d.getDay()||7);if(D&&D.first_monday){const w=weekOf(d);if(w>=1)$("#rw").value=String(w)}}
 function weekToRd(){const fm=D&&D.first_monday,raw=($("#rw").value||"").trim(),wm=/^(\d+)/.exec(raw),w=wm?+wm[1]:0,wd=+$("#rwd").value;if(!fm||!(w>=1)||!(wd>=1))return;const d=new Date(fm+"T00:00:00");d.setDate(d.getDate()+(w-1)*7+wd-1);$("#rd").value=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}
 $("#rd").addEventListener("change",rdToWeek);$("#rw").addEventListener("change",weekToRd);$("#rwd").addEventListener("change",weekToRd);
-/* 自习时间 ↔ 空闲节次：按教务节次表（或内置默认）互相换算，查询仍走节次参数 */
+/* 自习时间 ↔ 空闲节次：按教务节次表（或内置默认）互相换算，查询仍走节次参数。
+   DEF_PERIODS 必须在顶部 IIFE 调用 periodsToStudy() 之前初始化，否则 const TDZ 会让整页脚本中断，#boot 永远不消失。 */
 const DEF_PERIODS={1:["08:00","08:45"],2:["08:55","09:40"],3:["10:00","10:45"],4:["10:55","11:40"],5:["13:30","14:15"],6:["14:25","15:10"],7:["15:30","16:15"],8:["16:25","17:10"],9:["18:30","19:15"],10:["19:25","20:10"],11:["20:20","21:05"]};
 function periodMap(){const p=D&&D.periods;return(p&&Object.keys(p).length)?p:DEF_PERIODS}
 function periodsToStudy(){const a=+$("#rp1").value,b=+$("#rp2").value,m=periodMap(),x=m[a]||m[String(a)],y=m[b]||m[String(b)];if(x&&x[0])$("#rst").value=x[0];if(y&&y[1])$("#ret").value=y[1]}
 function studyToPeriods(){const s=$("#rst").value,e=$("#ret").value,m=periodMap();if(!s||!e||s>=e)return;let lo=null,hi=null;Object.keys(m).forEach(k=>{const n=+k,t=m[k];if(!(n>=1)||!t||t.length<2)return;if(t[0]<e&&t[1]>s){if(lo===null||n<lo)lo=n;if(hi===null||n>hi)hi=n}});if(lo!==null){$("#rp1").value=lo;$("#rp2").value=hi}}
 let _rSync=false;
+(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek();periodsToStudy()})();
 $("#rp1").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value;periodsToStudy()}finally{_rSync=false}});
 $("#rp2").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value;periodsToStudy()}finally{_rSync=false}});
 $("#rst").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
