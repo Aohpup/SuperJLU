@@ -816,7 +816,21 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                         raise jwxt.SessionExpiredError()
                     return self._json({**r, **cache_info(store)})
                 elif self.path == "/api/refresh":
-                    return self._json({"ok": True, "result": refresh_from_jwxt(store), **store.snapshot()})
+                    # 部分模块已写入本地时也要把 snapshot 带回，避免 UI 卡在空状态只能重进
+                    try:
+                        result = refresh_from_jwxt(store)
+                        return self._json({"ok": True, "result": result, **store.snapshot()})
+                    except jwxt.LoginError as e:
+                        partial = getattr(e, "partial", None)
+                        body = {
+                            "ok": False,
+                            "error": str(e),
+                            "session_expired": True,
+                            "site": getattr(e, "site", "jwxt"),
+                            "result": partial,
+                            **store.snapshot(),
+                        }
+                        return self._json(body, 401)
                 else:
                     return self._send(404, b"not found", "text/plain")
                 return self._json({"ok": True, **store.snapshot(body.get("grade_source", "jwxt"))})
