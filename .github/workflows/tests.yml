@@ -2,8 +2,12 @@ name: Tests
 
 on:
   pull_request:
+    paths-ignore:
+      - 'wechat/**'
   push:
     branches-ignore: [main]
+    paths-ignore:
+      - 'wechat/**'
 
 permissions:
   contents: read
