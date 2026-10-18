@@ -451,7 +451,7 @@ def _oa_data(store: Store) -> dict:
 
 
 def _oa_known(store: Store) -> dict:
-    """栏目名：内置 179577 校内通知 + data/oa_channels.json（--probe 发现）+ 缓存里记下的栏目。"""
+    """栏目名：内置 179577 校内通知 + data/oa_channels.json（--probe 发现）+ 缓存里记下的栏目 + 学院。"""
     from . import oa
     f = store._json("oa_channels.json", {})
     f = {str(k): str(v) for k, v in f.items()} if isinstance(f, dict) else {}
@@ -459,7 +459,7 @@ def _oa_known(store: Store) -> dict:
     oa_ch = {**oa.KNOWN_CHANNELS, **f, **(_oa_data(store).get("channels") or {})}
     lead = {k: v for k, v in oa_ch.items() if not _OA_TAIL.search(v)}
     tail = {k: v for k, v in oa_ch.items() if _OA_TAIL.search(v)}
-    # 顺序：OA 常规栏目 → 软件学院/计算机学院 → 医院、动科等院系栏目
+    # 顺序：OA 常规栏目 → 可抓取学院 → 医院、动科等（仅链接学院由偏好启用后再出现）
     return {**lead, **college.channels(), **tail}
 
 
@@ -469,12 +469,47 @@ _OA_TAIL = _re.compile(r"医院|动科|动物")
 
 def _resolve(cat: str, known: dict) -> str:
     from . import college, oa
-    return cat if college.is_channel(cat) else oa.resolve_category(cat, known)
+    cat = str(cat or "")
+    if college.is_channel(cat) or college.is_link_channel(cat):
+        return cat
+    return oa.resolve_category(cat, known)
 
 
 def oa_channels_api(store: Store) -> dict:
+    """按用户偏好返回快捷栏信息源；未引导时仍返回全部已知栏目（兼容旧客户端/测试）。"""
+    from . import college
+    prefs = college.load_prefs(store.root)
+    if prefs.get("onboarded"):
+        channels = college.channels_for_prefs(store.root)
+        return {"ok": True, "channels": channels, "prefs": prefs, "filtered": True}
+    # 未引导：保持旧行为（全部栏目），并附上 prefs / catalog 元数据供前端弹选学院卡
     ch = _oa_known(store)
-    return {"ok": True, "channels": [{"id": k, "name": v} for k, v in ch.items()]}
+    return {"ok": True,
+            "channels": [{"id": k, "name": v, "kind": ("college" if college.is_channel(k)
+                          else "link" if college.is_link_channel(k) else "oa")}
+                         for k, v in ch.items()],
+            "prefs": prefs, "filtered": False}
+
+
+def oa_catalog_api() -> dict:
+    from . import college
+    return {"ok": True, "catalog": college.catalog()}
+
+
+def oa_prefs_api(store: Store) -> dict:
+    from . import college
+    return {"ok": True, "prefs": college.load_prefs(store.root)}
+
+
+def oa_prefs_save_api(store: Store, body: dict) -> dict:
+    from . import college
+    body = body if isinstance(body, dict) else {}
+    if body.get("apply_home"):
+        prefs = college.apply_home_college(store.root, str(body.get("home_college") or ""))
+    else:
+        prefs = college.save_prefs(store.root, body)
+    channels = college.channels_for_prefs(store.root)
+    return {"ok": True, "prefs": prefs, "channels": channels}
 
 
 def oa_notices_api(store: Store, q: dict) -> dict:
@@ -490,7 +525,16 @@ def oa_notices_api(store: Store, q: dict) -> dict:
         raise ValueError("limit 应为整数")
     from . import college
     extra = {}
-    if college.is_channel(ch):
+    if college.is_link_channel(ch):
+        d = college.load(store.root)
+        st = (d.get("status") or {}).get(ch) or {}
+        home = college.link_home(ch) or st.get("source_url", "")
+        items = []
+        extra = {"source": "college", "status": st.get("status") or "link_only",
+                 "hint": st.get("hint") or "该学院官网暂不支持自动抓取列表，请打开官网查看通知公告。",
+                 "source_url": home}
+        d = {**d, "updated": st.get("at") or d.get("updated")}
+    elif college.is_channel(ch):
         d = college.load(store.root)
         src, _ = college._split(ch)
         items = [{**_oa_item(i), "url": college.safe_url(i.get("url"), src["host"])}
@@ -505,7 +549,9 @@ def oa_notices_api(store: Store, q: dict) -> dict:
         items = [i for i in items if kw in i["title"] or kw in i["dept"]]
     items.sort(key=lambda i: (i["top"], i["time"], i["id"]), reverse=True)
     items = items[:limit]
-    return {"ok": True, "channel": ch, "channel_name": known.get(ch) or oa.KNOWN_CHANNELS.get(ch, ""),
+    from . import college as _col
+    cname = known.get(ch) or oa.KNOWN_CHANNELS.get(ch) or _col.link_channels().get(ch) or _col.channels().get(ch) or ""
+    return {"ok": True, "channel": ch, "channel_name": cname,
             "count": len(items), "fetched_at": d.get("updated"), "items": items, **extra}
 
 
@@ -529,7 +575,7 @@ def oa_refresh_api(store: Store, body: dict) -> dict:
     from . import oa
     from . import college
     ch = _resolve(str(body.get("category") or ""), _oa_known(store))
-    if college.is_channel(ch):
+    if college.is_link_channel(ch) or college.is_channel(ch):
         college.save(store.root, college.fetch(ch))
         return oa_notices_api(store, {"category": ch})
     client = jwxt.JwxtClient()
@@ -539,6 +585,17 @@ def oa_refresh_api(store: Store, body: dict) -> dict:
     if has:
         client.save_session()
     return oa_notices_api(store, {"category": ch})
+
+
+def vpn_portal_url() -> str:
+    """校园 WebVPN 入口（campus_links 里的 vpn，找不到则用默认）。"""
+    try:
+        for x in campus_links_api().get("links") or []:
+            if isinstance(x, dict) and x.get("id") == "vpn" and _link_ok(x.get("url")):
+                return str(x["url"])
+    except Exception:  # noqa: BLE001
+        pass
+    return "https://vpn.jlu.edu.cn/"
 
 
 LINK_FIELDS = ("id", "name", "icon", "url", "purpose", "login", "campus_only", "vpn_url")
@@ -721,6 +778,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                         return self._json(oa_notices_api(store, q))
                     if path == "/api/oa/channels":
                         return self._json(oa_channels_api(store))
+                    if path == "/api/oa/catalog":
+                        return self._json(oa_catalog_api())
+                    if path == "/api/oa/prefs":
+                        return self._json(oa_prefs_api(store))
                     if path == "/api/oa/notice":
                         r = oa_notice_api(store, q.get("id", ""))
                         return self._json(r or {"ok": False, "error": "本地没有这条通知"}, 200 if r else 404)
@@ -791,8 +852,19 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 elif self.path == "/api/rooms/campuses":
                     return self._json({"ok": True, **campuses_api(store)})
                 elif self.path == "/api/login/start":
-                    return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
-                                                                 body.get("remember", True) is not False)})
+                    try:
+                        return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
+                                                                     body.get("remember", True) is not False)})
+                    except jwxt.NetworkError as e:
+                        return self._json({
+                            "ok": False,
+                            "error": str(e),
+                            "network": True,
+                            "vpn_hint": True,
+                            "vpn_url": vpn_portal_url(),
+                        }, 502)
+                elif self.path == "/api/oa/prefs":
+                    return self._json(oa_prefs_save_api(store, body))
                 elif self.path == "/api/login/send_code":
                     return self._json({"ok": True, **login.send_code()})
                 elif self.path == "/api/login/verify":
