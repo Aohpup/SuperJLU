@@ -61,3 +61,10 @@ def test_roundtrip_presets():
     for a, b in ((1, 4), (5, 8), (9, 11)):
         st, et = rooms.study_time_for_periods(PERIODS, a, b)
         assert rooms.periods_for_study_time(PERIODS, st, et) == (a, b)
+
+def test_def_periods_before_boot_iife():
+    """v1.0.9 回归：IIFE 在 const DEF_PERIODS 前调用 periodsToStudy → TDZ → #boot 卡住。"""
+    i_def = PAGE.index("const DEF_PERIODS=")
+    i_iife = PAGE.index("periodsToStudy()})();")
+    assert i_def < i_iife
+
