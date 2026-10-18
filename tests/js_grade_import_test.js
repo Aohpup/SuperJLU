@@ -83,6 +83,7 @@ async function main(){
  const refresh=page.split('\n').find(line=>line.startsWith('async function fullRefresh('));
  const refreshed=vm.createContext({D:{...local},dirty:true,bootRefreshing:false,
   $:()=>({innerHTML:'refresh',disabled:false}),window:{__rm:1},
+  setSyncInd:()=>{},
   api:async()=>({...remote,result:{}}),renderAll:()=>{},toast:()=>{},
   refreshSummary:()=>'',loadOA:()=>Promise.resolve()});
  vm.runInContext(helpers+refresh,refreshed);

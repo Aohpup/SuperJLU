@@ -22,14 +22,24 @@ def _wjson(path: Path, obj) -> None:
 
 
 def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> dict:
+    """逐步同步；某步 LoginError 时停止后续步骤，但已成功写入的文件保留。
+
+    失败时把已完成摘要挂到异常的 ``partial`` 上，方便 UI 仍展示刚刷到的课表等。
+    """
     root.mkdir(parents=True, exist_ok=True)
     s: dict = {}
+    login_err: jwxt.LoginError | None = None
 
     def step(name, fn):
+        nonlocal login_err
+        if login_err is not None:
+            s[name] = {"ok": False, "error": "skipped: session expired", "skipped": True}
+            return
         try:
             s[name] = fn()
-        except jwxt.LoginError:
-            raise
+        except jwxt.LoginError as e:
+            s[name] = {"ok": False, "error": str(e)[:200], "login_needed": True}
+            login_err = e
         except meta.Unavailable as e:
             s[name] = {"ok": True, "available": False, "note": str(e)[:300]}
         except (jwxt.JwxtError, ValueError, KeyError) as e:
@@ -116,5 +126,11 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
                      ("calendar", _cal), ("periods", _periods),
                      ("official_gpa", _gpa), ("completion", _prog), ("plan_courses", _plan)):
         step(name, fn)
-    client.save_session()
+    try:
+        client.save_session()
+    except Exception:  # noqa: BLE001
+        pass
+    if login_err is not None:
+        login_err.partial = s  # type: ignore[attr-defined]
+        raise login_err
     return s

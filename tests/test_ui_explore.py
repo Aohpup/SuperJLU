@@ -159,4 +159,8 @@ def test_ui_refresh_without_session(server, tmp_path, monkeypatch):
     monkeypatch.setattr(jwxt.JwxtClient, "load_session", lambda self, path=None: False)
     with pytest.raises(urllib.error.HTTPError) as e:
         _post(base + "/api/refresh", {})
-    assert e.value.code == 400
+    assert e.value.code == 401
+    body = json.loads(e.value.read().decode())
+    assert body["session_expired"] is True
+    assert "更多 → 账号" in body["error"]
+    assert "force-login" not in body["error"]

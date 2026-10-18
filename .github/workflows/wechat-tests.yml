@@ -1,15 +1,9 @@
 name: WeChat mini program
 
+# wechat/ 仅作为代码存档保留。默认不在 push / PR 上跑小程序 CI；
+# 需要验证时在 Actions 里手动触发本工作流即可。
 on:
-  pull_request:
-    paths:
-      - 'wechat/**'
-      - '.github/workflows/wechat-tests.yml'
-  push:
-    branches-ignore: [main]
-    paths:
-      - 'wechat/**'
-      - '.github/workflows/wechat-tests.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
