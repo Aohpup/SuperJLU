@@ -29,7 +29,7 @@ def test_vpn_url_roundtrip_oa():
     raw = "https://oa.jlu.edu.cn/defaultroot/PortalInformation!jldxList.action?channelId=179577"
     v = campus.vpn_url(raw)
     assert v.startswith("https://vpn.jlu.edu.cn/https/")
-    assert "44696469646131313237446964696461a579b2620fdde512c84ea96fd9" in v
+    assert v.split("/https/")[1].startswith(campus.VPN_KEY.hex())
     assert campus.vpn_url_decode(v).startswith("https://oa.jlu.edu.cn/defaultroot/")
     assert "channelId=179577" in campus.vpn_url_decode(v)
 

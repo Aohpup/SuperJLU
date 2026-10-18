@@ -174,11 +174,13 @@ def status(site_id: str) -> dict:
     msg = "无需登录" if s.auth == "none" else MESSAGES[state]
     if s.optional_login and state == MISSING:
         msg = "未登录（基本功能无需登录，个人中心需统一认证）"
+    if site_id == "vpn" and state == MISSING:
+        msg = "应用内 WebVPN 尚未连接；外部浏览器的登录状态无法检测"
     return {"id": s.id, "name": s.name, "host": s.host, "auth": s.auth, "vpn": s.vpn, "captcha": s.captcha,
             "state": state, "checked_at": checked, "needs_login": state in (EXPIRED, MISSING) and not (optional and state == MISSING),
             "optional_login": optional,
             "message": msg + (f"（{reason}）" if reason and state != OK else ""),
-            "has_check": find_check(site_id) is not None}
+            "has_check": find_check(site_id) is not None, "external_browser": site_id == "vpn" and state == MISSING}
 
 
 def all_status() -> dict:

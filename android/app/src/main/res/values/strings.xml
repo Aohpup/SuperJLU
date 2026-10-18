@@ -3,5 +3,8 @@
     <string name="app_name">SuperJLU</string>
     <string name="app_subtitle">吉大人的一站式服务</string>
     <string name="starting">正在启动本地服务…</string>
-    <string name="offcampus_banner">连不上教务 / OA：校外请先连接学校 VPN（vpn.jlu.edu.cn）。点此关闭</string>
+    <string name="browser_unsupported">不支持打开此类链接</string>
+    <string name="browser_open_failed">无法打开网页，请检查手机的默认浏览器设置。</string>
+    <string name="browser_disabled">指定浏览器功能暂不可用，当前使用系统默认浏览器。</string>
+    <string name="offcampus_banner">教务直连暂未连通。校园网内可直连登录；校外请在「更多 → 登录」选择「校外 WebVPN」。OA 原站可经校园网或学校 VPN 访问。点此关闭</string>
 </resources>

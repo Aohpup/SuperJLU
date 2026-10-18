@@ -25,6 +25,7 @@ import com.chaquo.python.android.AndroidPlatform;
 public class MainActivity extends Activity {
     private WebView web;
     private TranscriptChromeClient chrome;
+    private BrowserPicker browsers;
     private final Handler main = new Handler(Looper.getMainLooper());
     /** 前台时每 15 分钟调一次 POST /api/session/keepalive；退到后台停止。 */
     static final long KEEPALIVE_MS = 15 * 60 * 1000L;
@@ -43,6 +44,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         applyInsets(findViewById(R.id.root));
         web = findViewById(R.id.web);
+        browsers = new BrowserPicker(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -197,9 +199,13 @@ public class MainActivity extends Activity {
 
     /** 本机地址留在 WebView 内，其余链接交给系统浏览器。 */
     private boolean handle(Uri u) {
+        if ("superjlu".equals(u.getScheme()) && "browser-settings".equals(u.getHost())) {
+            browsers.showSettings();
+            return true;
+        }
         String h = u.getHost();
         if ("127.0.0.1".equals(h) || "localhost".equals(h)) return false;
-        try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) {}
+        browsers.open(u);
         return true;
     }
 

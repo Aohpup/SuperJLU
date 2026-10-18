@@ -2,7 +2,7 @@
 
 软件学院 csw.jlu.edu.cn、计算机科学与技术学院 ccst.jlu.edu.cn 都是博达站群：
 列表页每条是 <li> 里一个 YYYY-MM-DD 日期 + 指向 info/<栏目>/<id>.htm 的链接。
-连不上（部分站点只在校园网可达）时返回「需校园网」状态而不是抛错。
+学院站点直接访问；连接失败不推断为校园网限制，保留缓存并显示网络错误。
 """
 from __future__ import annotations
 
@@ -107,13 +107,13 @@ def _get(url: str, timeout: int = TIMEOUT) -> str:
 
 
 def fetch(ch: str, getter=None) -> dict:
-    """只取第 1 页。连不上返回 {"ok": False, "status": "need_campus"}，不抛异常。"""
+    """只取第 1 页。网络失败不影响学校 OA 或其它学院栏目。"""
     now = dt.datetime.now().isoformat(timespec="seconds")
     try:
         html = (getter or _get)(list_url(ch))
-    except Exception as e:  # noqa: BLE001 — 超时/DNS/拒绝连接：多半是需要校园网
-        return {"ok": False, "channel": ch, "status": "need_campus", "fetched_at": now, "items": [],
-                "hint": f"连不上 {_split(ch)[0]['host']}，可能需要校园网或 vpn.jlu.edu.cn（{type(e).__name__}）"}
+    except Exception as e:  # noqa: BLE001 — do not erase the last successful list
+        return {"ok": False, "channel": ch, "status": "network_error", "fetched_at": now, "items": [],
+                "hint": f"暂时无法连接 {_split(ch)[0]['host']}，请检查网络后重试，已保留本地通知（{type(e).__name__}）"}
     items = parse_list(html, ch)
     st = "ok" if items else "empty"
     return {"ok": True, "channel": ch, "status": st, "fetched_at": now, "items": items,
