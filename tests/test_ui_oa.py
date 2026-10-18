@@ -119,7 +119,8 @@ def test_refresh_errors(srv, monkeypatch):
 def test_page_has_oa_tab():
     from jlu_toolkit.ui_page import PAGE
     assert 'data-t="oa"' in PAGE and 'id="t-oa"' in PAGE and "/api/oa/notices" in PAGE
-    assert "vpn.jlu.edu.cn" in PAGE and "/api/oa/subscriptions" in PAGE and "jlu-toolkit oa watch" in PAGE
+    assert "vpn.jlu.edu.cn" in PAGE and "/api/oa/subscriptions" in PAGE
+    assert "jlu-toolkit oa watch" not in PAGE and "jlu-toolkit oa notices" not in PAGE
 
 
 def test_channels_from_file_and_category(srv):

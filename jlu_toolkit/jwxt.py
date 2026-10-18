@@ -107,7 +107,7 @@ class NetworkError(JwxtError):
 class SessionExpiredError(LoginError):
     """已保存的会话失效（教务把请求重定向到了 CAS 登录页）。需要重新走微信验证码登录。"""
 
-    def __init__(self, msg: str = "登录会话已过期，请重新登录：在终端运行 jlu-toolkit fetch --force-login"):
+    def __init__(self, msg: str = "登录会话已过期，请在「更多 → 账号」中重新登录"):
         super().__init__(msg)
 
 
@@ -294,8 +294,8 @@ def session_status() -> dict:
         state = info.get("state") or SESSION_UNKNOWN
     msg = {
         SESSION_OK: "已登录",
-        SESSION_EXPIRED: "登录已过期，请重新登录（终端运行 jlu-toolkit fetch --force-login）",
-        SESSION_MISSING: "尚未登录，请先在终端运行 jlu-toolkit fetch",
+        SESSION_EXPIRED: "登录已过期，请在「更多 → 账号」中重新登录",
+        SESSION_MISSING: "尚未登录，请在「更多 → 账号」中登录",
         SESSION_UNKNOWN: "已保存会话，尚未验证是否有效",
     }[state]
     return {
@@ -1110,9 +1110,8 @@ class JwxtClient:
                     pass
             if not self.has_cas_cookie():
                 mark_session_expired("emap_no_cas_cookie")
-                raise LoginError(
+                raise SessionExpiredError(
                     "教务登录已过期，请在「更多 → 账号」中重新登录。"
-                    "（CLI：加 --force-login）"
                 )
             # 用 CASTGC 对「该应用入口」显式换票
             cas_url = f"{CAS_LOGIN}?service={urllib.parse.quote(app_index, safe='')}"
@@ -1135,16 +1134,15 @@ class JwxtClient:
             )
             if host != IEDU_HOST or 'id="loginForm"' in html:
                 mark_session_expired("emap_cas_exchange_failed")
-                raise LoginError(
+                raise SessionExpiredError(
                     "统一认证的登录状态已失效，请在「更多 → 账号」中重新登录。"
-                    "（CLI：加 --force-login）"
                 )
             self.save_session()
 
         if code == 403:
             raise JwxtError(
                 f"打开教务应用入口被拒绝 HTTP 403：{app_index}。"
-                "可能未完成应用鉴权，请 --force-login 后重试。"
+                "可能未完成应用鉴权，请在「更多 → 账号」中重新登录后重试。"
             )
         if host != IEDU_HOST:
             raise NetworkError(
@@ -1185,8 +1183,7 @@ class JwxtClient:
         if code == 403:
             raise JwxtError(
                 f"{path} HTTP 403：通常是未先进入应用入口（缺少 _WEU 等）。"
-                "已按 JLU_schedule 流程在请求前打开 *default/index.do；"
-                "若仍失败请 --force-login，并加 --debug 查看 cookie_names。"
+                "请在「更多 → 账号」中重新登录后重试。"
             )
         if looks_like_login_redirect(final, text if code != 200 or not text.lstrip().startswith("{") else ""):
             if self.try_cas_refresh():
