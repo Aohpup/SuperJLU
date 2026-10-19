@@ -228,15 +228,18 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
+ <div class="seg" id="rmode"><button class="on" data-m="date">按日期查询</button><button data-m="week">按周次查询</button><button data-m="study">按自习时间</button></div>
  <div class="rgrid">
   <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
   <label>教学楼<select id="rb"><option value="">全部</option></select></label>
   <label>教室类型<select id="rt"><option value="">全部</option></select></label>
-  <label>空闲日期<input type="date" id="rd"></label>
-  <label>周次<input id="rw" placeholder="如 6 或 6-8"></label>
+  <label class="m-date">空闲日期<input type="date" id="rd"></label>
+  <label class="m-week" hidden>周次<input id="rw" placeholder="如 6 或 6-8"></label>
   <label title="隐藏实验室、机房、语音室等专用教室" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rhs" checked>屏蔽特殊教室</label>
-  <label>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+  <label class="m-week" hidden>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+  <label class="m-study" hidden>自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
   <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
+  <div class="m-study" id="rst-presets" hidden style="grid-column:1/-1;display:none;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
   <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
   <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
  </div>
@@ -458,7 +461,17 @@ function renderAll(){try{renderOffline();renderSession()}catch(_){}
 function refreshSummary(r){const c=k=>r&&r[k]&&r[k].ok?(r[k].count??"✓"):"✗";return `课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`}
 let bootRefreshing=false;
 function setSyncInd(on){const ind=$("#sync-ind");if(!ind)return;ind.hidden=!on;ind.setAttribute("aria-hidden",on?"false":"true");if(on)ind.setAttribute("aria-label","正在刷新");else ind.removeAttribute("aria-label")}
-async function fullRefresh({toastOnStart,okToast,failPrefix}={}){if(bootRefreshing)return null;bootRefreshing=true;const b=$("#refresh");const prev=b?b.innerHTML:"";if(b){b.disabled=true;b.innerHTML='⟳<span class="lbl"> 刷新中…</span>'}setSyncInd(true);if(toastOnStart)toast(toastOnStart);try{const j=await api("/api/refresh",{}),next=gradeRefreshSnapshot(D,j);if(D&&D.grade_source!==next.grade_source)dirty=false;D=next;renderAll();const msg=okToast||("已刷新："+refreshSummary(j.result));toast(msg);try{if(!window.__rm){window.__rm=1;roomsInit()}}catch(_){}loadOA().catch(()=>{});return j}catch(e){try{const has=D&&((D.courses||[]).length||(D.grades||[]).length||(D.exams||[]).length||D.completion);if(!has){const d=await fetch("/api/data").then(r=>r.json());if(d&&((d.courses||[]).length||(d.grades||[]).length||(d.exams||[]).length||d.completion)){D=gradeRefreshSnapshot(D,d);renderAll()}}}catch(_){}const partial=e&&e.payload&&e.payload.result;const sum=partial?refreshSummary(partial):"";toast((failPrefix||"刷新失败：")+e.message+(sum?"（已显示部分："+sum+"）":""),true);throw e}finally{bootRefreshing=false;setSyncInd(false);if(b){b.disabled=false;b.innerHTML=prev||'⟳<span class="lbl"> 刷新</span>'}}}
+async function subReq(m,path,body){const r=await fetch(path,body?{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method:m});let j=null;try{j=await r.json()}catch(_){}if(r.status===404&&(!j||j.ok===undefined)){const e=new Error("NOAPI");e.noapi=true;throw e}if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||("HTTP "+r.status));return j}
+const OACHN=id=>((OACHS||[]).find(c=>c.id===id)||{}).name||id;
+async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 SuperJLU 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
+ const rules=j.rules||[],ms=(j.matches||[]).filter(m=>rules.some(r=>r.id===m.rule_id));
+ b.innerHTML=`<p class="sub" style="margin:0 0 10px">按关键词（标题匹配）和发文单位订阅，只在本机保存。</p><div class="oaf"><input id="sub-kw" type="text" placeholder="关键词，逗号分隔，如 讲座,补考"><input id="sub-dp" type="text" placeholder="发文单位（可选，逗号分隔）"><button class="btn pri" id="sub-add">添加</button></div>`+
+ (rules.length?`<ul class="oal" style="margin-top:8px">${rules.map(r=>`<li style="cursor:default"><div class="tt">${(r.keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join(" ")}<span class="mt">${(r.depts||[]).length?"单位："+esc(r.depts.join("、"))+" · ":""}${r.channel?esc(OACHN(r.channel)):"全部栏目"}</span></div><button class="btn ghost" data-del="${esc(r.id)}">删除</button></li>`).join("")}</ul>`:`<p class="sub" style="margin:12px 0 0">还没有订阅规则。</p>`)+
+ `<h2 style="font-size:15px;margin:16px 0 4px">最近命中</h2>`+(ms.length?`<ul class="oal">${ms.map(m=>{const n=m.notice||{};return`<li data-id="${esc(n.id)}"><div class="tt">${n.top?'<span class="pin">置顶</span>':""}${esc(n.title)}<span class="mt">命中「${esc((m.keywords_hit||[]).join("、"))}」 · ${esc(n.dept||"")} · ${esc(n.time||"")}</span></div><span class="ar">›</span></li>`}).join("")}</ul>`:`<p class="sub" style="margin:0">暂无命中。添加订阅后，打开通知页或点「更新」时会检查是否有新消息。</p>`);
+ $("#sub-add").onclick=async()=>{const kw=$("#sub-kw").value.trim();if(!kw)return toast("请填写关键词");const dp=$("#sub-dp").value.split(/[,，、]/).map(x=>x.trim()).filter(Boolean);try{await subReq("POST","/api/oa/subscriptions",{keywords:kw,depts:dp,channel:OACH});toast("已添加订阅");loadSubs()}catch(e){toast(e.noapi?"当前版本还没有订阅功能，请更新":e.message)}};
+ b.querySelectorAll("[data-del]").forEach(x=>x.onclick=async()=>{/* 不用 confirm()：安卓 WebView 没有 WebChromeClient 时会静默返回 false，导致删不掉 */if(!x.dataset.armed){x.dataset.armed=1;x.textContent="确认删除";x.classList.add("pri");setTimeout(()=>{delete x.dataset.armed;x.textContent="删除";x.classList.remove("pri")},3000);return}try{await subReq("DELETE","/api/oa/subscriptions/"+encodeURIComponent(x.dataset.del))}catch(e){if(!/404/.test(e.message)&&!e.noapi)return toast(e.message)}loadSubs()});
+ b.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>openOA(li.dataset.id))}
+async function fullRefresh({toastOnStart,okToast,failPrefix}={}){if(bootRefreshing)return null;bootRefreshing=true;const b=$("#refresh");const prev=b?b.innerHTML:"";if(b){b.disabled=true;b.innerHTML='⟳<span class="lbl"> 刷新中…</span>'}setSyncInd(true);if(toastOnStart)toast(toastOnStart);try{const j=await api("/api/refresh",{}),next=gradeRefreshSnapshot(D,j);if(D&&D.grade_source!==next.grade_source)dirty=false;D=next;renderAll();const msg=okToast||("已刷新："+refreshSummary(j.result));toast(msg);try{if(!window.__rm){window.__rm=1;roomsInit()}}catch(_){}loadOA().then(loadSubs).catch(()=>{});return j}catch(e){try{const has=D&&((D.courses||[]).length||(D.grades||[]).length||(D.exams||[]).length||D.completion);if(!has){const d=await fetch("/api/data").then(r=>r.json());if(d&&((d.courses||[]).length||(d.grades||[]).length||(d.exams||[]).length||d.completion)){D=gradeRefreshSnapshot(D,d);renderAll()}}}catch(_){}const partial=e&&e.payload&&e.payload.result;const sum=partial?refreshSummary(partial):"";toast((failPrefix||"刷新失败：")+e.message+(sum?"（已显示部分："+sum+"）":""),true);throw e}finally{bootRefreshing=false;setSyncInd(false);if(b){b.disabled=false;b.innerHTML=prev||'⟳<span class="lbl"> 刷新</span>'}}}
 async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderAll();try{rdToWeek()}catch(_){}api("/api/session").then(async s=>{gradeSessionState=s.state||(s.logged_in?"ok":s.needs_login?"missing":"unknown");lgInfo(s.logged_in===true);renderSession();if(!gradeSyncing)$("#grade-sync-status").textContent=gradeStatusText(D,gradeSessionState);if(s.logged_in===true&&D.grade_source!=="import"&&!gradeImporting){if(D.needs_bootstrap){try{await fullRefresh({toastOnStart:D.bootstrapped?"正在同步教务数据…":"首次同步教务数据中…",okToast:null,failPrefix:"自动同步失败："})}catch(_){}}else refreshGradeData(true)}}).catch(()=>{})}
 let gradeSyncing=false;
 async function refreshGradeData(automatic=false){if(gradeSyncing)return;gradeSyncing=true;const b=$("#grade-sync");b.disabled=true;b.textContent="⟳ 同步中…";$("#grade-sync-status").textContent="正在使用已保存的登录会话同步教务成绩…";try{const j=await api("/api/grades/refresh",{auto:automatic});if(D.grade_source!=="import"&&!gradeImporting){D=j;renderAll();$("#grade-sync-status").textContent=`已同步当前账号的 ${j.grade_result.count} 门教务课程。`}if(!automatic)toast("教务成绩已同步")}catch(e){if(D.grade_source!=="import")$("#grade-sync-status").textContent="同步失败，保留本机成绩缓存："+e.message;if(!automatic)toast("同步失败："+e.message,true)}finally{gradeSyncing=false;b.disabled=false;b.textContent="⟳ 同步教务成绩";if(D.grade_source==="import"||gradeSessionState==="expired"||gradeSessionState==="missing")$("#grade-sync-status").textContent=gradeStatusText(D,gradeSessionState)}}
@@ -523,15 +536,32 @@ document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTh
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=()=>fullRefresh({}).catch(()=>{});
-/* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期。
-   空教室只保留一套表单，不再按日期/周次/自习时间切换。 */
+/* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期 */
 function rdToWeek(){const v=$("#rd").value;if(!v)return;const d=new Date(v+"T00:00:00");$("#rwd").value=String(d.getDay()||7);if(D&&D.first_monday){const w=weekOf(d);if(w>=1)$("#rw").value=String(w)}}
 function weekToRd(){const fm=D&&D.first_monday,raw=($("#rw").value||"").trim(),wm=/^(\d+)/.exec(raw),w=wm?+wm[1]:0,wd=+$("#rwd").value;if(!fm||!(w>=1)||!(wd>=1))return;const d=new Date(fm+"T00:00:00");d.setDate(d.getDate()+(w-1)*7+wd-1);$("#rd").value=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}
 $("#rd").addEventListener("change",rdToWeek);$("#rw").addEventListener("change",weekToRd);$("#rwd").addEventListener("change",weekToRd);
-(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek()})();
-$("#rp1").addEventListener("change",()=>{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value});
-$("#rp2").addEventListener("change",()=>{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value});
-let RR=[],RS={k:"name",d:1};
+/* 自习时间 ↔ 空闲节次：按教务节次表（或内置默认）互相换算，查询仍走节次参数。
+   DEF_PERIODS 必须在顶部 IIFE 调用 periodsToStudy() 之前初始化，否则 const TDZ 会让整页脚本中断，#boot 永远不消失。 */
+const DEF_PERIODS={1:["08:00","08:45"],2:["08:55","09:40"],3:["10:00","10:45"],4:["10:55","11:40"],5:["13:30","14:15"],6:["14:25","15:10"],7:["15:30","16:15"],8:["16:25","17:10"],9:["18:30","19:15"],10:["19:25","20:10"],11:["20:20","21:05"]};
+function periodMap(){const p=D&&D.periods;return(p&&Object.keys(p).length)?p:DEF_PERIODS}
+function periodsToStudy(){const a=+$("#rp1").value,b=+$("#rp2").value,m=periodMap(),x=m[a]||m[String(a)],y=m[b]||m[String(b)];if(x&&x[0])$("#rst").value=x[0];if(y&&y[1])$("#ret").value=y[1]}
+function studyToPeriods(){const s=$("#rst").value,e=$("#ret").value,m=periodMap();if(!s||!e||s>=e)return;let lo=null,hi=null;Object.keys(m).forEach(k=>{const n=+k,t=m[k];if(!(n>=1)||!t||t.length<2)return;if(t[0]<e&&t[1]>s){if(lo===null||n<lo)lo=n;if(hi===null||n>hi)hi=n}});if(lo!==null){$("#rp1").value=lo;$("#rp2").value=hi}}
+let _rSync=false;
+(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek();periodsToStudy()})();
+$("#rp1").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value;periodsToStudy()}finally{_rSync=false}});
+$("#rp2").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value;periodsToStudy()}finally{_rSync=false}});
+$("#rst").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
+$("#ret").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
+document.querySelectorAll("#rst-presets [data-sp]").forEach(b=>b.onclick=()=>{const[a,c]=b.dataset.sp.split("-").map(Number);$("#rp1").value=a;$("#rp2").value=c;periodsToStudy()});
+let RM="date",RR=[],RS={k:"name",d:1};
+function setRoomMode(m){RM=m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x.dataset.m===m));
+ document.querySelectorAll(".m-date").forEach(e=>e.hidden=!(m==="date"||m==="study"));
+ document.querySelectorAll(".m-week").forEach(e=>e.hidden=m!=="week");
+ const studyOn=m==="study";document.querySelectorAll(".m-study").forEach(e=>e.hidden=!studyOn);
+ const pre=$("#rst-presets");if(pre){pre.style.display=studyOn?"flex":"none"}
+ if(m==="week")rdToWeek();else{weekToRd();rdToWeek()}
+ if(studyOn)periodsToStudy()}
+document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>setRoomMode(b.dataset.m));
 const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
 async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
 // 六个校区固定（教务代码表 01–06，已与真实 campuses.json 核对），不再需要「加载」
@@ -553,7 +583,7 @@ function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats
 function showRoomFailure(error){const original=String(error?.message||"查询未成功，请稍后重试。"),technical=/HTTP\s*\d{3}|尝试：|cxkxjs|Traceback/i.test(original)||original.length>160;$("#room-error-message").textContent=(technical?"空教室查询失败，请检查网络或在「更多 → 登录」切换登录方式后重试。":original)+(RR.length?" 已保留上次查询结果。":"");$("#room-switch-login").hidden=!(technical||error?.connectionAction);$("#room-error").hidden=false}
 $("#room-switch-login").onclick=()=>{document.querySelector('nav button[data-t="sz"]').click();location.hash="sz";$("#network-route").scrollIntoView({behavior:"smooth",block:"center"})};
 $("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";$("#room-error").hidden=true;try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
- const j=await api("/api/rooms",{mode:"date",campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){showRoomFailure(e)}finally{b.disabled=false;b.textContent="查询"}};
+ if(RM==="study")studyToPeriods();const qMode=RM==="study"?"date":RM;const j=await api("/api/rooms",{mode:qMode,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){showRoomFailure(e)}finally{b.disabled=false;b.textContent="查询"}};
 let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null,OAPREFS=null,OACAT=null,OAMANAGE=false,OAPICK=null;
 function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
 function oaLink(u,label){try{const p=new URL(u||"");if(!/^https?:$/.test(p.protocol))return"";const h=p.hostname;if(!(h==="jlu.edu.cn"||h.endsWith(".jlu.edu.cn")||/\.(jdyy\.cn|jdey\.com\.cn|zrlyyy\.com)$/.test(h)))return""}catch(_){return""}return`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`}
@@ -609,17 +639,7 @@ async function openOA(id){const v=$("#oa-detail-v");$("#oa-list-v").hidden=true;
  $("#oa-back").onclick=oaBack}
 $("#oa-kw").oninput=e=>{OAQ.kw=e.target.value;renderOA()};$("#oa-dept").onchange=e=>{OAQ.dept=e.target.value;renderOA()};
 $("#oa-ref").onclick=async()=>{const b=$("#oa-ref");b.disabled=true;b.textContent="更新中…";try{OA=await api("/api/oa/refresh",{category:OACH});OAERR="";renderOA();const bad=["network_error","need_campus"].includes(OA.status);toast(OA.status==="link_only"?"请打开学院官网查看":bad?"学院官网暂未连通，已保留本地通知":"已更新第一页",bad)}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="⟳ 更新"}};
-async function subReq(m,path,body){const r=await fetch(path,body?{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method:m});let j=null;try{j=await r.json()}catch(_){}if(r.status===404&&(!j||j.ok===undefined)){const e=new Error("NOAPI");e.noapi=true;throw e}if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||("HTTP "+r.status));return j}
-const OACHN=id=>((OACHS||[]).find(c=>c.id===id)||{}).name||id;
-async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 SuperJLU 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
- const rules=j.rules||[],ms=(j.matches||[]).filter(m=>rules.some(r=>r.id===m.rule_id));
- b.innerHTML=`<p class="sub" style="margin:0 0 10px">按关键词（标题匹配）和发文单位订阅，只在本机保存。</p><div class="oaf"><input id="sub-kw" type="text" placeholder="关键词，逗号分隔，如 讲座,补考"><input id="sub-dp" type="text" placeholder="发文单位（可选，逗号分隔）"><button class="btn pri" id="sub-add">添加</button></div>`+
- (rules.length?`<ul class="oal" style="margin-top:8px">${rules.map(r=>`<li style="cursor:default"><div class="tt">${(r.keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join(" ")}<span class="mt">${(r.depts||[]).length?"单位："+esc(r.depts.join("、"))+" · ":""}${r.channel?esc(OACHN(r.channel)):"全部栏目"}</span></div><button class="btn ghost" data-del="${esc(r.id)}">删除</button></li>`).join("")}</ul>`:`<p class="sub" style="margin:12px 0 0">还没有订阅规则。</p>`)+
- `<h2 style="font-size:15px;margin:16px 0 4px">最近命中</h2>`+(ms.length?`<ul class="oal">${ms.map(m=>{const n=m.notice||{};return`<li data-id="${esc(n.id)}"><div class="tt">${n.top?'<span class="pin">置顶</span>':""}${esc(n.title)}<span class="mt">命中「${esc((m.keywords_hit||[]).join("、"))}」 · ${esc(n.dept||"")} · ${esc(n.time||"")}</span></div><span class="ar">›</span></li>`}).join("")}</ul>`:`<p class="sub" style="margin:0">暂无命中。添加订阅后，打开通知页或点「更新」时会检查是否有新消息。</p>`);
- $("#sub-add").onclick=async()=>{const kw=$("#sub-kw").value.trim();if(!kw)return toast("请填写关键词");const dp=$("#sub-dp").value.split(/[,，、]/).map(x=>x.trim()).filter(Boolean);try{await subReq("POST","/api/oa/subscriptions",{keywords:kw,depts:dp,channel:OACH});toast("已添加订阅");loadSubs()}catch(e){toast(e.noapi?"当前版本还没有订阅功能，请更新":e.message)}};
- b.querySelectorAll("[data-del]").forEach(x=>x.onclick=async()=>{/* 不用 confirm()：安卓 WebView 没有 WebChromeClient 时会静默返回 false，导致删不掉 */if(!x.dataset.armed){x.dataset.armed=1;x.textContent="确认删除";x.classList.add("pri");setTimeout(()=>{delete x.dataset.armed;x.textContent="删除";x.classList.remove("pri")},3000);return}try{await subReq("DELETE","/api/oa/subscriptions/"+encodeURIComponent(x.dataset.del))}catch(e){if(!/404/.test(e.message)&&!e.noapi)return toast(e.message)}loadSubs()});
- b.querySelectorAll("li[data-id]").forEach(li=>li.onclick=()=>openOA(li.dataset.id))}
-document.querySelector('nav button[data-t="oa"]').addEventListener("click",()=>{if(!OA){loadOA().then(loadSubs)}});
+document.querySelector('nav button[data-t="oa"]').addEventListener("click",()=>{(OA?Promise.resolve():loadOA()).then(loadSubs)});
 let SITES=null,LINKN={};const SITEN=id=>(SITES&&SITES[id]&&SITES[id].name)||LINKN[id]||id;
 const SST={ok:["已登录","done"],expired:["已过期","miss"],missing:["未登录","chip"],unknown:["未知","chip"]};
 async function loadSessions(){try{const r=await fetch("/api/sessions");if(!r.ok)return null;const j=await r.json();if(!j||j.ok===false||!Array.isArray(j.sites))return null;const m={};j.sites.forEach(s=>{if(s&&s.id)m[s.id]=s});return m}catch(_){return null}}
