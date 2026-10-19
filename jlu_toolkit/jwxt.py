@@ -627,7 +627,8 @@ class JwxtClient:
                     service = urllib.parse.parse_qs(destination.query).get("service", [""])[0]
                     vpn_login = destination.hostname == "vpn.jlu.edu.cn" or (
                         destination.hostname == "cas.jlu.edu.cn" and urllib.parse.urlsplit(service).hostname == "vpn.jlu.edu.cn")
-                    if vpn_login and urllib.parse.urlsplit(logical_url).hostname == IEDU_HOST:
+                    logical_host = urllib.parse.urlsplit(logical_url).hostname
+                    if vpn_login and logical_host in (IEDU_HOST, webvpn.OA_HOST):
                         raise NetworkError("应用内 WebVPN 会话不可用，请在「更多 → 登录」选择「校外 WebVPN」重新连接；教务登录和本地数据已保留。", "webvpn")
                     final = original
                 if urllib.parse.urlsplit(logical_url).hostname == IEDU_HOST and self.last_status < 400:
@@ -1089,8 +1090,11 @@ class JwxtClient:
                 code, html, final, _ = self._follow_redirects(final, html, code)
             except NetworkError as error:
                 hint = "可通过应用内 WebVPN 继续，无需重发验证码。" if can_connect else ""
-                raise NetworkError("二次认证已返回跳转，但后续连接失败；尚未完成登录。" + str(error) + hint,
-                                   error.kind, can_connect) from error
+                message = "二次认证已返回跳转，但后续连接失败；尚未完成登录。" + str(error) + hint
+                if self.route == "direct":
+                    from . import netstatus
+                    message = netstatus.with_direct_hint(message)
+                raise NetworkError(message, error.kind, can_connect) from error
         host = urllib.parse.urlparse(final).hostname or ""
         if "验证码错误" in html:
             return LoginStep.FAILED
@@ -1229,7 +1233,8 @@ class JwxtClient:
             pass
         self._dbg(step="emap_enter_done", app_index=app_index, **self.session_cookie_summary())
 
-    def _post_form(self, path: str, fields: dict, referer: str) -> dict:
+    def _post_form(self, path: str, fields: dict, referer: str, mark_expired: bool = True) -> dict:
+        """mark_expired=False：可选的附加查询（如调课）跳登录时只抛异常，不把整个会话记为过期。"""
         url = IEDU_BASE + path
         data = urllib.parse.urlencode(fields).encode("utf-8") if fields else b""
         code, text, final, _ = self._request(
@@ -1257,8 +1262,9 @@ class JwxtClient:
             )
         if looks_like_login_redirect(final, text if code != 200 or not text.lstrip().startswith("{") else ""):
             if self.try_cas_refresh():
-                return self._post_form(path, fields, referer)
-            mark_session_expired(path)
+                return self._post_form(path, fields, referer, mark_expired)
+            if mark_expired:
+                mark_session_expired(path)
             raise SessionExpiredError()
         if code != 200:
             raise JwxtError(f"{path} HTTP {code}")
@@ -1267,8 +1273,9 @@ class JwxtClient:
         except json.JSONDecodeError as e:
             if "loginForm" in text or "/tpass/login" in text or "二次认证" in text:
                 if self.try_cas_refresh():
-                    return self._post_form(path, fields, referer)
-                mark_session_expired(path)
+                    return self._post_form(path, fields, referer, mark_expired)
+                if mark_expired:
+                    mark_session_expired(path)
                 raise SessionExpiredError() from e
             raise JwxtError(f"{path} 返回非 JSON") from e
 
@@ -1450,6 +1457,9 @@ def row_to_course(row: dict) -> Optional[core.Course]:
         start=start,
         end=end,
         weeks=weeks,
+        jxbid=_emap_str(row.get("JXBID")),
+        kch=_emap_str(row.get("KCH")),
+        istk=_emap_str(row.get("ISTK")) in ("1", "是") or _emap_str(row.get("ISTK_DISPLAY")) == "是",
     )
 
 
@@ -1499,7 +1509,7 @@ def _first_float(row: dict, keys) -> Optional[float]:
 def export_courses_csv(courses: Iterable[core.Course], path: str) -> None:
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(
-            f, fieldnames=["课程", "教师", "地点", "星期", "开始节", "结束节", "周次"]
+            f, fieldnames=["课程", "教师", "地点", "星期", "开始节", "结束节", "周次", "教学班", "课程号", "教务调课标记"]
         )
         w.writeheader()
         for c in courses:
@@ -1512,6 +1522,9 @@ def export_courses_csv(courses: Iterable[core.Course], path: str) -> None:
                     "开始节": c.start,
                     "结束节": c.end,
                     "周次": _weeks_to_csv(c.weeks),
+                    "教学班": getattr(c, "jxbid", ""),
+                    "课程号": getattr(c, "kch", ""),
+                    "教务调课标记": "是" if getattr(c, "istk", False) else "",
                 }
             )
 

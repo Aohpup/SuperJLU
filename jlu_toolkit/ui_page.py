@@ -9,7 +9,7 @@ PAGE = r"""<!doctype html>
 <meta name="theme-color" id="tc-l" content="#f6f7f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" id="tc-d" content="#0e0f12" media="(prefers-color-scheme: dark)">
 <script>/AppleWebKit/.test(navigator.userAgent)&&/SuperJLU-Android/.test(navigator.userAgent)&&document.documentElement.classList.add("in-app");</script>
-<script>/* 首帧前应用主题，避免闪烁 */(function(){var t;try{t=localStorage.getItem("jlu-theme")}catch(e){}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))})};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)})();</script>
+<script>/* 首帧前应用主题，避免闪烁 */(function(){var P=window.__PREFS||{},t;try{var S=Storage.prototype,ls=window.localStorage,si=S.setItem,ri=S.removeItem;Object.keys(P).forEach(function(k){if(k.indexOf("jlu-")===0&&ls.getItem(k)!==P[k])si.call(ls,k,P[k])});var sync=function(o){try{fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o),keepalive:true}).catch(function(){})}catch(e){}};S.setItem=function(k,v){si.call(this,k,v);if(this===ls&&String(k).indexOf("jlu-")===0){var o={};o[k]=String(v);sync({set:o})}};S.removeItem=function(k){ri.call(this,k);if(this===ls&&String(k).indexOf("jlu-")===0)sync({remove:[String(k)]})};}catch(e){}t=P["jlu-theme"];if(t===undefined){try{t=localStorage.getItem("jlu-theme")}catch(e){}}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))})};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)})();</script>
 <title>SuperJLU · 吉大人的一站式服务</title>
 <style>
 /* ===== 设计变量：柔和中性底色 + 单一沉稳强调色 ===== */
@@ -56,6 +56,7 @@ nav{position:fixed;bottom:0;left:0;right:0;box-sizing:border-box;max-width:100vw
 nav button{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0;background:none;padding:7px 0 6px;margin:2px;font:inherit;font-size:11.5px;color:var(--sub);cursor:pointer;border-radius:14px;transition:background .15s,color .15s}
 nav button b{display:block;font-size:18px;line-height:1.25;font-weight:500}
 .lga{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}.lga span{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;font-size:13px;overflow:hidden}.lga span.on{border-color:var(--pri);background:var(--pri2);color:var(--pri)}.lga button{border:0;background:none;color:inherit;font:inherit;padding:5px 4px 5px 10px;cursor:pointer}.lga button.x{padding:5px 9px 5px 4px;color:var(--sub)}.lga button.add{padding:5px 10px;border:1px dashed var(--line);border-radius:999px;color:var(--sub)}
+nav button{position:relative}nav button.upd-dot::after{content:"";position:absolute;top:6px;right:calc(50% - 16px);width:7px;height:7px;border-radius:50%;background:var(--pri)}
 nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
 @media(max-width:380px){nav{padding-left:2px;padding-right:2px}nav button{margin:2px 1px;font-size:10.5px;padding:6px 0 5px;border-radius:11px}nav button b{font-size:16px}}
 @media(min-width:760px){nav{left:50%;right:auto;bottom:18px;transform:translateX(-50%);border:1px solid var(--line);border-radius:999px;padding:5px;box-shadow:0 8px 30px rgba(16,24,40,.12)}nav button{flex:none;padding:7px 16px;border-radius:999px;font-size:13px;display:flex;align-items:center;gap:6px}nav button b{display:inline;font-size:15px}body{padding-bottom:100px}}
@@ -84,6 +85,19 @@ nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
 .cls b{display:block;font-size:11px;font-weight:650}
 @media(min-width:640px){.grid{grid-template-columns:36px repeat(7,minmax(0,1fr))}.cls{font-size:12.5px;padding:7px 8px}.cls b{font-size:13.5px}.cell{min-height:52px}}
 .cls i{font-style:normal;opacity:.9}
+.cls{cursor:pointer;position:relative}.cls:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.cls.custom{outline:2px dashed rgba(255,255,255,.95);outline-offset:-3px}
+.cls.edited::after,.cls.custom::after,.cls.adjusted::after,.cls.cancelled::after{position:absolute;bottom:2px;right:2px;font-size:9px;font-weight:700;font-style:normal;line-height:14px;padding:0 3px;border-radius:6px;background:rgba(255,255,255,.92);color:#333}
+.cls.edited::after{content:"改"}.cls.custom::after{content:"自"}.cls.adjusted::after{content:"调";background:#ffe08a}
+.cls.cancelled{opacity:.62;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}.cls.cancelled b,.cls.cancelled i{text-decoration:line-through}.cls.cancelled::after{content:"停";background:#fff;color:#b42318}
+.adj-toggle{display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:600}.adj-toggle input{width:18px;height:18px}
+.kb-tools{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+#kb-issues{border-left:4px solid #e0a106}#kb-issues .kb-iss{border-top:1px solid var(--line);padding:10px 0 4px}#kb-issues .kb-iss:first-of-type{border-top:0}
+.kb-form label{display:block;margin:8px 0 2px;font-size:13px}.kb-form input:not([type]),.kb-form input[type=text]{width:100%;box-sizing:border-box}
+.kb-form .row label{display:inline-block;margin-right:6px}.kb-scope{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}.kb-scope label{display:inline-flex;gap:4px;align-items:center}
+.wkpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:4px}.wkpick label{display:flex!important;align-items:center;gap:2px;margin:0!important;font-size:12.5px}
+.kb-op{display:flex;align-items:center;gap:8px;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0;font-size:13.5px}
+#kb-backup-box textarea,#kb-paste{width:100%;box-sizing:border-box;font-size:12px}
 .empty{color:var(--sub);text-align:center;padding:36px 0}
 /* 成绩 */
 .gpa{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center}
@@ -192,9 +206,11 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 <div id="boot" class="card"><div class="state"><div class="spin"></div><b>正在读取本地数据…</b><div class="skel"></div><div class="skel" style="max-width:300px"></div></div></div>
 <section class="tab on" id="t-kb">
  <div class="card" id="nextexam" hidden></div>
+ <div class="card" id="kb-issues" role="status" hidden></div>
  <div class="card kb">
   <div class="row wk"><button class="btn ghost" id="prev">‹</button><div class="n" id="wkn">第 1 周</div><button class="btn ghost" id="next">›</button><span class="sp"></span><button class="btn" id="today">本周</button></div>
   <div class="grid" id="grid"></div>
+  <div class="kb-tools"><button type="button" class="btn" id="kb-add">＋ 添加课程</button><span class="sub" style="align-self:center">点一节课可以修改或隐藏</span></div>
  </div>
 </section>
 <section class="tab" id="t-cj">
@@ -228,23 +244,23 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
- <div class="seg" id="rmode"><button class="on" data-m="date">按日期查询</button><button data-m="week">按周次查询</button><button data-m="study">按自习时间</button></div>
  <div class="rgrid">
   <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
   <label>教学楼<select id="rb"><option value="">全部</option></select></label>
   <label>教室类型<select id="rt"><option value="">全部</option></select></label>
   <label class="m-date">空闲日期<input type="date" id="rd"></label>
-  <label class="m-week" hidden>周次<input id="rw" placeholder="如 6 或 6-8"></label>
+  <label class="m-week">周次<input id="rw" placeholder="如 6 或 6-8"></label>
   <label title="隐藏实验室、机房、语音室等专用教室" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rhs" checked>屏蔽特殊教室</label>
-  <label class="m-week" hidden>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
-  <label class="m-study" hidden>自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
+  <label class="m-week">星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+  <label class="m-study">自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
   <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
-  <div class="m-study" id="rst-presets" hidden style="grid-column:1/-1;display:none;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
+  <div class="m-study" id="rst-presets" style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
   <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
   <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
  </div>
  <details id="rmore"><summary>更多条件</summary><div class="rgrid" id="rextra"><p class="sub">加载中…</p></div></details>
  <div class="row" style="margin-top:8px"><span style="flex:1"></span><button class="btn pri" id="rq">查询</button></div>
+ <p class="sub" id="rauto" role="status" style="margin:8px 0 0"></p>
  <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
  <div class="banner err room-error" id="room-error" role="alert" hidden><div><b>查询未成功</b><p class="sub" id="room-error-message"></p></div><button class="btn" id="room-switch-login" type="button">检查登录方式</button></div>
  <div class="card" id="rres" hidden></div></section>
@@ -261,7 +277,7 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
   <div class="seg" id="oa-ch" style="margin:12px 0 0;overflow-x:auto" hidden></div>
   <div id="oa-manage" hidden></div>
   <div class="oaf" style="margin-top:12px"><input id="oa-kw" type="search" placeholder="搜索标题或发文单位（本地筛选）"><select id="oa-dept"><option value="">全部单位</option></select></div>
-  <p class="sub" style="margin:10px 0 0" id="oa-src">学校 OA 可经校园网或学校 VPN 访问；校外可登录<a href="/api/oa/webvpn" target="_blank" rel="noopener noreferrer">学校 WebVPN ↗</a>查看原站。当前应用内 VPN 仅用于教务，OA 通知同步仍走直连。学院官网通知可直接访问，独立更新；数据只读并保存在本机。</p></div>
+  <p class="sub" style="margin:10px 0 0" id="oa-src">学校 OA 可经校园网或学校 VPN 访问；校外可登录<a href="/api/oa/webvpn" target="_blank" rel="noopener noreferrer">学校 WebVPN ↗</a>查看原站。登录时选择「校外 WebVPN」后，OA 通知同步也会经应用内 WebVPN；校园网直连模式下走直连。学院官网通知可直接访问，独立更新；数据只读并保存在本机。</p></div>
  <div class="card" id="oa-box" style="padding:8px 14px"><div class="state"><div class="spin"></div><b>正在读取通知…</b></div></div>
  <div class="card" id="oa-sub"><h2>关键词订阅</h2><div id="oa-sub-b"><p class="sub" style="margin:0">读取中…</p></div></div>
  </div>
@@ -271,18 +287,23 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
  <div class="card" id="links"><h2>校园服务 <span class="sub">不常用但用得到的入口</span></h2><div id="links-b"><p class="sub" style="margin:0">读取中…</p></div></div>
  <h2 style="margin:18px 4px 10px;font-size:14px;color:var(--sub)">设置</h2>
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
-  <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
+  <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details><label class="adj-toggle"><input type="checkbox" id="adj-on" checked> 自动应用调课/停课</label><p class="sub" id="adj-info" style="margin:4px 0 0"></p></div>
  <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
- <div class="card"><h2>登录</h2><p class="sub" id="lginfo">请选择当前网络对应的登录方式。</p><div class="seg" role="group" aria-label="连接方式"><button type="button" data-login-mode="direct" class="on" aria-pressed="true">校园网直连</button><button type="button" data-login-mode="webvpn" aria-pressed="false">校外 WebVPN</button></div><p class="sub" id="login-method-hint">已连接校园网时使用，直接登录并同步教务数据。</p><button class="btn pri" id="lgbtn" type="button">登录并同步</button><div id="network-route" role="status"><span class="login-route-label">当前连接方式</span><strong id="network-route-current">校园网直连</strong><span id="network-route-last" hidden></span></div><p class="sub">选择其他方式后，登录成功才会切换。</p><p class="sub" id="login-feedback" role="status" hidden></p><p class="sub" id="login-network-help">教务仅支持校园网内直连；家庭 Wi-Fi、手机流量或热点请选「校外 WebVPN」登录。OA、校园网缴费及学在吉大等校内服务，校外也需通过学校 VPN 访问。</p></div>
- <div class="card"><h2>连接检测</h2><p class="sub" id="network-summary" role="status">检查学校入口的直连情况；不会更改登录方式或验证账号是否已登录。</p><button class="btn" id="network-check">检测连接</button><div id="network-report" aria-live="polite"></div></div>
- <div class="card" id="browser-preferences" hidden><h2>外部浏览器</h2><p class="sub" id="browser-preferences-hint">指定浏览器功能暂不可用，外链使用系统默认浏览器。</p><button class="btn ghost" id="browser-settings-button" type="button" disabled aria-describedby="browser-preferences-hint">更换浏览器（暂不可用）</button></div>
+ <div class="card"><h2>登录</h2><p class="sub" id="lginfo">请选择当前网络对应的登录方式。</p><div class="seg" role="group" aria-label="连接方式"><button type="button" data-login-mode="direct" class="on" aria-pressed="true">校园网直连</button><button type="button" data-login-mode="webvpn" aria-pressed="false">校外 WebVPN</button></div><p class="sub" id="login-method-hint">已连接校园网时使用，直接登录并同步教务数据。</p><p class="sub device-net-hint" id="device-net-hint" role="status" hidden></p><button class="btn pri" id="lgbtn" type="button">登录并同步</button><div id="network-route" role="status"><span class="login-route-label">当前连接方式</span><strong id="network-route-current">校园网直连</strong><span id="network-route-last" hidden></span></div><p class="sub">选择其他方式后，登录成功才会切换。</p><p class="sub" id="login-feedback" role="status" hidden></p><p class="sub" id="login-network-help">教务仅支持校园网内直连；家庭 Wi-Fi、手机流量或热点请选「校外 WebVPN」登录。OA、校园网缴费及学在吉大等校内服务，校外也需通过学校 VPN 访问。</p></div>
+ <div class="card"><h2>连接检测</h2><p class="sub" id="network-summary" role="status">检查学校入口的直连情况；不会更改登录方式或验证账号。教务/OA 直连失败而 WebVPN 门户可达时，请到上方登录选「校外 WebVPN」。</p><button class="btn" id="network-check">检测连接</button><div id="network-report" aria-live="polite"></div></div>
+ <!--BROWSER_PREFERENCES_CARD-->
  <div class="card"><h2>导出</h2><p class="sub">导出 iCal 后可导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
+ <div class="card" id="kb-edits-card"><h2>我的课表修改</h2><p class="sub" id="kb-edits-sum"></p><div id="kb-edits-list"></div>
+  <div class="row" style="margin-top:10px"><a class="btn" id="kb-export" href="/api/schedule/overlay" download="superjlu-schedule-edits.json">导出备份</a><button type="button" class="btn" id="kb-import-btn">导入备份</button><input type="file" id="kb-import" accept=".json,application/json,text/plain" hidden><button type="button" class="btn ghost" id="kb-reset" hidden>恢复教务原样</button><button type="button" class="btn ghost" id="kb-undo" hidden>撤销恢复</button></div>
+  <div id="kb-backup-box" hidden><p class="sub">把下面的内容复制下来保存好（比如发给自己），换手机后用「粘贴备份内容」恢复。</p><textarea id="kb-backup-text" readonly rows="5"></textarea><button type="button" class="btn" id="kb-copy">复制</button></div>
+  <details style="margin-top:8px"><summary class="sub">粘贴备份内容</summary><textarea id="kb-paste" rows="4" placeholder="把之前复制的备份内容粘贴到这里"></textarea><button type="button" class="btn" id="kb-paste-ok">导入</button></details></div>
+ <div class="card" id="ver-card"><h2>版本</h2><p class="sub" id="upd-s" role="status">当前版本 v<span id="upd-v"></span></p><div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button><label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="upd-auto" checked>自动检查新版本</label></div></div>
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据只保存在本机，不会上传到任何服务器。“刷新”使用已保存的登录会话；会话失效时请到「登录」重新登录。</p></div>
 </section>
 </main>
 <nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>☰</b>更多</button></nav>
 <dialog id="login" aria-labelledby="lgt"><form method="dialog" id="lgf" autocomplete="on">
- <h2 id="lgt" style="margin:0 0 4px">登录统一身份认证</h2><p class="sub" id="lgok" style="margin:0 0 6px;color:var(--ok);font-weight:600" hidden>✓ SuperJLU 已登录，如需切换账号可直接修改</p><p class="sub" style="margin:0">账号是邮箱前缀（不是学号）。登录状态加密保存在本机，下次打开不用重登。</p><button type="button" class="btn" id="lg-vpn-continue" hidden>通过应用内 WebVPN 继续</button>
+ <h2 id="lgt" style="margin:0 0 4px">登录统一身份认证</h2><p class="sub" id="lgok" style="margin:0 0 6px;color:var(--ok);font-weight:600" hidden>✓ SuperJLU 已登录，如需切换账号可直接修改</p><p class="sub device-net-hint" id="lg-device-net" role="status" style="margin:0 0 6px" hidden></p><p class="sub" style="margin:0">账号是邮箱前缀（不是学号）。登录状态加密保存在本机，下次打开不用重登。</p>
  <div id="lg1"><label for="lgu">账号</label><div id="lga" class="lga" hidden></div><input type="text" id="lgu" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="邮箱前缀">
   <label for="lgp">密码</label><input type="password" id="lgp" autocomplete="current-password" placeholder="密码">
   <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lgr" checked>记住我（会话失效时免输密码）</label></div>
@@ -290,8 +311,10 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
   <div id="lg3" hidden><label for="lgw">微信验证码（到「智慧吉大」查看「统一身份认证」消息）</label><input type="text" id="lgw" inputmode="numeric" autocomplete="one-time-code"></div></div>
  <p class="err" id="lge" role="alert"></p>
  <div class="vpn-hint" id="lgvpn" hidden></div>
+ <button type="button" class="btn pri" id="lg-vpn-continue" hidden style="width:100%;margin-top:8px">通过应用内 WebVPN 继续</button>
  <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="lgx">取消</button><span style="flex:1"></span><button type="submit" class="btn pri" id="lgo">登录</button></div>
 </form></dialog>
+<dialog id="kb-dlg" class="grade-dialog" aria-label="课程"><div id="kb-dlg-body"></div></dialog>
 <dialog id="grade-help-dialog" class="grade-dialog" aria-labelledby="grade-help-title"><div class="row"><h2 id="grade-help-title" style="margin:0">成绩帮助（适用于吉林大学）</h2><span class="sp"></span><button class="btn ghost" data-grade-close aria-label="关闭成绩帮助">✕</button></div>
  <p>不同学院保研政策和奖学金政策不同。请先核对本学院当年规则，调整计入课程，再点击「另存为自定义模板」。内置模板仅供起步参考，不代表官方统计。</p>
  <h3>内置模板</h3><p><strong class="grade-template-name">保研加权：</strong>排除选修、<span style="color:var(--bad)">限选</span>、通用学术英语、体育、军事理论、军事训练。<strong class="grade-template-name">奖学金加权：</strong>只计必修，排除英语、体育、军事训练；军事理论计入。<strong class="grade-template-name">所有课程：</strong>计入全部有学分课程。</p>
@@ -319,13 +342,59 @@ function renderGrid(){
  const g=$("#grid"),days=["一","二","三","四","五","六","日"];let html='<div></div>';
  const fm=D.first_monday, now=new Date();
  days.forEach((d,i)=>{let lab="周"+d,today=false;if(fm){const dd=new Date(fm+"T00:00:00");dd.setDate(dd.getDate()+(week-1)*7+i);lab+=`<br>${dd.getMonth()+1}/${dd.getDate()}`;today=dd.toDateString()===now.toDateString()}html+=`<div class="h${today?" today":""}">${lab}</div>`});
- const cs=D.courses.filter(c=>c.weeks.includes(week));
+ const cs=KB_CS=D.courses.filter(c=>c.weeks.includes(week));
  const maxP=Math.max(11,...cs.map(c=>c.end));
  for(let p=1;p<=maxP;p++){const pt=(D.periods||{})[p];html+=`<div class="p" style="grid-row:${p+1};grid-column:1;flex-direction:column">${p}${pt?`<em>${pt[0]}</em>`:""}</div>`;for(let d=1;d<=7;d++)html+=`<div class="cell" style="grid-row:${p+1};grid-column:${d+1}"></div>`}
- for(const c of cs)html+=`<div class="cls" style="grid-row:${c.start+1}/${c.end+2};grid-column:${c.weekday+1};background:${color(c.name)}"><b>${esc(c.name)}</b><i>${esc(c.location)}</i></div>`;
+ cs.forEach((c,i)=>{html+=`<div class="cls${kbCls(c)}" data-i="${i}" role="button" tabindex="0" style="grid-row:${c.start+1}/${c.end+2};grid-column:${c.weekday+1};background:${c.src==="cancelled"?"#8a9099":color(c.name)}"><b>${esc(c.name)}</b><i>${esc(c.location)}</i></div>`});
  g.innerHTML=html;
  if(!D.courses.length)g.insertAdjacentHTML("afterend",'<p class="empty" id="noc">还没有课表数据，点右上角「刷新」同步</p>');
 }
+/* 课表个人修改：增 / 隐藏 / 改，刷新不覆盖（后端 schedule_overlay.json） */
+const KB_WD="一二三四五六日";let KB_CS=[];
+const KB_FIELD={name:"课程名",location:"地点",teacher:"教师",weekday:"星期",start:"开始节",end:"结束节"};
+function kbSlot(c){return "周"+(KB_WD[c.weekday-1]||"?")+" 第"+c.start+(c.end!==c.start?"-"+c.end:"")+"节"}
+function kbWeeks(ws){ws=[...new Set(ws||[])].sort((a,b)=>a-b);if(!ws.length)return"";if(ws.length>=3&&ws.every((w,i)=>!i||w-ws[i-1]===2))return"第"+ws[0]+"-"+ws[ws.length-1]+"周（"+(ws[0]%2?"单":"双")+"周）";const out=[];let a=ws[0],p=ws[0];for(const w of ws.slice(1).concat([null])){if(w===p+1){p=w;continue}out.push(a===p?String(a):a+"-"+p);a=p=w}return"第"+out.join("、")+"周"}
+function kbPreset(kind,max){const a=[];for(let w=1;w<=max;w++)if(kind==="all"||(kind==="odd"&&w%2===1)||(kind==="even"&&w%2===0))a.push(w);return a}
+function kbTarget(t){const m=/^(.*)\|(\d+)\|(\d+)-(\d+)$/.exec(t||"");return m?{name:m[1],weekday:+m[2],start:+m[3],end:+m[4]}:{name:t||""}}
+function kbOpText(o){if(o.op==="add"){const c=o.course||{};return"添加了「"+c.name+"」 "+kbSlot(c)+" "+kbWeeks(c.weeks)}const t=kbTarget(o.target),where="「"+t.name+"」"+(t.weekday?" "+kbSlot(t):""),when=o.weeks&&o.weeks.length?kbWeeks(o.weeks):"所有周";if(o.op==="hide")return where+" "+when+"不上";const s=o.set||{};return where+" "+when+"："+Object.keys(s).map(k=>(KB_FIELD[k]||k)+"改为"+(k==="weekday"?"周"+KB_WD[s[k]-1]:k==="start"||k==="end"?"第"+s[k]+"节":s[k])).join("，")}
+function kbIssueTitle(i){return i.kind==="changed"?"教务更新了这门课":i.kind==="missing"?"这条修改暂未生效":"这条修改已损坏"}
+function kbIssueActions(i){if(i.kind==="invalid")return[["remove","删掉这条修改"]];const a=[["ack","我知道了"]];if(i.kind==="missing"&&i.op==="edit")a.push(["detach","保留为自定义课"]);a.push(["remove","删掉这条修改"]);return a}
+function kbCls(c){return c.src==="cancelled"?" cancelled":c.src==="custom"?" custom":c.src==="edited"?" edited":c.adj?" adjusted":""}
+function kbSrcText(c){if(c.src==="cancelled")return"教务"+(c.adj||"停课");if(c.src==="custom")return"你自己添加的课";if(c.src==="official"&&c.adj)return"教务"+c.adj;if(c.src==="edited"){const t=kbTarget(c.from);return"你改过的课（教务原来是 "+(t.weekday?kbSlot(t):t.name)+"）"}return"教务课表"}
+function kbCourse(c,patch){return Object.assign({name:c.name,teacher:c.teacher,location:c.location,weekday:c.weekday,start:c.start,end:c.end,weeks:c.weeks},patch||{})}
+function kbOpSet(id){const o=((D&&D.schedule_ops)||[]).find(x=>x.id===id);return(o&&o.set)||{}}
+function kbSkipReq(c,wk){if(c.src==="official")return{action:"hide",target:c.key,jxbid:c.jxbid||undefined,weeks:[wk]};if(c.src==="custom"){const rest=c.weeks.filter(w=>w!==wk);return rest.length?{action:"update",id:c.oid,course:kbCourse(c,{weeks:rest})}:{action:"remove",id:c.oid}}return null}
+function kbDeleteReq(c){return c.src==="official"?{action:"hide",target:c.key,jxbid:c.jxbid||undefined}:{action:"remove",id:c.oid}}
+function kbEditReq(c,vals,scope,wk){if(c.src==="custom")return{action:"update",id:c.oid,course:kbCourse(c,vals)};const set={};for(const k of Object.keys(KB_FIELD))if(vals[k]!==undefined&&String(vals[k])!==String(c[k]))set[k]=vals[k];if(c.src==="edited")return{action:"update",id:c.oid,set:Object.assign({},kbOpSet(c.oid),set)};return{action:"edit",target:c.key,jxbid:c.jxbid||undefined,weeks:scope==="week"?[wk]:null,set}}
+async function kbPost(body,okMsg){try{const j=await api("/api/schedule/overlay",body);for(const k of Object.keys(j))if(k!=="ok")D[k]=j[k];renderGrid();renderKbExtras();if(okMsg)toast(okMsg);return true}catch(e){toast(e.message,true);return false}}
+function kbOpen(c){if(!c)return;const b=$("#kb-dlg-body"),ed=c.src==="edited";if(c.src==="cancelled"){b.innerHTML=`<h2 style="margin:0 0 6px">${esc(c.name)} <span class="chip">本周停课</span></h2><p class="sub">${esc(kbSlot(c))} · ${esc(c.location)}${c.teacher?" · "+esc(c.teacher):""}<br>${esc(kbSrcText(c))}</p><p class="sub">这节课第 ${esc(c.weeks.join("、"))} 周不上，其他周照常。关闭「更多 → 学期」里的「自动应用调课/停课」可按原始安排显示。</p><div class="row" style="margin-top:12px"><span class="sp"></span><button type="button" class="btn ghost" data-k="close">关闭</button></div>`;b.onclick=e=>{if(e.target.dataset&&e.target.dataset.k==="close")$("#kb-dlg").close()};const d=$("#kb-dlg");if(!d.open)d.showModal();return}
+ b.innerHTML=`<h2 style="margin:0 0 6px">${esc(c.name)}</h2><p class="sub">${esc(kbSlot(c))} · ${esc(c.location)}${c.teacher?" · "+esc(c.teacher):""}<br>${esc(kbWeeks(c.weeks))} · ${esc(kbSrcText(c))}</p>${c.hint?`<p class="sub">⚠ ${esc(c.hint)}</p>`:""}<div class="row" style="margin-top:12px"><button type="button" class="btn pri" data-k="edit">修改</button>${ed?"":'<button type="button" class="btn" data-k="skip">本周不上</button>'}<button type="button" class="btn ghost" data-k="del">${ed?"恢复教务原样":"删除这门课"}</button><span class="sp"></span><button type="button" class="btn ghost" data-k="close">关闭</button></div>`;
+ b.onclick=async e=>{const k=e.target.dataset&&e.target.dataset.k;if(!k)return;if(k==="close")return $("#kb-dlg").close();if(k==="edit")return kbForm(c);
+  if(k==="skip"){const r=kbSkipReq(c,week);if(r&&await kbPost(r,"第"+week+"周的「"+c.name+"」已标记为不上"))$("#kb-dlg").close();return}
+  if(!confirm(ed?"撤销你对这门课的修改，恢复教务原样？":c.src==="custom"?"删除你添加的「"+c.name+"」？":"在你的课表里隐藏「"+c.name+"」的所有周？刷新课表也不会再出现，可以在「更多 → 我的课表修改」里恢复。"))return;
+  if(await kbPost(kbDeleteReq(c),ed?"已恢复教务原样":"已删除"))$("#kb-dlg").close()};
+ const d=$("#kb-dlg");if(!d.open)d.showModal()}
+function kbForm(c){const add=!c,custom=add||c.src==="custom",official=!!c&&c.src==="official",mx=maxWeek(),cur=c||{name:"",location:"",teacher:"",weekday:1,start:1,end:2,weeks:kbPreset("all",mx)};
+ const opt=(n,v,lab)=>`<option value="${n}"${n==v?" selected":""}>${lab}</option>`,secs=Math.max(12,cur.end,...Object.keys(D.periods||{}).map(Number).filter(n=>n>0)),sel=(id,v)=>`<select id="${id}">${Array.from({length:secs},(_,i)=>opt(i+1,v,"第"+(i+1)+"节")).join("")}</select>`;
+ const weeksHtml=custom?`<div class="sub" style="margin-top:10px">上课周</div><div class="row" style="margin:4px 0"><button type="button" class="btn ghost" data-p="all">全选</button><button type="button" class="btn ghost" data-p="odd">单周</button><button type="button" class="btn ghost" data-p="even">双周</button><button type="button" class="btn ghost" data-p="none">清空</button></div><div class="wkpick">${Array.from({length:mx},(_,i)=>`<label><input type="checkbox" value="${i+1}"${cur.weeks.includes(i+1)?" checked":""}>${i+1}</label>`).join("")}</div>`:official?`<div class="kb-scope" role="radiogroup" aria-label="修改范围"><label><input type="radio" name="kb-scope" value="week" checked> 只改本周（第${week}周）</label><label><input type="radio" name="kb-scope" value="all"> 所有周</label></div>`:"";
+ const b=$("#kb-dlg-body");b.innerHTML=`<h2 style="margin:0 0 10px">${add?"添加课程":"修改「"+esc(c.name)+"」"}</h2><form id="kb-form" class="kb-form"><label>课程名<input id="kb-f-name" value="${esc(cur.name)}" maxlength="60" required></label><label>地点<input id="kb-f-location" value="${esc(cur.location==="待定"&&add?"":cur.location)}" maxlength="60"></label><label>教师<input id="kb-f-teacher" value="${esc(cur.teacher)}" maxlength="40"></label><div class="row"><label>星期 <select id="kb-f-weekday">${[1,2,3,4,5,6,7].map(d=>opt(d,cur.weekday,"周"+KB_WD[d-1])).join("")}</select></label><label>从 ${sel("kb-f-start",cur.start)}</label><label>到 ${sel("kb-f-end",cur.end)}</label></div>${weeksHtml}<div class="row" style="margin-top:14px"><span class="sp"></span><button type="button" class="btn ghost" id="kb-f-cancel">取消</button><button class="btn pri">保存</button></div></form>`;
+ b.onclick=e=>{const p=e.target.dataset&&e.target.dataset.p;if(!p)return;const on=new Set(p==="none"?[]:kbPreset(p,mx));b.querySelectorAll(".wkpick input").forEach(x=>x.checked=on.has(+x.value))};
+ $("#kb-f-cancel").onclick=()=>$("#kb-dlg").close();
+ $("#kb-form").onsubmit=async e=>{e.preventDefault();const v={name:$("#kb-f-name").value.trim(),location:$("#kb-f-location").value.trim(),teacher:$("#kb-f-teacher").value.trim(),weekday:+$("#kb-f-weekday").value,start:+$("#kb-f-start").value,end:+$("#kb-f-end").value};if(!v.name)return toast("请填写课程名",true);if(v.end<v.start)return toast("结束节不能早于开始节",true);
+  if(custom){v.weeks=[...b.querySelectorAll(".wkpick input:checked")].map(x=>+x.value);if(!v.weeks.length)return toast("请至少选择一周",true)}
+  const sc=(b.querySelector('input[name="kb-scope"]:checked')||{}).value,req=add?{action:"add",course:v}:kbEditReq(c,v,sc,week);if(await kbPost(req,"已保存，刷新课表也不会覆盖"))$("#kb-dlg").close()};
+ const d=$("#kb-dlg");if(!d.open)d.showModal();try{$("#kb-f-name").focus()}catch(_){}}
+function adjInfoText(a){a=a||{};if(a.enabled===false)return"已关闭：课表按教务原始安排显示。";if(a.applied>0)return`本学期有 ${a.applied} 处调课/停课已经显示在课表上：带「调」字的是调过来的课，灰色带「停」字的是停掉的课，点开能看到原来的安排。`;if(a.count>0)return"本学期的调课已经包含在课表里了。";return"刷新课表时会一起读取教务的调课、停课通知；读不到也不影响课表和登录。"}
+function renderAdjToggle(){const a=(D&&D.schedule_adjust)||{enabled:true},el=$("#adj-on");if(!el)return;el.checked=a.enabled!==false;$("#adj-info").textContent=adjInfoText(a)}
+function renderKbExtras(){const is=(D&&D.schedule_issues)||[],box=$("#kb-issues");if(!box)return;box.hidden=!is.length;
+ box.innerHTML=is.length?`<h2>有 ${is.length} 条课表修改需要你看一下</h2>`+is.map(i=>`<div class="kb-iss"><b>${esc(kbIssueTitle(i))}</b> <span class="sub">「${esc(i.name||"")}」${i.weekday?" "+esc(kbSlot(i)):""}</span><div class="sub">${esc(i.message)}</div><div class="row" style="margin-top:6px">${kbIssueActions(i).map(([a,l])=>`<button type="button" class="btn${a==="remove"?" ghost":""}" data-a="${a}" data-id="${esc(i.oid)}">${l}</button>`).join("")}</div></div>`).join(""):"";
+ const ops=(D&&D.schedule_ops)||[],n=ops.length,o=(D&&D.schedule_other_terms)||0;
+ $("#kb-edits-sum").textContent=(n?`本学期你改了 ${n} 处课表，刷新课表不会覆盖这些修改。`:"你还没有修改过课表。在课表里点一节课就能修改或隐藏，也可以点「＋ 添加课程」。")+(o?` 其他学期还有 ${o} 处修改，已经保存，不会显示在本学期课表里。`:"");
+ $("#kb-edits-list").innerHTML=ops.map(x=>`<div class="kb-op"><span>${esc(kbOpText(x))}</span><button type="button" class="btn ghost" data-a="remove" data-id="${esc(x.id)}">撤销</button></div>`).join("");
+ $("#kb-reset").hidden=!n;$("#kb-undo").hidden=!(D&&D.schedule_can_undo_reset)}
+const KB_DONE={ack:"好的，不再提醒",detach:"已保留为自定义课",remove:"已删掉这条修改"};
+function kbActionClick(e){const t=e.target.closest&&e.target.closest("button[data-a]");if(t)kbPost({action:t.dataset.a,id:t.dataset.id},KB_DONE[t.dataset.a])}
+function kbImportText(text){let doc;try{doc=JSON.parse(text)}catch(_){return toast("这不是课表修改备份",true)}return kbPost({action:"import",doc},"备份已导入")}
 const GRADE_BUILTINS={__postgraduate__:{base:"postgraduate",name:"保研加权（不含限选课程）"},__scholarship__:{base:"scholarship",name:"奖学金加权"},__all__:{base:"comprehensive",name:"所有课程"}};
 let gradeBase="postgraduate",gradeSort={key:"",dir:0};
 // Grade calculation helpers: no DOM, shared by rendering and regression checks.
@@ -455,7 +524,7 @@ function renderAll(){try{renderOffline();renderSession()}catch(_){}
  $("#fm").value=D.first_monday||"";
  const terms=[...new Set(D.grades.map(g=>g.term))].sort().reverse();const tf=$("#termf"),keep=tf.value;
  tf.innerHTML='<option value="">全部学期</option>'+terms.map(t=>`<option>${esc(t)}</option>`).join("");tf.value=keep;
- document.getElementById("noc")?.remove();renderGrid();gradeFilterOptions();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();renderOfficial();renderProgress();
+ document.getElementById("noc")?.remove();renderGrid();try{renderKbExtras();renderAdjToggle()}catch(_){}gradeFilterOptions();schemeOptions();if(!dirty)applyScheme($("#scheme").value);else renderGrades();renderExams();renderOfficial();renderProgress();
  const cal=D.calendar||{};$("#calinfo").innerHTML=D.first_monday?`第 1 周周一：<b>${esc(D.first_monday)}</b>（${D.first_monday_source==="manual"?"手动覆盖":"来自教务校历"}）${cal.term?" · "+esc(cal.term):""}${cal.total_weeks?" · 共 "+cal.total_weeks+" 周":""} · 今天第 ${weekOf(new Date())} 周`:"尚未读取校历：点右上角“刷新”自动获取开学日期。";
 }
 function refreshSummary(r){const c=k=>r&&r[k]&&r[k].ok?(r[k].count??"✓"):"✗";return `课表 ${c("schedule")} · 成绩 ${c("grades")} · 考试 ${c("exams")} · 校历 ${c("calendar")} · 学业 ${c("completion")}`}
@@ -480,6 +549,17 @@ function renderSession(){const box=$("#sess"),s=sessionInfo(D);if(!s){box.hidden
  box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>${s.missing?"尚未登录，无法同步教务数据":(D&&D.session_site?esc(SITEN(D.session_site))+" ":"")+"登录会话已过期"}</b><p class="sub">${s.message?esc(s.message)+" · ":""}本地成绩单仍可导入、计算和保存模板。需要同步教务数据时，请${s.missing?"登录":"重新登录"}。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div><button class="btn pri" type="button" onclick="openLogin()">${s.missing?"立即登录":"重新登录"}</button></div>`}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0);scheduleGradeCompact();if(b.dataset.t==="cj"&&!gradeHelpSeen())openGradeHelp()});
 $("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
+$("#grid").addEventListener("click",e=>{const el=e.target.closest(".cls");if(el)kbOpen(KB_CS[+el.dataset.i])});
+$("#grid").addEventListener("keydown",e=>{const el=e.target.closest&&e.target.closest(".cls");if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();kbOpen(KB_CS[+el.dataset.i])}});
+$("#adj-on").onchange=async e=>{const on=e.target.checked;try{const j=await api("/api/settings",{apply_adjustments:on});D=gradeRefreshSnapshot(D,j);renderAll();toast(on?"已开启，调课会显示在课表上":"已关闭，课表按教务原始安排显示")}catch(err){e.target.checked=!on;toast(err.message,true)}};
+$("#kb-add").onclick=()=>kbForm(null);$("#kb-issues").onclick=kbActionClick;$("#kb-edits-list").onclick=kbActionClick;
+$("#kb-reset").onclick=()=>{if(confirm("把本学期课表恢复成教务原样？你的修改会先收起来，马上可以「撤销恢复」。"))kbPost({action:"reset"},"已恢复教务原样")};
+$("#kb-undo").onclick=()=>kbPost({action:"undo_reset"},"已撤销，你的修改回来了");
+$("#kb-import-btn").onclick=()=>$("#kb-import").click();
+$("#kb-import").onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;const r=new FileReader();r.onload=()=>kbImportText(String(r.result));r.onerror=()=>toast("无法读取这个文件",true);r.readAsText(f)};
+$("#kb-paste-ok").onclick=()=>{const t=$("#kb-paste").value.trim();if(!t)return toast("请先粘贴备份内容",true);kbImportText(t).then(ok=>{if(ok)$("#kb-paste").value=""})};
+$("#kb-export").onclick=async e=>{if(!/SuperJLU-Android/.test(navigator.userAgent))return;e.preventDefault();let t;try{t=await fetch("/api/schedule/overlay").then(r=>r.text())}catch(_){return toast("读取备份失败",true)}$("#kb-backup-text").value=t;$("#kb-backup-box").hidden=false;try{const f=new File([t],"superjlu-schedule-edits.json",{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"SuperJLU 课表修改备份"})}catch(_){}};
+$("#kb-copy").onclick=async()=>{const t=$("#kb-backup-text");t.select();let ok=false;try{await navigator.clipboard.writeText(t.value);ok=true}catch(_){try{ok=document.execCommand("copy")}catch(_){}}toast(ok?"已复制，可以粘贴到聊天或备忘录里保存":"复制失败，请长按文字手动复制",!ok)};
 $("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
 let tx=null;$("#grid").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
 $("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>60)(dx<0?$("#next"):$("#prev")).click();tx=null});
@@ -547,21 +627,23 @@ function periodMap(){const p=D&&D.periods;return(p&&Object.keys(p).length)?p:DEF
 function periodsToStudy(){const a=+$("#rp1").value,b=+$("#rp2").value,m=periodMap(),x=m[a]||m[String(a)],y=m[b]||m[String(b)];if(x&&x[0])$("#rst").value=x[0];if(y&&y[1])$("#ret").value=y[1]}
 function studyToPeriods(){const s=$("#rst").value,e=$("#ret").value,m=periodMap();if(!s||!e||s>=e)return;let lo=null,hi=null;Object.keys(m).forEach(k=>{const n=+k,t=m[k];if(!(n>=1)||!t||t.length<2)return;if(t[0]<e&&t[1]>s){if(lo===null||n<lo)lo=n;if(hi===null||n>hi)hi=n}});if(lo!==null){$("#rp1").value=lo;$("#rp2").value=hi}}
 let _rSync=false;
-(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek();periodsToStudy()})();
+/* 按当前时间自动选好「接下来两节」：正在上的或下一节开始，连续两节；当天课都结束了就选次日第 1-2 节。
+   用户手动改过日期或节次后不再覆盖。 */
+function roomNextSlot(map,now){const toM=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(t||"");return m?+m[1]*60+ +m[2]:NaN};const ks=Object.keys(map).map(Number).filter(n=>n>=1&&map[n]&&map[n].length>=2&&!isNaN(toM(map[n][1]))).sort((a,b)=>a-b);const d=new Date(now.getFullYear(),now.getMonth(),now.getDate());if(!ks.length)return{date:d,a:1,b:2};const cur=now.getHours()*60+now.getMinutes();const k=ks.find(n=>toM(map[n][1])>cur);if(k===undefined){d.setDate(d.getDate()+1);return{date:d,a:ks[0],b:ks[Math.min(1,ks.length-1)]}}const i=ks.indexOf(k);return{date:d,a:k,b:ks[Math.min(i+1,ks.length-1)]}}
+let _rTouched=false;
+function roomAutoSlot(){if(_rTouched)return;const s=roomNextSlot(periodMap(),new Date()),dd=s.date;$("#rd").value=dd.getFullYear()+"-"+String(dd.getMonth()+1).padStart(2,"0")+"-"+String(dd.getDate()).padStart(2,"0");$("#rp1").value=s.a;$("#rp2").value=s.b;rdToWeek();periodsToStudy();const n=new Date(),tomorrow=dd.getDate()!==n.getDate(),h=$("#rauto");if(h)h.textContent=`已按现在的时间选好${tomorrow?"明天":"今天"}第 ${s.a}${s.b!==s.a?"-"+s.b:""} 节，可以直接查询，也可以自己改。`}
+roomAutoSlot();
+["#rd","#rp1","#rp2","#rst","#ret","#rw","#rwd"].forEach(q=>{const e=$(q);if(e)["input","change"].forEach(ev=>e.addEventListener(ev,()=>{_rTouched=true;const h=$("#rauto");if(h)h.textContent=""}))});
 $("#rp1").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value;periodsToStudy()}finally{_rSync=false}});
 $("#rp2").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value;periodsToStudy()}finally{_rSync=false}});
 $("#rst").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
 $("#ret").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
-document.querySelectorAll("#rst-presets [data-sp]").forEach(b=>b.onclick=()=>{const[a,c]=b.dataset.sp.split("-").map(Number);$("#rp1").value=a;$("#rp2").value=c;periodsToStudy()});
+document.querySelectorAll("#rst-presets [data-sp]").forEach(b=>b.onclick=()=>{_rTouched=true;const[a,c]=b.dataset.sp.split("-").map(Number);$("#rp1").value=a;$("#rp2").value=c;periodsToStudy()});
 let RM="date",RR=[],RS={k:"name",d:1};
-function setRoomMode(m){RM=m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x.dataset.m===m));
- document.querySelectorAll(".m-date").forEach(e=>e.hidden=!(m==="date"||m==="study"));
- document.querySelectorAll(".m-week").forEach(e=>e.hidden=m!=="week");
- const studyOn=m==="study";document.querySelectorAll(".m-study").forEach(e=>e.hidden=!studyOn);
- const pre=$("#rst-presets");if(pre){pre.style.display=studyOn?"flex":"none"}
- if(m==="week")rdToWeek();else{weekToRd();rdToWeek()}
- if(studyOn)periodsToStudy()}
-document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>setRoomMode(b.dataset.m));
+/* 空教室只有一张表单：日期、周次/星期、自习时间、节次一起显示、互相联动。
+   最后改的是日期就按日期查；改的是周次/星期就按周次查（支持 6-8 这样的多周）。 */
+$("#rd").addEventListener("change",()=>{RM="date"});$("#rw").addEventListener("change",()=>{RM="week"});$("#rwd").addEventListener("change",()=>{RM="week"});
+function roomQueryMode(){const w=($("#rw").value||"").trim();if(RM==="week"&&w&&!/^\d+$/.test(w))return"week";if(!$("#rd").value&&w)return"week";return RM==="week"&&!(D&&D.first_monday)&&w?"week":"date"}
 const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
 async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
 // 六个校区固定（教务代码表 01–06，已与真实 campuses.json 核对），不再需要「加载」
@@ -574,7 +656,7 @@ $("#rcs").innerHTML=CAMPUSES.map(c=>`<button type="button" role="radio" data-c="
 document.querySelectorAll("#rcs button").forEach(b=>b.onclick=()=>pickCampus(b.dataset.c));
 let RMETA=false;
 async function roomsInit(){const last=lsGet(RCKEY);pickCampus(CAMPUSES.some(c=>c.code===last)?last:CAMPUSES[0].code);if(RMETA)return;RMETA=true;try{const t=await api("/api/rooms/types",{});$("#rt").innerHTML=opts(t.types,"全部");const f=await api("/api/rooms/fields",{});$("#rextra").innerHTML=f.fields.map(x=>`<label>${esc(x.caption||x.name)}<input data-f="${esc(x.name)}" placeholder="${esc(x.name)}"></label>`).join("")||'<p class="sub">元数据中没有其它检索字段</p>'}catch(e){RMETA=false;showRoomFailure(e)}}
-document.querySelector('nav button[data-t="js"]').addEventListener("click",()=>{if(!window.__rm){window.__rm=1;roomsInit()}});
+document.querySelector('nav button[data-t="js"]').addEventListener("click",()=>{roomAutoSlot();if(!window.__rm){window.__rm=1;roomsInit()}});
 const RCOLS=[["building","教学楼"],["kind","教室类型"],["name","教室名称"],["seats","上课座位数"],["exam_seats","考试座位数"]];
 function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats","exam_seats"].includes(k);const rs=[...RR].sort((a,b)=>{const x=a[RS.k],y=b[RS.k];return RS.d*(n(RS.k)?(+x||0)-(+y||0):String(x).localeCompare(String(y),"zh"))});
  const head=j.mode==="week"?`第${esc(j.weeks)}周 周${"一二三四五六日"[j.weekday-1]}`:`${esc(j.date)} <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]}</span>`;
@@ -583,11 +665,11 @@ function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats
 function showRoomFailure(error){const original=String(error?.message||"查询未成功，请稍后重试。"),technical=/HTTP\s*\d{3}|尝试：|cxkxjs|Traceback/i.test(original)||original.length>160;$("#room-error-message").textContent=(technical?"空教室查询失败，请检查网络或在「更多 → 登录」切换登录方式后重试。":original)+(RR.length?" 已保留上次查询结果。":"");$("#room-switch-login").hidden=!(technical||error?.connectionAction);$("#room-error").hidden=false}
 $("#room-switch-login").onclick=()=>{document.querySelector('nav button[data-t="sz"]').click();location.hash="sz";$("#network-route").scrollIntoView({behavior:"smooth",block:"center"})};
 $("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";$("#room-error").hidden=true;try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
- if(RM==="study")studyToPeriods();const qMode=RM==="study"?"date":RM;const j=await api("/api/rooms",{mode:qMode,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){showRoomFailure(e)}finally{b.disabled=false;b.textContent="查询"}};
+ const qMode=roomQueryMode();const j=await api("/api/rooms",{mode:qMode,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){showRoomFailure(e)}finally{b.disabled=false;b.textContent="查询"}};
 let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null,OAPREFS=null,OACAT=null,OAMANAGE=false,OAPICK=null;
 function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
 function oaLink(u,label){try{const p=new URL(u||"");if(!/^https?:$/.test(p.protocol))return"";const h=p.hostname;if(!(h==="jlu.edu.cn"||h.endsWith(".jlu.edu.cn")||/\.(jdyy\.cn|jdey\.com\.cn|zrlyyy\.com)$/.test(h)))return""}catch(_){return""}return`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`}
-function renderOA(){const box=$("#oa-box");queueMicrotask(()=>{if(OA&&OA.offline===true&&!box.querySelector(".offl"))box.insertAdjacentHTML("afterbegin",offlineBadge(OA))});if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">学校 OA 可经校园网或学校 VPN 访问，当前应用内 OA 同步仍走直连；学院通知可独立更新。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
+function renderOA(){const box=$("#oa-box");queueMicrotask(()=>{if(OA&&OA.offline===true&&!box.querySelector(".offl"))box.insertAdjacentHTML("afterbegin",offlineBadge(OA))});if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">学校 OA 可经校园网或学校 VPN 访问；当前通道为校外 WebVPN 时同步也会走应用内 WebVPN。学院通知可独立更新。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
  if(!OA)return;const all=OA.items||[];const ds=[...new Set(all.map(i=>i.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh"));const sel=$("#oa-dept");sel.innerHTML='<option value="">全部单位</option>'+ds.map(d=>`<option${d===OAQ.dept?" selected":""}>${esc(d)}</option>`).join("");
  const needNet=OA.source==="college"&&["network_error","need_campus"].includes(OA.status);
  const linkOnly=OA.source==="college"&&OA.status==="link_only";
@@ -645,12 +727,16 @@ const SST={ok:["已登录","done"],expired:["已过期","miss"],missing:["未登
 async function loadSessions(){try{const r=await fetch("/api/sessions");if(!r.ok)return null;const j=await r.json();if(!j||j.ok===false||!Array.isArray(j.sites))return null;const m={};j.sites.forEach(s=>{if(s&&s.id)m[s.id]=s});return m}catch(_){return null}}
 function stBadge(s){if(!s)return"";const t=s.external_browser?["浏览器状态未知","chip"]:s.state==="ok"&&s.id!=="vpn"?["会话已保存","done"]:SST[s.state]||SST.unknown;return`<span class="${t[1]}" title="${esc(s.message||"")}">${t[0]}</span>`}
 let LOGIN_MODE=null,ACTIVE_LOGIN_MODE="direct";
-function syncLoginChoice(){const selected=LOGIN_MODE||ACTIVE_LOGIN_MODE;document.querySelectorAll("[data-login-mode]").forEach(b=>{const on=b.dataset.loginMode===selected;b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on))});$("#login-method-hint").textContent=selected==="webvpn"?"未连接校园网时使用；同一次认证会连接应用内 WebVPN 并验证教务，无需先登录直连教务。":"已连接校园网时使用，直接登录并同步教务数据。";$("#lgbtn").textContent=selected!==ACTIVE_LOGIN_MODE?"切换方式并登录":LOGGED?"重新登录 / 切换账号":"登录并同步"}
+function syncLoginChoice(){const selected=LOGIN_MODE||ACTIVE_LOGIN_MODE;document.querySelectorAll("[data-login-mode]").forEach(b=>{const on=b.dataset.loginMode===selected;b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on))});$("#login-method-hint").textContent=selected==="webvpn"?"未连接校园网时使用；同一次认证会连接应用内 WebVPN 并验证教务，无需先登录直连教务。":"已连接校园网时使用，直接登录并同步教务数据。";if(typeof renderDeviceNet==="function")renderDeviceNet();$("#lgbtn").textContent=selected!==ACTIVE_LOGIN_MODE?"切换方式并登录":LOGGED?"重新登录 / 切换账号":"登录并同步"}
 document.querySelectorAll("[data-login-mode]").forEach(b=>b.onclick=()=>{LOGIN_MODE=b.dataset.loginMode;syncLoginChoice()});
 function loginFeedback(message){const p=$("#login-feedback");p.textContent=message||"";p.hidden=!message}
 function renderNetworkState(state){ACTIVE_LOGIN_MODE=state.mode==="webvpn"?"webvpn":"direct";if(LOGIN_MODE===null)LOGIN_MODE=ACTIVE_LOGIN_MODE;const last=state.last_connection?.route;$("#network-route-current").textContent=ACTIVE_LOGIN_MODE==="webvpn"?"校外 WebVPN":"校园网直连";$("#network-route-last").hidden=!last;$("#network-route-last").textContent=last?"最近成功连接："+(last==="webvpn"?"WebVPN":"直连"):"";syncLoginChoice()}
-async function loadNetworkState(){try{renderNetworkState(await api("/api/network/state"))}catch(_){}$("#browser-preferences").hidden=!/SuperJLU-Android/.test(navigator.userAgent)}
-$("#network-check").onclick=async()=>{const b=$("#network-check");b.disabled=true;$("#network-summary").textContent="正在检测实际 HTTPS 入口，不读取账号或改变登录状态…";try{const data=await api("/api/network/check",{});$("#network-summary").textContent="检测于 "+data.checked_at.replace("T"," ")+" · Python "+data.python+" · "+data.tls_library;$("#network-report").innerHTML='<div style="overflow-x:auto"><table><thead><tr><th>服务</th><th>连接</th><th>说明</th></tr></thead><tbody>'+data.services.map(s=>`<tr><td>${esc(s.name)}<br><span class="sub">${esc(s.host)}:${s.port}</span></td><td>${s.reachable?"可达":"未连通"}</td><td class="sub">${esc(s.error||("HTTP "+s.http_status+" · "+(s.transport==="system"?"系统 HTTPS":"Python HTTPS")+" · "+s.milliseconds+"ms"))}</td></tr>`).join("")+'</tbody></table></div><p class="sub">检测不验证登录状态。学校 OA 未连通不会影响学院通知。</p>'}catch(e){$("#network-summary").textContent=e.message}finally{b.disabled=false}};
+// Android 直连时提示「当前走移动数据 / Wi-Fi 未通过网关认证」；桌面端接口无提示，不改变任何行为
+let DEVICE_NET_HINT="";function renderDeviceNet(){const sel=LOGIN_MODE||ACTIVE_LOGIN_MODE,c=$("#device-net-hint");if(c){c.hidden=!(DEVICE_NET_HINT&&sel!=="webvpn");c.textContent=DEVICE_NET_HINT}let lgTarget="";try{lgTarget=LG&&LG.target}catch(_){}const d=$("#lg-device-net");if(d){d.hidden=!(DEVICE_NET_HINT&&lgTarget==="jwxt");d.textContent=DEVICE_NET_HINT}}
+async function loadDeviceNet(){try{const j=await (await fetch("/api/network/device")).json();DEVICE_NET_HINT=(j&&j.direct_hint)||""}catch(_){DEVICE_NET_HINT=""}renderDeviceNet()}
+async function loadNetworkState(){loadDeviceNet();try{renderNetworkState(await api("/api/network/state"))}catch(_){}const bp=$("#browser-preferences");if(bp)bp.hidden=!/SuperJLU-Android/.test(navigator.userAgent)}
+function networkCheckFooter(data){const dev=data&&data.device_hint?`<p class="sub" id="network-device-hint" role="status"><b>手机网络</b> ${esc(data.device_hint)}</p>`:"";const hint=data&&data.hint;if(hint)return dev+`<p class="sub" id="network-check-hint" role="status"><b>校外提示</b> ${esc(hint)}</p><p class="sub">检测不验证登录状态，也不会切换「校园网直连／校外 WebVPN」。学校 OA 直连未通不影响学院通知。</p>`;return dev+`<p class="sub">检测不验证登录状态。学校 OA 未连通不会影响学院通知。若教务直连失败而 WebVPN 门户可达，可到「更多 → 登录」改选「校外 WebVPN」。</p>`}
+$("#network-check").onclick=async()=>{const b=$("#network-check");b.disabled=true;$("#network-summary").textContent="正在检测实际 HTTPS 入口，不读取账号或改变登录状态…";try{const data=await api("/api/network/check",{});$("#network-summary").textContent="检测于 "+data.checked_at.replace("T"," ");$("#network-report").innerHTML='<div style="overflow-x:auto"><table><thead><tr><th>服务</th><th>连接</th><th>说明</th></tr></thead><tbody>'+data.services.map(s=>`<tr><td>${esc(s.name)}<br><span class="sub">${esc(s.host)}:${s.port}</span></td><td>${s.reachable?"可达":"未连通"}</td><td class="sub">${esc(s.error||("HTTP "+s.http_status+" · "+(s.transport==="system"?"系统 HTTPS":"Python HTTPS")+" · "+s.milliseconds+"ms"))}</td></tr>`).join("")+'</tbody></table></div>'+networkCheckFooter(data)+`<details class="sub" id="network-tech"><summary>技术信息（反馈问题时可附上）</summary>Python ${esc(data.python)} · ${esc(data.tls_library)}</details>`}catch(e){$("#network-summary").textContent=e.message}finally{b.disabled=false}};
 const LKOK=u=>{try{const p=new URL(u);return p.protocol==="https:"&&/(^|\.)jlu\.edu\.cn$/.test(p.hostname)}catch(_){return false}};
 const lkA=(u,t,c)=>LKOK(u)?`<a class="btn ${c}" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:"";
 async function loadLinks(){const b=$("#links-b");let j;try{j=await api("/api/links")}catch(e){b.innerHTML=`<p class="sub" style="margin:0">读取失败：${esc(e.message)}</p>`;return}
@@ -659,20 +745,30 @@ async function loadLinks(){const b=$("#links-b");let j;try{j=await api("/api/lin
  b.innerHTML=`<div class="lgrid">${L.map(x=>`<div class="lk"><div class="hd"><span class="ic" aria-hidden="true">${esc(x.icon||"↗")}</span><b>${esc(x.name)}</b>${x.campus_only?'<span class="tag">校内网</span>':""}${stBadge(S(x.id))}</div>${S(x.id)&&S(x.id).checked_at?`<div class="lg">状态检查于 ${esc(String(S(x.id).checked_at).replace("T"," ").slice(0,16))}</div>`:""}<div class="sub">${esc(x.purpose||"")}</div>${x.login?`<div class="lg">🔑 ${esc(x.login)}</div>`:""}${x.campus_only&&!x.vpn_url?'<div class="lg">校外请先连接校园 VPN</div>':""}<div class="row">${x.sso_url&&/^\/api\/sso\/jump\?/.test(x.sso_url)?`<a class="btn pri" href="${esc(x.sso_url)}" target="_blank" rel="noopener" title="用已登录的统一认证直接进入">打开 ↗</a>`:lkA(x.url,"打开 ↗","pri")}${x.vpn_url?lkA(x.vpn_url,"经 VPN 打开 ↗","ghost"):""}</div></div>`).join("")}</div>`+
  `<p class="sub" style="margin:12px 0 0">链接在新窗口打开，账号在对应网站登录，本工具不保存这些网站的密码。${j.warning?" ⚠ "+esc(j.warning):""}</p>`}
 document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(!window.__lk){window.__lk=1;loadLinks()}loadNetworkState()});
+// ---- 新版本提醒：不弹窗、不强制，只在「更多」里显示，并在导航上加一个小圆点 ----
+let UPD=null;
+function updAuto(){try{return localStorage.getItem("jlu-update-auto")!=="off"}catch(_){return true}}
+function updRender(j,manual){const s=$("#upd-s"),go=$("#upd-go"),nav=document.querySelector('nav button[data-t="sz"]');if(j&&j.current)$("#upd-v").textContent=j.current;const has=!!(j&&j.has_update&&j.latest);go.hidden=!has;if(has)go.href=j.url;let seen=null;try{seen=localStorage.getItem("jlu-update-seen")}catch(_){}if(nav)nav.classList.toggle("upd-dot",has&&seen!==j.latest);if(has)s.innerHTML=`当前版本 v${esc(j.current)} · <b style="color:var(--pri)">有新版本 v${esc(j.latest)}</b>，可随时下载，不更新也能照常使用。`;else if(manual)s.textContent=j&&j.unavailable?`当前版本 v${j.current||""} · 暂时查不到新版本信息，稍后再试`:`当前版本 v${j&&j.current||""} · 已是最新版本`}
+async function updCheck(manual){try{const r=await fetch("/api/update"+(manual?"?force=1":""));const j=await r.json();UPD=j;updRender(j,manual)}catch(_){if(manual)$("#upd-s").textContent="暂时查不到新版本信息，稍后再试"}}
+$("#upd-auto").checked=updAuto();$("#upd-auto").onchange=e=>{try{localStorage.setItem("jlu-update-auto",e.target.checked?"on":"off")}catch(_){}if(!e.target.checked)document.querySelector('nav button[data-t="sz"]').classList.remove("upd-dot")};
+$("#upd-chk").onclick=()=>{$("#upd-s").textContent="正在检查…";updCheck(true)};
+document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(UPD&&UPD.has_update&&UPD.latest){try{localStorage.setItem("jlu-update-seen",UPD.latest)}catch(_){}document.querySelector('nav button[data-t="sz"]').classList.remove("upd-dot")}});
+setTimeout(()=>{if(updAuto())updCheck(false);else fetch("/api/update?local=1").then(r=>r.json()).then(j=>updRender(j,false)).catch(()=>{})},4000);
+
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
 load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});
 // ---- 应用内登录（统一身份认证：账号密码 → 微信验证码；图形验证码由服务端自动识别，界面不显示） ----
 let LG={step:"pw"};
 function lgErr(m){$("#lge").textContent=m||"";const v=$("#lgvpn");if(v&&!m){v.hidden=true;v.innerHTML=""}}
-function lgVpnHint(j){const v=$("#lgvpn");if(!v)return;const url=j&&j.vpn_url;v.hidden=false;v.innerHTML=url?`连不上教务或统一认证时，请先在浏览器打开 <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">校园 VPN</a> 登录，连上后再点「登录」重试。本工具不会代填 VPN 账号。`:`连不上教务或统一认证时，请先到「更多 → 校园服务」打开校园 VPN 并登录，连上后再点「登录」重试。本工具不会代填 VPN 账号。`;}
+function lgVpnHint(j,opts){const v=$("#lgvpn");if(!v)return;opts=opts||{};if(opts.canConnectVpn){v.hidden=false;v.innerHTML="统一认证已通过，教务直连不可达。请点下方「通过应用内 WebVPN 继续」，无需重发验证码；校外请改用「校外 WebVPN」登录。";return;}const url=j&&j.vpn_url;v.hidden=false;v.innerHTML=url?`连不上教务或统一认证时，请先在浏览器打开 <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">校园 VPN</a> 登录，连上后再点「登录」重试。本工具不会代填 VPN 账号。`:`连不上教务或统一认证时，请先到「更多 → 校园服务」打开校园 VPN 并登录，连上后再点「登录」重试。本工具不会代填 VPN 账号。`;}
 function lgView(){$("#lg2").hidden=LG.step==="pw";$("#lg3").hidden=LG.step!=="code";$("#lgo").textContent=LG.step==="pw"?"登录":LG.step==="cap"?(LG.retry?"重新发送":"发送微信验证码"):"完成登录"}
 const PW_MASK="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
 function lgAcc(list){const box=$("#lga");box.innerHTML="";LG.acc=list||[];const cur=$("#lgu").value.trim();box.hidden=!LG.acc.length;LG.acc.forEach(u=>{const s=document.createElement("span");if(u===cur)s.className="on";const b=document.createElement("button");b.type="button";b.textContent=u;b.onclick=()=>{$("#lgu").value=u;$("#lgp").value=PW_MASK;lgSync();$("#lgp").focus()};const x=document.createElement("button");x.type="button";x.className="x";x.textContent="×";x.title="删除该账号及其保存的密码";x.setAttribute("aria-label","删除账号 "+u);x.onclick=async()=>{if(!confirm("删除已保存的账号 "+u+"（连同密码）？"))return;try{const j=await (await fetch("/api/login/accounts/"+encodeURIComponent(u),{method:"DELETE"})).json();if($("#lgu").value.trim()===u)$("#lgu").value=j.accounts&&j.accounts[0]||"";lgAcc(j.accounts||[]);toast("已删除 "+u)}catch(_){toast("删除失败")}};s.append(b,x);box.append(s)});const a=document.createElement("button");a.type="button";a.className="add";a.textContent="＋ 其他账号";a.onclick=()=>{$("#lgu").value="";$("#lgp").value="";lgSync();$("#lgu").focus()};if(LG.acc.length)box.append(a)}
 function lgSync(){const u=$("#lgu").value.trim();const has=(LG.acc||[]).includes(u);if(has){if(!$("#lgp").value||$("#lgp").value===PW_MASK)$("#lgp").value=PW_MASK;$("#lgp").placeholder=""}else{if($("#lgp").value===PW_MASK)$("#lgp").value="";$("#lgp").placeholder="密码"}document.querySelectorAll("#lga span").forEach(s=>s.classList.toggle("on",s.firstChild.textContent===u))}
 $("#lgu").addEventListener("input",lgSync);$("#lgp").addEventListener("focus",e=>{if(e.target.value===PW_MASK)e.target.select()});
 let LOGGED=false;function lgInfo(ok){LOGGED=!!ok;if(ok)gradeSessionState="ok";const i=$("#lginfo");if(i)i.textContent=ok?"✓ 已保存教务登录会话，请按当前网络选择校园网直连或校外 WebVPN。":gradeSessionState==="expired"?"登录会话已过期，请选择当前网络对应的方式重新登录；本地成绩单仍可计算。":"请选择当前网络对应的方式，登录后可同步课表、成绩和学业数据；也可离线导入成绩单。";syncLoginChoice()}
-async function openLogin(target){if(LOGIN_MODE===null)await loadNetworkState();target=target==="vpn"||target==="jwxt"?target:LOGIN_MODE==="webvpn"?"vpn":"jwxt";LG={step:"pw",target};$("#lg-vpn-continue").hidden=true;$("#lgt").textContent=target==="vpn"?"校外登录 · WebVPN 与教务":"校园网登录 · 直连教务";lgErr("");$("#lgp").value="";$("#lgok").hidden=!LOGGED;if(LOGGED)$("#lgp").value=PW_MASK;$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username;lgAcc(j.accounts||(j.saved_username?[j.saved_username]:[]));lgSync();const ok=LOGGED||!!(j.session&&j.session.logged_in);if(ok)LOGGED=true;$("#lgok").hidden=!ok;if((ok||(LG.acc||[]).includes($("#lgu").value.trim()))&&(!$("#lgp").value||$("#lgp").value===PW_MASK))$("#lgp").value=PW_MASK}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
+async function openLogin(target){if(LOGIN_MODE===null)await loadNetworkState();target=target==="vpn"||target==="jwxt"?target:LOGIN_MODE==="webvpn"?"vpn":"jwxt";LG={step:"pw",target};if(typeof loadDeviceNet==="function"){renderDeviceNet();loadDeviceNet()}const _vc=$("#lg-vpn-continue");_vc.hidden=true;if(_vc.classList)_vc.classList.remove("pri");const _go=$("#lgo");if(_go.classList){_go.classList.add("pri");_go.classList.remove("ghost")};$("#lgt").textContent=target==="vpn"?"校外登录 · WebVPN 与教务":"校园网登录 · 直连教务";lgErr("");$("#lgp").value="";$("#lgok").hidden=!LOGGED;if(LOGGED)$("#lgp").value=PW_MASK;$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username;lgAcc(j.accounts||(j.saved_username?[j.saved_username]:[]));lgSync();const ok=LOGGED||!!(j.session&&j.session.logged_in);if(ok)LOGGED=true;$("#lgok").hidden=!ok;if((ok||(LG.acc||[]).includes($("#lgu").value.trim()))&&(!$("#lgp").value||$("#lgp").value===PW_MASK))$("#lgp").value=PW_MASK}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
 async function lgPost(path,body){let r;try{r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})})}catch(e){let alive=false;try{alive=(await fetch("/api/session",{cache:"no-store"})).ok}catch(_){}LG.retry=true;throw new Error(alive?"和 SuperJLU 后台的连接中断了（教务响应慢或被安全软件拦截），请再点一次重试":"SuperJLU 后台已经退出，请从托盘或开始菜单重新打开 SuperJLU 后再登录")}let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false){const error=new Error(j.error||("HTTP "+r.status));error.canConnectVpn=!!j.can_connect_vpn;error.payload=j;throw error}return j}
 async function lgDone(result={}){$("#login").close();LOGIN_MODE=LG.target==="vpn"?"webvpn":"direct";await loadNetworkState();await loadLinks();if(LG.target==="vpn"&&!result.jwxt_ready){const message=result.warning||"WebVPN 已连接，但教务尚未验证，请重试登录或同步。";loginFeedback(message);toast(message,true);return}loginFeedback("");lgInfo(true);D=Object.assign(D||{},{session_expired:false,session:null,needs_bootstrap:true});try{renderSession()}catch(_){}try{await fullRefresh({toastOnStart:"登录成功，正在刷新各页面…",okToast:null,failPrefix:"登录成功，刷新失败："})}catch(_){}await loadNetworkState()}
 async function lgSendCode(){const j=await lgPost((LG.target==="vpn"?"/api/vpn/login/":"/api/login/")+"send_code",{});if(j.step==="code_sent"){LG.step="code";LG.retry=false;toast("微信验证码已发送");return true}LG.step="cap";LG.retry=true;lgErr(j.error||"发送失败，请重试");return false}
@@ -680,7 +776,7 @@ async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.di
  if(LG.step==="pw"){const j=await lgPost((LG.target==="vpn"?"/api/vpn/login/":"/api/login/")+"start",{username:$("#lgu").value.trim(),password:$("#lgp").value===PW_MASK?"":$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value=PW_MASK;if(j.step==="success"){await lgDone(j);return}LG.step="cap";LG.retry=false;lgView();b.textContent="发送中…";await lgSendCode()}
  else if(LG.step==="cap"){await lgSendCode()}
  else{const j=await lgPost((LG.target==="vpn"?"/api/vpn/login/":"/api/login/")+"verify",{wechat_code:$("#lgw").value.trim()});if(j.step==="success"){await lgDone(j);return}lgErr(j.error||"验证码不正确")}
-}catch(e){lgErr(e.message);$("#lg-vpn-continue").hidden=!e.canConnectVpn;const p=e.payload||{};if(p.vpn_hint||p.network||/无法连接|连接超时|网络连接|NetworkError|校外|VPN/i.test(e.message||"")){try{lgVpnHint(p)}catch(_){}}if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
+}catch(e){lgErr(e.message);const cont=$("#lg-vpn-continue");cont.hidden=!e.canConnectVpn;if(e.canConnectVpn){if(b.classList){b.classList.remove("pri");b.classList.add("ghost")}if(cont.classList)cont.classList.add("pri");}else{if(cont.classList)cont.classList.remove("pri");if(b.classList){b.classList.add("pri");b.classList.remove("ghost")}}const p=e.payload||{};if(e.canConnectVpn||p.vpn_hint||p.network||/无法连接|连接超时|网络连接|NetworkError|校外|VPN/i.test(e.message||"")){try{lgVpnHint(p,{canConnectVpn:!!e.canConnectVpn})}catch(_){}}if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
 $("#lg-vpn-continue").onclick=async()=>{const b=$("#lg-vpn-continue");b.disabled=true;try{const result=await api("/api/network/vpn",{});LG.target="vpn";await lgDone(result);fetch("/api/login/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{})}catch(e){lgErr(e.message)}finally{b.disabled=false}};
 $("#lgf").addEventListener("submit",lgSubmit);
 $("#lgx").onclick=()=>{fetch((LG.target==="vpn"?"/api/vpn/login/cancel":"/api/login/cancel"),{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});$("#login").close()};
@@ -688,3 +784,9 @@ async function startLogin(){await openLogin()}
 $("#lgbtn").onclick=startLogin;
 </script></body></html>
 """
+
+# 「更多 → 外部浏览器」卡片暂时下线（指定浏览器尚未实现，禁用的按钮只会让同学困惑）。
+# 代码与原生接口保留，后续按 docs/TODO-browser-selection.md 实现后把开关改回 True 即可恢复。
+SHOW_BROWSER_PREFERENCES = False
+BROWSER_PREFERENCES_CARD = '<div class="card" id="browser-preferences" hidden><h2>外部浏览器</h2><p class="sub" id="browser-preferences-hint">指定浏览器功能暂不可用，外链使用系统默认浏览器。</p><button class="btn ghost" id="browser-settings-button" type="button" disabled aria-describedby="browser-preferences-hint">更换浏览器（暂不可用）</button></div>'
+PAGE = PAGE.replace("<!--BROWSER_PREFERENCES_CARD-->", BROWSER_PREFERENCES_CARD if SHOW_BROWSER_PREFERENCES else "", 1)

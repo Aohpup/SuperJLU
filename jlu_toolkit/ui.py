@@ -4,6 +4,7 @@
   schedule.csv / grades.csv / exams.csv —— 由「从教务刷新」或 CLI fetch 生成
   schemes.json  —— 命名绩点方案（保研/综测…）：{"方案名": ["学期|课程", ...]}
   settings.json —— {"first_monday": "YYYY-MM-DD"}
+  schedule_overlay.json —— 同学自己对课表的增/删/改（刷新不覆盖，见 overlay.py）
 所有数据只在本机；网页不引用任何外部资源。
 """
 from __future__ import annotations
@@ -80,9 +81,109 @@ class Store:
             return
         self.p(name).write_text(json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
 
+    # ---- 课表：读取统一走 timetable.py（App / iCal / 命令行 / MCP 同一份） ----
+    OVERLAY = "schedule_overlay.json"
+    OVERLAY_UNDO = "schedule_overlay.undo.json"
+
+    def jwxt_courses(self) -> list[core.Course]:
+        """教务原课表（schedule.csv，刷新整份覆盖；不含调课）。"""
+        from . import timetable
+        return timetable.jwxt_courses(self.root)
+
+    def adjustments_enabled(self) -> bool:
+        from . import timetable
+        return timetable.adjustments_enabled(self.root)
+
+    def _adjustments(self) -> list:
+        from . import timetable
+        return timetable.load_adjustments(self.root, self.current_term())
+
+    def official_courses(self) -> list[core.Course]:
+        """教务课表 + 调停课（设置开着时）；个人修改叠加在它之上。"""
+        cs = self.jwxt_courses()
+        if self.adjustments_enabled():
+            adjs = self._adjustments()
+            if adjs:
+                from . import adjust
+                cs, _ = adjust.apply_adjustments(cs, adjs)
+        return cs
+
+    def timetable_view(self) -> dict:
+        from . import timetable
+        return timetable.view(self.root)
+
+    def adjustments_info(self, v: Optional[dict] = None) -> dict:
+        from . import adjust
+        v = v or self.timetable_view()
+        d = self._json("schedule_adjustments.json", None)
+        d = d if isinstance(d, dict) else {}
+        adjs = v["adjustments"]
+        applied = v["applied"]
+        if not v["enabled"] and adjs:  # 关着时也告诉同学「有几处」
+            applied = sum(1 for n in adjust.apply_adjustments(self.jwxt_courses(), adjs)[1] if not n["skipped"])
+        return {"enabled": v["enabled"], "count": len(adjs), "applied": applied,
+                "cancelled": sum(1 for r in v["rows"] if r["src"] == "cancelled"),
+                "fetched_at": d.get("fetched_at") if adjs else None}
+
+    def current_term(self) -> str:
+        from . import timetable
+        return timetable.current_term(self.root)
+
+    def overlay_doc(self) -> dict:
+        from . import timetable
+        return timetable.load_overlay(self.root, self.current_term())
+
+    def overlay_ops(self) -> list:
+        from . import overlay as ov
+        return ov.term_ops(self.overlay_doc(), self.current_term())
+
+    def schedule_view(self) -> tuple[list[dict], list[dict]]:
+        v = self.timetable_view()
+        return v["rows"], v["issues"]
+
     def courses(self) -> list[core.Course]:
-        f = self.p("schedule.csv")
-        return core.load_courses(str(f)) if f.exists() else []
+        """同学看到的课表 = 教务 + 调停课 + 个人修改（日历导出等都用这个；不含灰显的停课）。"""
+        from . import timetable
+        return timetable.courses(self.root)
+
+    def overlay_action(self, body: dict) -> None:
+        from . import overlay as ov
+        action, oid = body.get("action"), str(body.get("id") or "")
+        with self.lock:
+            term = self.current_term()
+            doc = self.overlay_doc()
+            ops = ov.term_ops(doc, term)
+            official = self.official_courses()
+            undo = self.p(self.OVERLAY_UNDO)
+            if action in ("add", "hide", "edit"):
+                ops = ops + [ov.make_op(action, body, official)]
+            elif action == "update":
+                ops = ov.update(ops, oid, body)
+            elif action == "remove":
+                ops = ov.remove(ops, oid)
+            elif action == "ack":
+                ops = ov.ack(ops, oid, official)
+            elif action == "detach":
+                ops = ov.detach(ops, oid)
+            elif action == "reset":  # 恢复教务原样（本学期）；留一份可撤销
+                if not ops:
+                    return
+                self._write_json(self.OVERLAY_UNDO, {"term": term, "ops": ops})
+                self._write_json(self.OVERLAY, ov.with_ops(doc, term, []))
+                return
+            elif action == "undo_reset":
+                prev = self._json(self.OVERLAY_UNDO, None)
+                if not isinstance(prev, dict) or prev.get("term") != term:
+                    raise ValueError("没有可以撤销的恢复操作")
+                ops = ov.term_ops(ov.normalize({"terms": {term: prev.get("ops")}}), term) + ops
+            elif action == "import":
+                doc = ov.merge_import(doc, ov.normalize(body.get("doc"), term))
+                ops = ov.term_ops(doc, term)
+            else:
+                raise ValueError("未知的课表修改操作")
+            self._write_json(self.OVERLAY, ov.with_ops(doc, term, ops))
+            if undo.exists():
+                undo.unlink()
 
     def grades(self) -> list[core.Grade]:
         f = self.p("grades.csv")
@@ -218,9 +319,24 @@ class Store:
         with self.lock:
             s = self.settings()
             s.update({k: v for k, v in upd.items() if k in ("first_monday",)})
+            if "apply_adjustments" in upd:
+                s["apply_adjustments"] = bool(upd["apply_adjustments"])
             if "grade_help_seen" in upd:
                 s["grade_help_seen"] = bool(upd["grade_help_seen"])
             self._write_json("settings.json", s)
+
+    def _schedule_snapshot(self) -> dict:
+        v = self.timetable_view()
+        rows, issues = v["rows"], v["issues"]
+        doc, term = self.overlay_doc(), self.current_term()
+        ops = doc["terms"].get(term, [])
+        undo = self._json(self.OVERLAY_UNDO, None)
+        return {"courses": rows, "schedule_issues": issues, "schedule_ops": ops,
+                "schedule_adjust": self.adjustments_info(v),
+                "schedule_edits": len(ops), "schedule_term": term,
+                "schedule_other_terms": sum(len(v) for k, v in doc["terms"].items() if k != term),
+                "schedule_can_undo_reset": isinstance(undo, dict) and undo.get("term") == term
+                                           and bool(undo.get("ops"))}
 
     def snapshot(self, source: str = "jwxt") -> dict:
         gs = self.grades()
@@ -235,7 +351,7 @@ class Store:
         mtimes = [self.p(n).stat().st_mtime for n in ("schedule.csv", "grades.csv", "exams.csv")
                   if self.p(n).exists()]
         return {
-            "courses": [c.__dict__ for c in self.courses()],
+            **self._schedule_snapshot(),
             "grades": self.grade_records(source),
             "grade_source": "import" if imported else "jwxt",
             "has_imported_grades": saved_import is not None,
@@ -788,13 +904,18 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             if self._oa_sub("GET"):
                 return
             if path in ("/", "/index.html"):
-                return self._send(200, PAGE.encode(), "text/html; charset=utf-8",
+                from . import ui_prefs
+                page = PAGE.replace("<script>/* 首帧前应用主题", ui_prefs.inline_script(store.root) + "<script>/* 首帧前应用主题", 1)
+                return self._send(200, page.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
             if path in ("/favicon.svg", "/favicon.ico"):  # SuperJLU 官方标志
                 from importlib import resources
                 data = resources.files("jlu_toolkit").joinpath("data", path[1:]).read_bytes()
                 ctype = "image/svg+xml" if path.endswith(".svg") else "image/x-icon"
                 return self._send(200, data, ctype)
+            if path == "/api/prefs":  # 界面偏好（主题等），落盘防止端口变化丢失
+                from . import ui_prefs
+                return self._json({"ok": True, "prefs": ui_prefs.load(store.root)})
             if path == "/api/sessions":  # 各校园站点会话状态（只读本地）
                 from . import sessions
                 return self._json(sessions.all_status())
@@ -804,6 +925,11 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             if path == "/api/network/state":
                 from . import webvpn
                 return self._json(webvpn.state())
+            if path == "/api/network/device":
+                # 只读：Android 默认网络是 Wi-Fi 还是移动数据；桌面端恒为 unknown、无提示
+                from . import netstatus
+                info = netstatus.status()
+                return self._json({"ok": True, **info, "direct_hint": netstatus.direct_hint(info)})
             if path == "/api/oa/webvpn":
                 # Navigation only: never forwards app cookies or user input.
                 self.send_response(302)
@@ -827,6 +953,13 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                         return self._json(r or {"ok": False, "error": "本地没有这条通知"}, 200 if r else 404)
                 except ValueError as e:
                     return self._json({"ok": False, "error": str(e)}, 400)
+            if path == "/api/update":  # 只读：查询公开发布页是否有新版本，不强制更新
+                from . import update_check
+                from urllib.parse import parse_qs, urlsplit
+                q = parse_qs(urlsplit(self.path).query)
+                if q.get("local") == ["1"]:  # 关闭自动检查时只显示本机版本，不联网
+                    return self._json({"ok": True, "current": update_check.__version__, "has_update": False})
+                return self._json(update_check.check(force=q.get("force") == ["1"]))
             if path == "/api/links":
                 from . import sso
                 j = campus_links_api()
@@ -846,6 +979,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 from urllib.parse import parse_qs
                 source = parse_qs(self.path.partition("?")[2]).get("grade_source", ["jwxt"])[0]
                 return self._json(store.snapshot("import" if source == "import" else "jwxt"))
+            if path == "/api/schedule/overlay":  # 备份导出：只含同学自己的修改
+                return self._send(200, json.dumps(store.overlay_doc(), ensure_ascii=False, indent=1).encode(),
+                                  "application/json; charset=utf-8",
+                                  {"Content-Disposition": 'attachment; filename="superjlu-schedule-edits.json"'})
             if path == "/api/grades/colleges":
                 links = json.loads((Path(__file__).parent / "data" / "grade_colleges.json").read_text(encoding="utf-8"))
                 return self._json({"ok": True, "links": [x for x in links["links"] if _link_ok(x["url"])]})
@@ -865,7 +1002,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 return
             try:
                 body = self._body()
-                if self.path == "/api/schemes":
+                if self.path == "/api/prefs":
+                    from . import ui_prefs
+                    return self._json({"ok": True, "prefs": ui_prefs.update(store.root, body.get("set"), body.get("remove"))})
+                elif self.path == "/api/schemes":
                     store.save_scheme(body.get("name", ""), body.get("include") or [], body.get("base"),
                                       body.get("grade_source", "jwxt"))
                 elif self.path == "/api/grades/import":
@@ -879,6 +1019,9 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                                        **store.snapshot()})
                 elif self.path == "/api/schemes/delete":
                     store.delete_scheme(body.get("name", ""))
+                elif self.path == "/api/schedule/overlay":
+                    store.overlay_action(body)
+                    return self._json({"ok": True, **store._schedule_snapshot()})
                 elif self.path == "/api/settings":
                     store.save_settings(body)
                 elif self.path == "/api/rooms":
@@ -906,9 +1049,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                         return self._json({"ok": True, **login.start(body.get("username", ""), body.get("password", ""),
                                                                      body.get("remember", True) is not False)})
                     except jwxt.NetworkError as e:
+                        from . import netstatus
                         return self._json({
                             "ok": False,
-                            "error": str(e),
+                            "error": netstatus.with_direct_hint(str(e)),
                             "network": True,
                             "vpn_hint": True,
                             "vpn_url": vpn_portal_url(),
@@ -934,10 +1078,18 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                     try:
                         return self._json(oa_refresh_api(store, body))
                     except jwxt.NetworkError as e:
-                        return self._json({"ok": False, "error": f"学校 OA 直连暂不可用，校外可通过学校 WebVPN 访问原站；当前应用内 VPN 仅支持教务，OA 同步仍走直连。学院通知可独立更新。{e}",
+                        from . import sessions, webvpn
+                        app_vpn = webvpn.mode() == "webvpn" and bool(sessions.load_cookies("vpn"))
+                        if app_vpn:
+                            err = (f"学校 OA 经应用内 WebVPN 暂不可用；也可在浏览器打开学校 WebVPN 查看原站。"
+                                   f"学院通知可独立更新。{e}")
+                        else:
+                            err = (f"学校 OA 直连暂不可用；校外可在「更多 → 登录」选择「校外 WebVPN」后重试，"
+                                   f"或在浏览器打开学校 WebVPN 查看原站。学院通知可独立更新。{e}")
+                        return self._json({"ok": False, "error": err,
                                            "offline": True, "error_kind": e.kind,
                                            "campus_required": False, "browser_vpn_supported": True,
-                                           "app_vpn_supported": False}, 502)
+                                           "app_vpn_supported": app_vpn}, 502)
                     except jwxt.SessionExpiredError:
                         raise
                     except jwxt.LoginError as e:

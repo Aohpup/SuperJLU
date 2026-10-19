@@ -59,9 +59,9 @@ def _main(argv=None):
     st.add_argument("--check", action="store_true", help="访问教务一次确认会话是否仍有效")
     st.add_argument("--json", action="store_true")
 
-    a = sub.add_parser("ics", help="课表 CSV 导出 iCal")
-    a.add_argument("csv")
-    a.add_argument("--first-monday", required=True)
+    a = sub.add_parser("ics", help="课表导出 iCal（与 App 同一份：教务 + 调停课 + 个人修改）")
+    a.add_argument("csv", nargs="?", help="schedule.csv 路径；省略则读数据目录")
+    a.add_argument("--first-monday", help="第一周周一 YYYY-MM-DD；省略则用校历/设置")
     a.add_argument("-o", default="schedule.ics")
 
     b = sub.add_parser("gpa", help="计算绩点；或 --probe 扫描教务官方绩点接口")
@@ -71,8 +71,8 @@ def _main(argv=None):
     b.add_argument("-o", "--out", help="--probe 报告路径")
     b.add_argument("--debug", action="store_true")
 
-    c = sub.add_parser("today", help="查看某周某天的课")
-    c.add_argument("csv")
+    c = sub.add_parser("today", help="查看某周某天的课（与 App 同一份课表）")
+    c.add_argument("csv", nargs="?", help="schedule.csv 路径；省略则读数据目录")
     c.add_argument("--week", type=int, required=True)
     c.add_argument("--weekday", type=int, required=True)
 
@@ -141,8 +141,8 @@ def _main(argv=None):
         help="禁用图形验证码自动识别，始终手动输入",
     )
 
-    e = sub.add_parser("exams", help="查看考试倒计时（读取 exams.csv）")
-    e.add_argument("csv", nargs="?", default="exams.csv")
+    e = sub.add_parser("exams", help="查看考试倒计时（默认读 App 数据目录；也可给 exams.csv 路径）")
+    e.add_argument("csv", nargs="?", default="")
     e.add_argument("--all", action="store_true", help="包含已结束的考试")
 
     ex_p = sub.add_parser(
@@ -213,6 +213,16 @@ def _main(argv=None):
     oa.add_argument("--json", action="store_true", help="ASCII JSON 输出")
     oa.add_argument("--debug", action="store_true")
 
+    adj = sub.add_parser("adjustments", help="本学期调课/停课记录（只读 App 数据目录）")
+    adj.add_argument("--json", action="store_true")
+    co = sub.add_parser("college", help="学院官网通知（只读）；不带参数列出栏目")
+    co.add_argument("college", nargs="?", default="", help="栏目 id 或学院名，如 计算机")
+    co.add_argument("-k", "--keyword", default="")
+    co.add_argument("-n", "--limit", type=int, default=20)
+    co.add_argument("--refresh", action="store_true", help="联网抓取学院官网公开页面（无需登录）")
+    co.add_argument("--json", action="store_true")
+    rt = sub.add_parser("route", help="查看或切换教务网络方式：direct 校园网直连 / webvpn 校外 WebVPN")
+    rt.add_argument("mode", nargs="?", choices=("direct", "webvpn"))
     u = sub.add_parser("ui", help="启动本地网页界面（127.0.0.1，手机浏览器打开）")
     u.add_argument("--port", type=int, default=8765)
     u.add_argument("--demo", action="store_true", help="使用示例数据（不读写真实数据目录）")
@@ -221,9 +231,14 @@ def _main(argv=None):
 
     x = p.parse_args(argv)
     if x.cmd == "ics":
-        open(x.o, "w", encoding="utf-8").write(
-            core.to_ics(core.load_courses(x.csv), x.first_monday)
-        )
+        from . import timetable, ui
+        root = timetable.root_for_csv(x.csv) if x.csv else ui.data_dir()
+        st = ui.Store(root)
+        fm = x.first_monday or st.first_monday()
+        if not fm:
+            print("缺少开学日期：请加 --first-monday YYYY-MM-DD，或先同步校历", file=sys.stderr); sys.exit(2)
+        cs = timetable.courses_from_csv(x.csv) if x.csv else timetable.courses(root)
+        open(x.o, "w", encoding="utf-8").write(core.to_ics(cs, fm, st.periods() or None))
         print(f"已导出 {x.o}")
     elif x.cmd == "gpa":
         if x.probe:
@@ -242,7 +257,9 @@ def _main(argv=None):
                 return
             print(json.dumps(core.gpa(core.load_grades(x.csv), x.term), ensure_ascii=False))
     elif x.cmd == "today":
-        for k in core.courses_on(core.load_courses(x.csv), x.week, x.weekday):
+        from . import timetable, ui
+        cs = timetable.courses_from_csv(x.csv) if x.csv else timetable.courses(ui.data_dir())
+        for k in core.courses_on(cs, x.week, x.weekday):
             print(f"第{k.start}-{k.end}节 {k.name} @ {k.location}")
     elif x.cmd == "sessions":
         _cmd_sessions(x)
@@ -254,6 +271,12 @@ def _main(argv=None):
         _cmd_fetch(x)
     elif x.cmd == "exams":
         _cmd_exams(x)
+    elif x.cmd == "adjustments":
+        _cmd_adjustments(x)
+    elif x.cmd == "college":
+        _cmd_college(x)
+    elif x.cmd == "route":
+        _cmd_route(x)
     elif x.cmd == "explore":
         _cmd_explore(x)
     elif x.cmd == "ui":
@@ -484,6 +507,34 @@ def _ensure_login(x) -> jwxt.JwxtClient:
     return client
 
 
+def _fetch_merged_schedule(client, term, out_path):
+    """命令行导出与 App 同一份课表：教务 + 调停课（按 App 设置）+ 个人修改（读数据目录，不写）。
+
+    导出目标正好是数据目录的 schedule.csv 时只写教务原样（App 读取时再合并，避免合并两次）。"""
+    from pathlib import Path
+    from . import adjust, overlay as ov, timetable, ui
+    term = term or client.current_semester() or ""
+    raw = client.fetch_schedule(term)
+    root = ui.data_dir()
+    try:
+        if Path(out_path).expanduser().resolve() == (root / "schedule.csv").resolve():
+            return raw, "（教务原样；App 读取时合并调课和个人修改）"
+    except OSError:
+        pass
+    enabled = timetable.adjustments_enabled(root)
+    adjs: list = []
+    if enabled:
+        try:
+            adjs = adjust.fetch_adjustments(client, term)
+        except Exception as e:  # noqa: BLE001 —— 调课读不到不影响课表导出
+            print(f"（调课信息暂未获取：{type(e).__name__}，按教务原课表导出）", file=sys.stderr)
+    ops = ov.term_ops(timetable.load_overlay(root, term), term)
+    v = timetable.build(raw, adjs, ops, enabled)
+    for i in v["issues"]:
+        print(f"（个人修改提示：{i.get('name', '')} {i['message']}）", file=sys.stderr)
+    return timetable.to_courses(v["rows"]), f"（调课 {v['applied']} 处，个人修改 {len(ops)} 处）"
+
+
 def _cmd_fetch(x):
     if x.probe:
         print(json.dumps(jwxt.probe_reachability(), ensure_ascii=False, indent=2))
@@ -497,9 +548,9 @@ def _cmd_fetch(x):
 
     try:
         if x.what in ("all", "schedule"):
-            courses = client.fetch_schedule(x.term)
+            courses, extra = _fetch_merged_schedule(client, x.term, x.schedule_out)
             jwxt.export_courses_csv(courses, x.schedule_out)
-            print(f"课表 {len(courses)} 门 → {x.schedule_out}")
+            print(f"课表 {len(courses)} 门{extra} → {x.schedule_out}")
         if x.what in ("all", "grades"):
             grades = client.fetch_grades()
             jwxt.export_grades_csv(grades, x.grades_out)
@@ -539,12 +590,67 @@ def _print_countdown(exs, show_all: bool = False) -> None:
 
 
 def _cmd_exams(x):
+    if not x.csv:
+        from . import ui
+        exs = ui.Store(ui.data_dir()).exams()
+        if not exs:
+            if (ui.data_dir() / "exams.csv").exists():
+                print("已经同步过考试安排，目前没有安排考试。")
+                return
+            print("本地还没有考试安排；请先用新版 SuperJLU App 登录同步一次，或运行 jlu-toolkit sync", file=sys.stderr)
+            sys.exit(1)
+        _print_countdown(exs, show_all=x.all)
+        return
     try:
         exs = exmod.load_exams(x.csv)
     except FileNotFoundError:
         print(f"找不到 {x.csv}；先运行 jlu-toolkit fetch --what exams", file=sys.stderr)
         sys.exit(1)
     _print_countdown(exs, show_all=x.all)
+
+
+def _cmd_adjustments(x):
+    from . import mcp_tools
+    d = mcp_tools.adjustments()
+    if x.json:
+        print(json.dumps(d, ensure_ascii=False, indent=1)); return
+    if "error" in d:
+        print(d["error"], file=sys.stderr); sys.exit(1)
+    if not d.get("synced", True):
+        print(d["note"]); return
+    print(f"学期 {d['term'] or '未知'}：{d['count']} 条调整，自动应用{'已开' if d['auto_apply'] else '已关'}")
+    f = lambda s: f"{s['weekday_text']} 第{s['periods']}节 第{','.join(map(str, s['weeks']))}周" if s else "—"
+    for i in d["items"]:
+        loc = f" @ {i['new_location']}" if i["new_location"] else ""
+        print(f"  [{i['kind']}] {i['course']}：{f(i['before'])} → {f(i['after'])}{loc}")
+
+
+def _cmd_college(x):
+    from . import mcp_tools
+    d = mcp_tools.college_notices(x.college, x.keyword, x.limit, x.refresh)
+    if x.json:
+        print(json.dumps(d, ensure_ascii=False, indent=1)); return
+    if "error" in d:
+        print(d["error"], file=sys.stderr); sys.exit(1)
+    if not x.college:
+        for c in d["channels"]:
+            print(f"  {c['id']}  {c['name']}（本地 {c['cached']} 条）")
+        print(d["hint"]); return
+    print(f"{d.get('channel_name') or d['channel']}（更新于 {d.get('fetched_at') or '—'}）")
+    for i in d["items"]:
+        print(f"  {i['time'][:10]}  {i['title']}  {i.get('url', '')}")
+    if d.get("hint"):
+        print(d["hint"])
+
+
+def _cmd_route(x):
+    from . import webvpn
+    names = {"direct": "校园网直连", "webvpn": "校外 WebVPN"}
+    if x.mode:
+        webvpn.set_mode(x.mode)
+        print(f"已切换为：{names[x.mode]}（与桌面 App 共用这一设置）")
+    else:
+        print(f"当前网络方式：{names[webvpn.mode()]}")
 
 
 def _cmd_explore(x):
