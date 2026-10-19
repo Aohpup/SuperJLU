@@ -134,10 +134,10 @@ SuperJLU 也提供命令行工具、本地 API，以及接入 AI 助手（MCP）
 
 ## 特别鸣谢
 
--
-**[@Aohpup](https://github.com/Aohpup)**：成绩加权分析、模板与导入等（[PR #44](https://github.com/Runa-Asahi/SuperJLU/pull/44) / [#45](https://github.com/Runa-Asahi/SuperJLU/pull/45)、[#67](https://github.com/Runa-Asahi/SuperJLU/pull/67)、[#81](https://github.com/Runa-Asahi/SuperJLU/pull/81)）、
-[#85](https://github.com/Runa-Asahi/SuperJLU/pull/85)）。 **[@Dramadan-wow](https://github.com/Dramadan-wow)**：微信小程序端（[PR #82](https://github.com/Runa-Asahi/SuperJLU/pull/82)）。小程序相关需求请联系 `dramadan070925@qq.com`；其他项目参与者与小程序无关。
-- 
+- **[@Aohpup](https://github.com/Aohpup)**：成绩加权分析、模板与导入等（[PR #44](https://github.com/Runa-Asahi/SuperJLU/pull/44)、[#45](https://github.com/Runa-Asahi/SuperJLU/pull/45)、[#67](https://github.com/Runa-Asahi/SuperJLU/pull/67)、[#81](https://github.com/Runa-Asahi/SuperJLU/pull/81)、[#85](https://github.com/Runa-Asahi/SuperJLU/pull/85)）。
+- **[@Dramadan-wow](https://github.com/Dramadan-wow)**：微信小程序端（[PR #82](https://github.com/Runa-Asahi/SuperJLU/pull/82)）。
+
+> 小程序相关需求请联系 `dramadan070925@qq.com`；其他项目参与者与小程序无关。
 
 欢迎关注他们的 GitHub ⭐
 
