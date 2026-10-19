@@ -99,7 +99,7 @@
 
 ## 给开发者和极客
 
-SuperJLU 也提供命令行工具、本地 API，以及接入 AI 助手（MCP）的能力，可以让 Claude、Cursor 等直接回答「我明天有什么课」「这学期绩点多少」。安装方式和全部命令见 [命令行与开发者文档](docs/cli.md)。
+SuperJLU 也能接入 AI 助手（MCP），让 Claude、Cursor 等 AI 助手直接回答「我明天有什么课」「这学期绩点多少」；也可以用命令行查课表、成绩和考试。命令行和 MCP 的安装与使用步骤见 [命令行与开发者文档](docs/cli.md#命令行与-mcp-快速上手)。
 
 本地修改源码后，Windows 可运行仓库内的 `启动SuperJLU.cmd`（需先安装 uv），或在项目目录执行 `uv run --extra captcha python start_local.py`。启动器会运行当前源码、自动打开浏览器，并打印实际地址；8765 已占用时使用其他端口，测试时以本次输出的网址为准。使用期间请保留启动窗口，按 Ctrl+C 停止。
 
