@@ -95,7 +95,7 @@ def test_session_status_lifecycle(cfg, mem):
     assert st["state"] == "ok" and st["logged_in"] and st["storage"].startswith("keyring")
     jwxt.mark_session_expired("test")
     st = jwxt.session_status()
-    assert st["state"] == "expired" and st["needs_login"] and st["session_expired"] is True and "更多 → 账号" in st["message"] and "force-login" not in st["message"]
+    assert st["state"] == "expired" and st["needs_login"] and st["session_expired"] is True and "更多 → 登录" in st["message"] and "force-login" not in st["message"]
 
 
 def test_post_form_redirect_to_login_raises_typed_error(cfg, mem, monkeypatch):
@@ -105,7 +105,7 @@ def test_post_form_redirect_to_login_raises_typed_error(cfg, mem, monkeypatch):
     monkeypatch.setattr(c, "_request", lambda *a, **k: (200, html, "https://cas.jlu.edu.cn/tpass/login?service=x", b""))
     with pytest.raises(jwxt.SessionExpiredError) as ei:
         c._post_form("/jwapp/x.do", {}, "ref")
-    assert "更多 → 账号" in str(ei.value) and "force-login" not in str(ei.value)
+    assert "更多 → 登录" in str(ei.value) and "force-login" not in str(ei.value)
     assert isinstance(ei.value, jwxt.LoginError)  # 旧的 except LoginError 依然能接住
     assert jwxt.session_status()["state"] == "expired"
 

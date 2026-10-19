@@ -28,8 +28,11 @@ class _Stop(Exception):
 
 
 class LoginFlow:
-    def __init__(self, client_factory: Callable[[], "jwxt.JwxtClient"] = jwxt.JwxtClient):
+    def __init__(self, client_factory: Callable[[], "jwxt.JwxtClient"] = jwxt.JwxtClient,
+                 service: str = jwxt.CAS_SERVICE, on_success=None):
         self._factory = client_factory
+        self._service = service
+        self._on_success = on_success
         self._lock = threading.Lock()
         self._client: Optional[jwxt.JwxtClient] = None
         self._cred: Optional[tuple[str, str]] = None
@@ -45,15 +48,19 @@ class LoginFlow:
 
     def _finish(self) -> dict:
         c = self._client
-        try:
-            c.bootstrap_emap_apps()
-        except jwxt.JwxtError:
-            pass
-        c.save_session()
+        result = {}
+        if self._on_success is not None:
+            result = self._on_success(c)
+        else:
+            try:
+                c.bootstrap_emap_apps()
+            except jwxt.JwxtError:
+                pass
+            c.save_session()
         if self._remember and self._cred:
             jwxt.save_credentials(*self._cred)
         self._reset()
-        return {"step": "success"}
+        return {"step": "success", **result}
 
     def _reset(self) -> None:
         self._client = None
@@ -101,7 +108,8 @@ class LoginFlow:
             self._client = self._factory()
             self._cred = (username, password)
             self._remember = bool(remember)
-            step = self._client.login_password(username, password)
+            step = (self._client.login_password(username, password) if self._service == jwxt.CAS_SERVICE
+                    else self._client.login_password(username, password, service=self._service))
             if step == jwxt.LoginStep.SUCCESS:
                 return self._finish()
             if step == jwxt.LoginStep.NEED_SECOND_FACTOR:

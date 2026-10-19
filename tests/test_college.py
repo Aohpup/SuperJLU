@@ -34,14 +34,14 @@ def test_offsite_links_dropped():
     assert [i["title"] for i in items] == ["好"]
 
 
-def test_unreachable_is_need_campus(tmp_path):
+def test_unreachable_preserves_cache_without_assuming_campus_requirement(tmp_path):
     def boom(url):
         raise TimeoutError("t")
     r = college.fetch("ccst-xytz", getter=boom)
-    assert r["ok"] is False and r["status"] == "need_campus" and "校园网" in r["hint"]
+    assert r["ok"] is False and r["status"] == "network_error" and "本地通知" in r["hint"]
     college.save(tmp_path, r)
     s = ui.oa_notices_api(ui.Store(tmp_path), {"category": "ccst-xytz"})
-    assert s["status"] == "need_campus" and s["count"] == 0
+    assert s["status"] == "network_error" and s["count"] == 0
 
 
 def test_ui_api(tmp_path):

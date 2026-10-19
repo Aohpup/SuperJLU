@@ -27,7 +27,7 @@
    "url": "https://icourses.jlu.edu.cn/xsxk/profile/index.html",
    "purpose": "本科生选课系统",
    "login": "学号 + 密码登录（选课开放时段可用）",
-   "campus_only": true
+   "campus_only": false
   },
   {
    "id": "ilearn",

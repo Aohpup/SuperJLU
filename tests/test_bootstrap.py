@@ -25,7 +25,7 @@ def test_ui_page_auto_refresh_hooks():
     assert "needs_bootstrap" in page
     assert "async function fullRefresh" in page
     assert "登录成功，正在刷新各页面" in page
-    assert 'await lgDone()' in page
+    assert 'await lgDone(j)' in page
 
 
 def test_encrypted_completion_counts_as_cached(tmp_path):

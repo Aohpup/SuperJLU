@@ -116,6 +116,8 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left}
 tbody tr:last-child td{border-bottom:0}
 th{font-size:12px;color:var(--sub);font-weight:600;position:sticky;top:58px;background:var(--card)}
+#network-report th{position:static;white-space:nowrap}#network-report td{vertical-align:top;font-size:12px;overflow-wrap:anywhere}#network-report td:first-child{min-width:90px}#network-report td:nth-child(2){white-space:nowrap}#network-report th:nth-child(2){width:60px}
+#network-route{display:flex;flex-direction:column;gap:4px;margin:16px 0 8px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--pri) 35%,var(--line));border-radius:var(--r-sm);background:var(--pri2);color:var(--pri)}.login-route-label{font-size:12px;font-weight:600}#network-route-current{font-size:23px;font-weight:750;line-height:1.4}#network-route-last{font-size:12px;font-weight:600}.room-error{margin-top:14px;flex-wrap:wrap}.room-error[hidden]{display:none}.room-error>div{flex:1;min-width:180px}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
 tbody tr:hover td{background:var(--card2)}
 tr.off td{opacity:.42}
@@ -165,6 +167,7 @@ dialog#login label{display:block;margin:10px 0 4px;font-size:13px;opacity:.8}
 dialog#login input[type=text],dialog#login input[type=password]{width:100%;box-sizing:border-box}
 dialog#login .cap{display:flex;gap:8px;align-items:center}dialog#login .cap img{height:40px;image-rendering:pixelated;border-radius:6px;cursor:pointer;background:#fff}
 dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
+dialog#login .lg-pass-ok{display:block;color:var(--ok);font-size:15px;font-weight:700;letter-spacing:.2px}
 dialog#login .vpn-hint{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--pri2);color:var(--txt);font-size:13px;line-height:1.5}
 dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 #oa-ch{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
@@ -225,24 +228,22 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
- <div class="seg" id="rmode"><button class="on" data-m="date">按日期查询</button><button data-m="week">按周次查询</button><button data-m="study">按自习时间</button></div>
  <div class="rgrid">
   <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
   <label>教学楼<select id="rb"><option value="">全部</option></select></label>
   <label>教室类型<select id="rt"><option value="">全部</option></select></label>
-  <label class="m-date">空闲日期<input type="date" id="rd"></label>
-  <label class="m-week" hidden>周次<input id="rw" placeholder="如 6 或 6-8"></label>
+  <label>空闲日期<input type="date" id="rd"></label>
+  <label>周次<input id="rw" placeholder="如 6 或 6-8"></label>
   <label title="隐藏实验室、机房、语音室等专用教室" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rhs" checked>屏蔽特殊教室</label>
-  <label class="m-week" hidden>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
-  <label class="m-study" hidden>自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
+  <label>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
   <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
-  <div class="m-study" id="rst-presets" hidden style="grid-column:1/-1;display:none;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
   <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
   <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
  </div>
  <details id="rmore"><summary>更多条件</summary><div class="rgrid" id="rextra"><p class="sub">加载中…</p></div></details>
  <div class="row" style="margin-top:8px"><span style="flex:1"></span><button class="btn pri" id="rq">查询</button></div>
  <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
+ <div class="banner err room-error" id="room-error" role="alert" hidden><div><b>查询未成功</b><p class="sub" id="room-error-message"></p></div><button class="btn" id="room-switch-login" type="button">检查登录方式</button></div>
  <div class="card" id="rres" hidden></div></section>
 <section class="tab" id="t-ks"><div class="card"><h2>考试倒计时</h2><div id="exams"></div></div></section>
 <section class="tab" id="t-oa">
@@ -257,7 +258,7 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
   <div class="seg" id="oa-ch" style="margin:12px 0 0;overflow-x:auto" hidden></div>
   <div id="oa-manage" hidden></div>
   <div class="oaf" style="margin-top:12px"><input id="oa-kw" type="search" placeholder="搜索标题或发文单位（本地筛选）"><select id="oa-dept"><option value="">全部单位</option></select></div>
-  <p class="sub" style="margin:10px 0 0" id="oa-src">数据来自校内 OA 与已选学院官网，只读、保存在本机。校外访问 OA 请先连接校园 VPN。</p></div>
+  <p class="sub" style="margin:10px 0 0" id="oa-src">学校 OA 可经校园网或学校 VPN 访问；校外可登录<a href="/api/oa/webvpn" target="_blank" rel="noopener noreferrer">学校 WebVPN ↗</a>查看原站。当前应用内 VPN 仅用于教务，OA 通知同步仍走直连。学院官网通知可直接访问，独立更新；数据只读并保存在本机。</p></div>
  <div class="card" id="oa-box" style="padding:8px 14px"><div class="state"><div class="spin"></div><b>正在读取通知…</b></div></div>
  <div class="card" id="oa-sub"><h2>关键词订阅</h2><div id="oa-sub-b"><p class="sub" style="margin:0">读取中…</p></div></div>
  </div>
@@ -269,18 +270,20 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
  <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
   <details><summary class="sub">手动覆盖开学日期（一般不需要）</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details></div>
  <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
- <div class="card"><h2>账号</h2><p class="sub" id="lginfo">登录统一身份认证后才能刷新课表和成绩。</p><button class="btn pri" id="lgbtn" type="button">登录 / 重新登录</button></div>
+ <div class="card"><h2>登录</h2><p class="sub" id="lginfo">请选择当前网络对应的登录方式。</p><div class="seg" role="group" aria-label="连接方式"><button type="button" data-login-mode="direct" class="on" aria-pressed="true">校园网直连</button><button type="button" data-login-mode="webvpn" aria-pressed="false">校外 WebVPN</button></div><p class="sub" id="login-method-hint">已连接校园网时使用，直接登录并同步教务数据。</p><button class="btn pri" id="lgbtn" type="button">登录并同步</button><div id="network-route" role="status"><span class="login-route-label">当前连接方式</span><strong id="network-route-current">校园网直连</strong><span id="network-route-last" hidden></span></div><p class="sub">选择其他方式后，登录成功才会切换。</p><p class="sub" id="login-feedback" role="status" hidden></p><p class="sub" id="login-network-help">教务仅支持校园网内直连；家庭 Wi-Fi、手机流量或热点请选「校外 WebVPN」登录。OA、校园网缴费及学在吉大等校内服务，校外也需通过学校 VPN 访问。</p></div>
+ <div class="card"><h2>连接检测</h2><p class="sub" id="network-summary" role="status">检查学校入口的直连情况；不会更改登录方式或验证账号是否已登录。</p><button class="btn" id="network-check">检测连接</button><div id="network-report" aria-live="polite"></div></div>
+ <div class="card" id="browser-preferences" hidden><h2>外部浏览器</h2><p class="sub" id="browser-preferences-hint">指定浏览器功能暂不可用，外链使用系统默认浏览器。</p><button class="btn ghost" id="browser-settings-button" type="button" disabled aria-describedby="browser-preferences-hint">更换浏览器（暂不可用）</button></div>
  <div class="card"><h2>导出</h2><p class="sub">导出 iCal 后可导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
- <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据只保存在本机，不会上传到任何服务器。“刷新”使用已保存的登录会话；会话失效时请到「账号」重新登录。</p></div>
+ <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据只保存在本机，不会上传到任何服务器。“刷新”使用已保存的登录会话；会话失效时请到「登录」重新登录。</p></div>
 </section>
 </main>
 <nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>☰</b>更多</button></nav>
 <dialog id="login" aria-labelledby="lgt"><form method="dialog" id="lgf" autocomplete="on">
- <h2 id="lgt" style="margin:0 0 4px">登录统一身份认证</h2><p class="sub" id="lgok" style="margin:0 0 6px;color:var(--ok);font-weight:600" hidden>✓ SuperJLU 已登录，如需切换账号可直接修改</p><p class="sub" style="margin:0">账号是邮箱前缀（不是学号）。登录状态加密保存在本机，下次打开不用重登。</p>
+ <h2 id="lgt" style="margin:0 0 4px">登录统一身份认证</h2><p class="sub" id="lgok" style="margin:0 0 6px;color:var(--ok);font-weight:600" hidden>✓ SuperJLU 已登录，如需切换账号可直接修改</p><p class="sub" style="margin:0">账号是邮箱前缀（不是学号）。登录状态加密保存在本机，下次打开不用重登。</p><button type="button" class="btn" id="lg-vpn-continue" hidden>通过应用内 WebVPN 继续</button>
  <div id="lg1"><label for="lgu">账号</label><div id="lga" class="lga" hidden></div><input type="text" id="lgu" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="邮箱前缀">
   <label for="lgp">密码</label><input type="password" id="lgp" autocomplete="current-password" placeholder="密码">
   <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lgr" checked>记住我（会话失效时免输密码）</label></div>
- <div id="lg2" hidden><p class="sub" id="lgh" style="margin:8px 0 0">账号密码已通过。微信验证码会发到「智慧吉大」的「统一身份认证」消息；若未收到可点「重新发送」。</p>
+ <div id="lg2" hidden><p id="lgh" style="margin:8px 0 0"><b class="lg-pass-ok">✓ 账号密码已通过</b><span class="sub" style="display:block;margin-top:4px">微信验证码会发到「智慧吉大」的「统一身份认证」消息；若未收到可点「重新发送」。</span></p>
   <div id="lg3" hidden><label for="lgw">微信验证码（到「智慧吉大」查看「统一身份认证」消息）</label><input type="text" id="lgw" inputmode="numeric" autocomplete="one-time-code"></div></div>
  <p class="err" id="lge" role="alert"></p>
  <div class="vpn-hint" id="lgvpn" hidden></div>
@@ -304,7 +307,7 @@ const COLORS=["#3b6fd4","#d4573b","#2e9e6a","#9b51e0","#d48a1e","#1f8fa8","#c241
 let D=null, week=1, include=new Set(), current="__postgraduate__", dirty=false, gradeSessionState="unknown";
 function toast(m,error=false){const t=$("#toast"),el=document.createElement("div");el.className="toast-item"+(error?" bad":"");el.setAttribute("role",error?"alert":"status");el.textContent=m;t.append(el);while(t.children.length>3)t.firstElementChild.remove();setTimeout(()=>el.classList.add("leaving"),3650);setTimeout(()=>el.remove(),4000)}
 function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
-async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.session_expired===true){if(!j.site||j.site==="jwxt"){gradeSessionState="expired";lgInfo(false)}if(Array.isArray(j.courses)||Array.isArray(j.grades)||Array.isArray(j.exams)||j.completion||j.calendar){const next=gradeRefreshSnapshot(D,j);D=Object.assign({},next,{session_expired:true,offline:true,cached_at:j.cached_at||next.cached_at||next.updated},j.site?{session_site:String(j.site)}:{});try{renderAll()}catch(_){}}else{D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});if(D&&((D.courses||[]).length||(D.grades||[]).length)&&!D.offline){D.offline=true;D.cached_at=D.cached_at||D.updated}try{renderSession();renderOffline()}catch(_){}}}if(j&&j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j;if(!r.ok||j.ok===false){const err=new Error(j.error||(r.status===401?"登录会话已过期，请在「更多 → 账号」中重新登录":r.status));err.payload=j;throw err}return j}
+async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.network_error===true&&$("#network-summary"))$("#network-summary").textContent="最近请求失败："+j.error;if(j&&j.session_expired===true){if(!j.site||j.site==="jwxt"){gradeSessionState="expired";lgInfo(false)}if(Array.isArray(j.courses)||Array.isArray(j.grades)||Array.isArray(j.exams)||j.completion||j.calendar){const next=gradeRefreshSnapshot(D,j);D=Object.assign({},next,{session_expired:true,offline:true,cached_at:j.cached_at||next.cached_at||next.updated},j.site?{session_site:String(j.site)}:{});try{renderAll()}catch(_){}}else{D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});if(D&&((D.courses||[]).length||(D.grades||[]).length)&&!D.offline){D.offline=true;D.cached_at=D.cached_at||D.updated}try{renderSession();renderOffline()}catch(_){}}}if(j&&j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j;if(!r.ok||j.ok===false){const err=new Error(j.error||(r.status===401?"登录会话已过期，请在「更多 → 登录」中重新登录":r.status));err.payload=j;err.connectionAction=!!(j.connection_action||j.session_expired);throw err}return j}
 function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
 function maxWeek(){return Math.max((D.calendar&&D.calendar.total_weeks)||16,...D.courses.flatMap(c=>c.weeks))}
 function color(name){let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;return COLORS[h%COLORS.length]}
@@ -520,32 +523,15 @@ document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTh
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=()=>fullRefresh({}).catch(()=>{});
-/* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期 */
+/* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期。
+   空教室只保留一套表单，不再按日期/周次/自习时间切换。 */
 function rdToWeek(){const v=$("#rd").value;if(!v)return;const d=new Date(v+"T00:00:00");$("#rwd").value=String(d.getDay()||7);if(D&&D.first_monday){const w=weekOf(d);if(w>=1)$("#rw").value=String(w)}}
 function weekToRd(){const fm=D&&D.first_monday,raw=($("#rw").value||"").trim(),wm=/^(\d+)/.exec(raw),w=wm?+wm[1]:0,wd=+$("#rwd").value;if(!fm||!(w>=1)||!(wd>=1))return;const d=new Date(fm+"T00:00:00");d.setDate(d.getDate()+(w-1)*7+wd-1);$("#rd").value=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}
 $("#rd").addEventListener("change",rdToWeek);$("#rw").addEventListener("change",weekToRd);$("#rwd").addEventListener("change",weekToRd);
-/* 自习时间 ↔ 空闲节次：按教务节次表（或内置默认）互相换算，查询仍走节次参数。
-   DEF_PERIODS 必须在顶部 IIFE 调用 periodsToStudy() 之前初始化，否则 const TDZ 会让整页脚本中断，#boot 永远不消失。 */
-const DEF_PERIODS={1:["08:00","08:45"],2:["08:55","09:40"],3:["10:00","10:45"],4:["10:55","11:40"],5:["13:30","14:15"],6:["14:25","15:10"],7:["15:30","16:15"],8:["16:25","17:10"],9:["18:30","19:15"],10:["19:25","20:10"],11:["20:20","21:05"]};
-function periodMap(){const p=D&&D.periods;return(p&&Object.keys(p).length)?p:DEF_PERIODS}
-function periodsToStudy(){const a=+$("#rp1").value,b=+$("#rp2").value,m=periodMap(),x=m[a]||m[String(a)],y=m[b]||m[String(b)];if(x&&x[0])$("#rst").value=x[0];if(y&&y[1])$("#ret").value=y[1]}
-function studyToPeriods(){const s=$("#rst").value,e=$("#ret").value,m=periodMap();if(!s||!e||s>=e)return;let lo=null,hi=null;Object.keys(m).forEach(k=>{const n=+k,t=m[k];if(!(n>=1)||!t||t.length<2)return;if(t[0]<e&&t[1]>s){if(lo===null||n<lo)lo=n;if(hi===null||n>hi)hi=n}});if(lo!==null){$("#rp1").value=lo;$("#rp2").value=hi}}
-let _rSync=false;
-(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek();periodsToStudy()})();
-$("#rp1").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value;periodsToStudy()}finally{_rSync=false}});
-$("#rp2").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value;periodsToStudy()}finally{_rSync=false}});
-$("#rst").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
-$("#ret").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
-document.querySelectorAll("#rst-presets [data-sp]").forEach(b=>b.onclick=()=>{const[a,c]=b.dataset.sp.split("-").map(Number);$("#rp1").value=a;$("#rp2").value=c;periodsToStudy()});
-let RM="date",RR=[],RS={k:"name",d:1};
-function setRoomMode(m){RM=m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x.dataset.m===m));
- document.querySelectorAll(".m-date").forEach(e=>e.hidden=!(m==="date"||m==="study"));
- document.querySelectorAll(".m-week").forEach(e=>e.hidden=m!=="week");
- const studyOn=m==="study";document.querySelectorAll(".m-study").forEach(e=>e.hidden=!studyOn);
- const pre=$("#rst-presets");if(pre){pre.style.display=studyOn?"flex":"none"}
- if(m==="week")rdToWeek();else{weekToRd();rdToWeek()}
- if(studyOn)periodsToStudy()}
-document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>setRoomMode(b.dataset.m));
+(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek()})();
+$("#rp1").addEventListener("change",()=>{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value});
+$("#rp2").addEventListener("change",()=>{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value});
+let RR=[],RS={k:"name",d:1};
 const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
 async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
 // 六个校区固定（教务代码表 01–06，已与真实 campuses.json 核对），不再需要「加载」
@@ -557,23 +543,25 @@ function pickCampus(code){$("#rc").value=code;lsSet(RCKEY,code);document.querySe
 $("#rcs").innerHTML=CAMPUSES.map(c=>`<button type="button" role="radio" data-c="${esc(c.code)}">${esc(c.name.replace(/校区$/,""))}</button>`).join("");
 document.querySelectorAll("#rcs button").forEach(b=>b.onclick=()=>pickCampus(b.dataset.c));
 let RMETA=false;
-async function roomsInit(){const last=lsGet(RCKEY);pickCampus(CAMPUSES.some(c=>c.code===last)?last:CAMPUSES[0].code);if(RMETA)return;RMETA=true;try{const t=await api("/api/rooms/types",{});$("#rt").innerHTML=opts(t.types,"全部");const f=await api("/api/rooms/fields",{});$("#rextra").innerHTML=f.fields.map(x=>`<label>${esc(x.caption||x.name)}<input data-f="${esc(x.name)}" placeholder="${esc(x.name)}"></label>`).join("")||'<p class="sub">元数据中没有其它检索字段</p>'}catch(e){RMETA=false;toast(e.message)}}
+async function roomsInit(){const last=lsGet(RCKEY);pickCampus(CAMPUSES.some(c=>c.code===last)?last:CAMPUSES[0].code);if(RMETA)return;RMETA=true;try{const t=await api("/api/rooms/types",{});$("#rt").innerHTML=opts(t.types,"全部");const f=await api("/api/rooms/fields",{});$("#rextra").innerHTML=f.fields.map(x=>`<label>${esc(x.caption||x.name)}<input data-f="${esc(x.name)}" placeholder="${esc(x.name)}"></label>`).join("")||'<p class="sub">元数据中没有其它检索字段</p>'}catch(e){RMETA=false;showRoomFailure(e)}}
 document.querySelector('nav button[data-t="js"]').addEventListener("click",()=>{if(!window.__rm){window.__rm=1;roomsInit()}});
-const RCOLS=[["campus","学校校区"],["building","教学楼"],["kind","教室类型"],["name","教室名称"],["free_date","空闲日期"],["free_periods","空闲节次"],["free_time","空闲时间"],["seats","上课座位数"],["exam_seats","考试座位数"]];
+const RCOLS=[["building","教学楼"],["kind","教室类型"],["name","教室名称"],["seats","上课座位数"],["exam_seats","考试座位数"]];
 function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats","exam_seats"].includes(k);const rs=[...RR].sort((a,b)=>{const x=a[RS.k],y=b[RS.k];return RS.d*(n(RS.k)?(+x||0)-(+y||0):String(x).localeCompare(String(y),"zh"))});
  const head=j.mode==="week"?`第${esc(j.weeks)}周 周${"一二三四五六日"[j.weekday-1]}`:`${esc(j.date)} <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]}</span>`;
  box.innerHTML=`<h2>${head} 第${j.periods[0]}-${j.periods[1]}节 <span class="sub">· ${rs.length} 间${j.hidden_special?" · 已屏蔽特殊教室 "+j.hidden_special+" 间":""}</span></h2>`+(rs.length?`<div style="overflow-x:auto"><table class="rt"><thead><tr>${RCOLS.map(([k,l])=>`<th data-k="${k}">${l}${RS.k===k?(RS.d>0?" ▲":" ▼"):""}</th>`).join("")}</tr></thead><tbody>${rs.map(r=>`<tr>${RCOLS.map(([k])=>`<td>${esc(r[k]||"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`:'<p class="empty">没有符合条件的空教室</p>');
  box.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;RS=RS.k===k?{k,d:-RS.d}:{k,d:1};renderRooms(j)})}
-$("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
- if(RM==="study")studyToPeriods();const qMode=RM==="study"?"date":RM;const j=await api("/api/rooms",{mode:qMode,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
+function showRoomFailure(error){const original=String(error?.message||"查询未成功，请稍后重试。"),technical=/HTTP\s*\d{3}|尝试：|cxkxjs|Traceback/i.test(original)||original.length>160;$("#room-error-message").textContent=(technical?"空教室查询失败，请检查网络或在「更多 → 登录」切换登录方式后重试。":original)+(RR.length?" 已保留上次查询结果。":"");$("#room-switch-login").hidden=!(technical||error?.connectionAction);$("#room-error").hidden=false}
+$("#room-switch-login").onclick=()=>{document.querySelector('nav button[data-t="sz"]').click();location.hash="sz";$("#network-route").scrollIntoView({behavior:"smooth",block:"center"})};
+$("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";$("#room-error").hidden=true;try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
+ const j=await api("/api/rooms",{mode:"date",campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){showRoomFailure(e)}finally{b.disabled=false;b.textContent="查询"}};
 let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null,OAPREFS=null,OACAT=null,OAMANAGE=false,OAPICK=null;
 function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
 function oaLink(u,label){try{const p=new URL(u||"");if(!/^https?:$/.test(p.protocol))return"";const h=p.hostname;if(!(h==="jlu.edu.cn"||h.endsWith(".jlu.edu.cn")||/\.(jdyy\.cn|jdey\.com\.cn|zrlyyy\.com)$/.test(h)))return""}catch(_){return""}return`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`}
-function renderOA(){const box=$("#oa-box");queueMicrotask(()=>{if(OA&&OA.offline===true&&!box.querySelector(".offl"))box.insertAdjacentHTML("afterbegin",offlineBadge(OA))});if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">校外请先连接校园 VPN 再点“更新”。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
+function renderOA(){const box=$("#oa-box");queueMicrotask(()=>{if(OA&&OA.offline===true&&!box.querySelector(".offl"))box.insertAdjacentHTML("afterbegin",offlineBadge(OA))});if(OAERR&&!OA){box.innerHTML=`<div class="state"><b>读取通知失败</b>${esc(OAERR)}<div class="sub" style="margin-top:6px">学校 OA 可经校园网或学校 VPN 访问，当前应用内 OA 同步仍走直连；学院通知可独立更新。</div><div style="margin-top:14px"><button class="btn pri" id="oa-retry">重试</button></div></div>`;$("#oa-retry").onclick=loadOA;return}
  if(!OA)return;const all=OA.items||[];const ds=[...new Set(all.map(i=>i.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh"));const sel=$("#oa-dept");sel.innerHTML='<option value="">全部单位</option>'+ds.map(d=>`<option${d===OAQ.dept?" selected":""}>${esc(d)}</option>`).join("");
- const needNet=OA.source==="college"&&OA.status==="need_campus";
+ const needNet=OA.source==="college"&&["network_error","need_campus"].includes(OA.status);
  const linkOnly=OA.source==="college"&&OA.status==="link_only";
- const hint=needNet?`<div class="state" style="padding:10px 4px"><b>需校园网</b>${esc(OA.hint||"")}</div>`:"";
+ const hint=needNet?`<div class="state" style="padding:10px 4px"><b>学院官网暂未连通</b>${esc(OA.hint||"")}</div>`:"";
  $("#oa-meta").textContent=all.length?`${all.length} 条${OA.fetched_at?" · 更新于 "+String(OA.fetched_at).replace("T"," ").slice(0,16):""}`:(linkOnly?"官网入口":"");
  if(linkOnly){const u=OA.source_url||"";box.innerHTML=`<div class="state"><b>打开学院官网查看通知</b><div class="sub" style="margin-top:6px">${esc(OA.hint||"该学院暂不支持自动抓取列表。")}</div><div style="margin-top:14px">${oaLink(u,"打开官网 ↗")||'<span class="sub">暂无可用链接</span>'}</div></div>`;return}
  if(!all.length){box.innerHTML=hint||(OA.source==="college"?`<div class="state"><b>还没有消息</b>点右上角「更新」从学院官网取第一页。</div>`:`<div class="state"><b>还没有通知</b>点右上角「更新」从校内通知取第一页。</div>`);return}
@@ -616,11 +604,11 @@ async function openOA(id){const v=$("#oa-detail-v");$("#oa-list-v").hidden=true;
  let i;try{i=(await api("/api/oa/notice?id="+encodeURIComponent(id))).item}catch(e){v.innerHTML=`<div class="card"><button class="btn ghost" id="oa-back">‹ 返回</button><div class="state"><b>读取失败</b>${esc(e.message)}</div></div>`;$("#oa-back").onclick=oaBack;return}
  const atts=i.attachments||[];
  v.innerHTML=`<div class="card oad"><div class="row" style="margin-bottom:10px"><button class="btn ghost" id="oa-back">‹ 返回</button><span class="sp"></span>${oaLink(i.url,i.source==="college"?"打开原文 ↗":"在 OA 中打开 ↗")}</div><h2>${i.top?'<span class="pin">置顶</span>':""}${esc(i.title)}</h2><div class="sub">${esc(i.dept||"未知单位")} · ${esc(i.time||"")}</div>`+
-  (i.text?`<div class="body">${esc(i.text)}</div>`:`<div class="state" style="padding:28px 8px">${i.source==="college"?"<b>学院新闻只保存标题</b>点“打开原文”在新标签页查看。":"<b>本地没有正文</b>点“在 OA 中打开”查看原文（校外需先连接 vpn.jlu.edu.cn）。"}</div>`)+
+  (i.text?`<div class="body">${esc(i.text)}</div>`:`<div class="state" style="padding:28px 8px">${i.source==="college"?"<b>学院新闻只保存标题</b>点“打开原文”在新标签页查看。":"<b>本地没有正文</b>点“在 OA 中打开”查看原文；校外可校外登录 · WebVPN 与教务 访问 OA。"}</div>`)+
   (atts.length?`<h2 style="font-size:15px;margin-top:6px">附件 <span class="sub">${atts.length}</span></h2><div class="att">${atts.map(a=>`<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">📎 ${esc(a.name)}</a>`).join("")}</div>`:"")+`</div>`;
  $("#oa-back").onclick=oaBack}
 $("#oa-kw").oninput=e=>{OAQ.kw=e.target.value;renderOA()};$("#oa-dept").onchange=e=>{OAQ.dept=e.target.value;renderOA()};
-$("#oa-ref").onclick=async()=>{const b=$("#oa-ref");b.disabled=true;b.textContent="更新中…";try{OA=await api("/api/oa/refresh",{category:OACH});OAERR="";renderOA();toast(OA.status==="need_campus"?"连不上学院官网，需校园网":OA.status==="link_only"?"请打开学院官网查看":"已更新第一页")}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="⟳ 更新"}};
+$("#oa-ref").onclick=async()=>{const b=$("#oa-ref");b.disabled=true;b.textContent="更新中…";try{OA=await api("/api/oa/refresh",{category:OACH});OAERR="";renderOA();const bad=["network_error","need_campus"].includes(OA.status);toast(OA.status==="link_only"?"请打开学院官网查看":bad?"学院官网暂未连通，已保留本地通知":"已更新第一页",bad)}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="⟳ 更新"}};
 async function subReq(m,path,body){const r=await fetch(path,body?{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{method:m});let j=null;try{j=await r.json()}catch(_){}if(r.status===404&&(!j||j.ok===undefined)){const e=new Error("NOAPI");e.noapi=true;throw e}if(!r.ok||!j||j.ok===false)throw new Error((j&&j.error)||("HTTP "+r.status));return j}
 const OACHN=id=>((OACHS||[]).find(c=>c.id===id)||{}).name||id;
 async function loadSubs(){const b=$("#oa-sub-b");let j;try{j=await subReq("GET","/api/oa/subscriptions?limit=20")}catch(e){b.innerHTML=e.noapi?`<p class="sub" style="margin:0">当前版本还没有订阅功能，请更新 SuperJLU 后再试。</p>`:`<p class="sub" style="margin:0">读取订阅失败：${esc(e.message)}</p>`;return}
@@ -635,7 +623,14 @@ document.querySelector('nav button[data-t="oa"]').addEventListener("click",()=>{
 let SITES=null,LINKN={};const SITEN=id=>(SITES&&SITES[id]&&SITES[id].name)||LINKN[id]||id;
 const SST={ok:["已登录","done"],expired:["已过期","miss"],missing:["未登录","chip"],unknown:["未知","chip"]};
 async function loadSessions(){try{const r=await fetch("/api/sessions");if(!r.ok)return null;const j=await r.json();if(!j||j.ok===false||!Array.isArray(j.sites))return null;const m={};j.sites.forEach(s=>{if(s&&s.id)m[s.id]=s});return m}catch(_){return null}}
-function stBadge(s){if(!s)return"";const t=SST[s.state]||SST.unknown;return`<span class="${t[1]}" title="${esc(s.message||"")}">${t[0]}</span>`}
+function stBadge(s){if(!s)return"";const t=s.external_browser?["浏览器状态未知","chip"]:s.state==="ok"&&s.id!=="vpn"?["会话已保存","done"]:SST[s.state]||SST.unknown;return`<span class="${t[1]}" title="${esc(s.message||"")}">${t[0]}</span>`}
+let LOGIN_MODE=null,ACTIVE_LOGIN_MODE="direct";
+function syncLoginChoice(){const selected=LOGIN_MODE||ACTIVE_LOGIN_MODE;document.querySelectorAll("[data-login-mode]").forEach(b=>{const on=b.dataset.loginMode===selected;b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on))});$("#login-method-hint").textContent=selected==="webvpn"?"未连接校园网时使用；同一次认证会连接应用内 WebVPN 并验证教务，无需先登录直连教务。":"已连接校园网时使用，直接登录并同步教务数据。";$("#lgbtn").textContent=selected!==ACTIVE_LOGIN_MODE?"切换方式并登录":LOGGED?"重新登录 / 切换账号":"登录并同步"}
+document.querySelectorAll("[data-login-mode]").forEach(b=>b.onclick=()=>{LOGIN_MODE=b.dataset.loginMode;syncLoginChoice()});
+function loginFeedback(message){const p=$("#login-feedback");p.textContent=message||"";p.hidden=!message}
+function renderNetworkState(state){ACTIVE_LOGIN_MODE=state.mode==="webvpn"?"webvpn":"direct";if(LOGIN_MODE===null)LOGIN_MODE=ACTIVE_LOGIN_MODE;const last=state.last_connection?.route;$("#network-route-current").textContent=ACTIVE_LOGIN_MODE==="webvpn"?"校外 WebVPN":"校园网直连";$("#network-route-last").hidden=!last;$("#network-route-last").textContent=last?"最近成功连接："+(last==="webvpn"?"WebVPN":"直连"):"";syncLoginChoice()}
+async function loadNetworkState(){try{renderNetworkState(await api("/api/network/state"))}catch(_){}$("#browser-preferences").hidden=!/SuperJLU-Android/.test(navigator.userAgent)}
+$("#network-check").onclick=async()=>{const b=$("#network-check");b.disabled=true;$("#network-summary").textContent="正在检测实际 HTTPS 入口，不读取账号或改变登录状态…";try{const data=await api("/api/network/check",{});$("#network-summary").textContent="检测于 "+data.checked_at.replace("T"," ")+" · Python "+data.python+" · "+data.tls_library;$("#network-report").innerHTML='<div style="overflow-x:auto"><table><thead><tr><th>服务</th><th>连接</th><th>说明</th></tr></thead><tbody>'+data.services.map(s=>`<tr><td>${esc(s.name)}<br><span class="sub">${esc(s.host)}:${s.port}</span></td><td>${s.reachable?"可达":"未连通"}</td><td class="sub">${esc(s.error||("HTTP "+s.http_status+" · "+(s.transport==="system"?"系统 HTTPS":"Python HTTPS")+" · "+s.milliseconds+"ms"))}</td></tr>`).join("")+'</tbody></table></div><p class="sub">检测不验证登录状态。学校 OA 未连通不会影响学院通知。</p>'}catch(e){$("#network-summary").textContent=e.message}finally{b.disabled=false}};
 const LKOK=u=>{try{const p=new URL(u);return p.protocol==="https:"&&/(^|\.)jlu\.edu\.cn$/.test(p.hostname)}catch(_){return false}};
 const lkA=(u,t,c)=>LKOK(u)?`<a class="btn ${c}" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:"";
 async function loadLinks(){const b=$("#links-b");let j;try{j=await api("/api/links")}catch(e){b.innerHTML=`<p class="sub" style="margin:0">读取失败：${esc(e.message)}</p>`;return}
@@ -643,7 +638,7 @@ async function loadLinks(){const b=$("#links-b");let j;try{j=await api("/api/lin
  L.forEach(x=>{const s=S(x.id);if(!x.vpn_url&&s&&typeof s.vpn_url==="string"&&LKOK(s.vpn_url))x.vpn_url=s.vpn_url});if(!L.length){b.innerHTML='<p class="sub" style="margin:0">没有可显示的入口。</p>';return}
  b.innerHTML=`<div class="lgrid">${L.map(x=>`<div class="lk"><div class="hd"><span class="ic" aria-hidden="true">${esc(x.icon||"↗")}</span><b>${esc(x.name)}</b>${x.campus_only?'<span class="tag">校内网</span>':""}${stBadge(S(x.id))}</div>${S(x.id)&&S(x.id).checked_at?`<div class="lg">状态检查于 ${esc(String(S(x.id).checked_at).replace("T"," ").slice(0,16))}</div>`:""}<div class="sub">${esc(x.purpose||"")}</div>${x.login?`<div class="lg">🔑 ${esc(x.login)}</div>`:""}${x.campus_only&&!x.vpn_url?'<div class="lg">校外请先连接校园 VPN</div>':""}<div class="row">${x.sso_url&&/^\/api\/sso\/jump\?/.test(x.sso_url)?`<a class="btn pri" href="${esc(x.sso_url)}" target="_blank" rel="noopener" title="用已登录的统一认证直接进入">打开 ↗</a>`:lkA(x.url,"打开 ↗","pri")}${x.vpn_url?lkA(x.vpn_url,"经 VPN 打开 ↗","ghost"):""}</div></div>`).join("")}</div>`+
  `<p class="sub" style="margin:12px 0 0">链接在新窗口打开，账号在对应网站登录，本工具不保存这些网站的密码。${j.warning?" ⚠ "+esc(j.warning):""}</p>`}
-document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(!window.__lk){window.__lk=1;loadLinks()}});
+document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(!window.__lk){window.__lk=1;loadLinks()}loadNetworkState()});
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
 load().then(()=>{$("#boot").remove();fromHash()}).catch(e=>{$("#boot").innerHTML=`<div class="state"><b>加载失败</b>${esc(e.message)}<div style="margin-top:14px"><button class="btn pri" onclick="location.reload()">重试</button></div></div>`});
@@ -656,18 +651,20 @@ const PW_MASK="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
 function lgAcc(list){const box=$("#lga");box.innerHTML="";LG.acc=list||[];const cur=$("#lgu").value.trim();box.hidden=!LG.acc.length;LG.acc.forEach(u=>{const s=document.createElement("span");if(u===cur)s.className="on";const b=document.createElement("button");b.type="button";b.textContent=u;b.onclick=()=>{$("#lgu").value=u;$("#lgp").value=PW_MASK;lgSync();$("#lgp").focus()};const x=document.createElement("button");x.type="button";x.className="x";x.textContent="×";x.title="删除该账号及其保存的密码";x.setAttribute("aria-label","删除账号 "+u);x.onclick=async()=>{if(!confirm("删除已保存的账号 "+u+"（连同密码）？"))return;try{const j=await (await fetch("/api/login/accounts/"+encodeURIComponent(u),{method:"DELETE"})).json();if($("#lgu").value.trim()===u)$("#lgu").value=j.accounts&&j.accounts[0]||"";lgAcc(j.accounts||[]);toast("已删除 "+u)}catch(_){toast("删除失败")}};s.append(b,x);box.append(s)});const a=document.createElement("button");a.type="button";a.className="add";a.textContent="＋ 其他账号";a.onclick=()=>{$("#lgu").value="";$("#lgp").value="";lgSync();$("#lgu").focus()};if(LG.acc.length)box.append(a)}
 function lgSync(){const u=$("#lgu").value.trim();const has=(LG.acc||[]).includes(u);if(has){if(!$("#lgp").value||$("#lgp").value===PW_MASK)$("#lgp").value=PW_MASK;$("#lgp").placeholder=""}else{if($("#lgp").value===PW_MASK)$("#lgp").value="";$("#lgp").placeholder="密码"}document.querySelectorAll("#lga span").forEach(s=>s.classList.toggle("on",s.firstChild.textContent===u))}
 $("#lgu").addEventListener("input",lgSync);$("#lgp").addEventListener("focus",e=>{if(e.target.value===PW_MASK)e.target.select()});
-let LOGGED=false;function lgInfo(ok){LOGGED=!!ok;if(ok)gradeSessionState="ok";const i=$("#lginfo");if(i)i.textContent=ok?"✓ SuperJLU 已登录":gradeSessionState==="expired"?"登录会话已过期，重新登录后可同步教务数据；本地成绩单仍可计算。":"尚未登录，登录后可同步教务数据；也可直接导入成绩单在本地计算。";const b=$("#lgbtn");if(b)b.textContent=ok?"重新登录 / 切换账号":"立即登录"}
-async function openLogin(){LG={step:"pw"};lgErr("");const _v=$("#lgvpn");if(_v){_v.hidden=true;_v.innerHTML=""};$("#lgp").value="";$("#lgok").hidden=!LOGGED;if(LOGGED)$("#lgp").value=PW_MASK;$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username;lgAcc(j.accounts||(j.saved_username?[j.saved_username]:[]));lgSync();const ok=LOGGED||!!(j.session&&j.session.logged_in);if(ok)LOGGED=true;$("#lgok").hidden=!ok;if((ok||(LG.acc||[]).includes($("#lgu").value.trim()))&&(!$("#lgp").value||$("#lgp").value===PW_MASK))$("#lgp").value=PW_MASK}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
-async function lgPost(path,body){let r;try{r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})})}catch(e){let alive=false;try{alive=(await fetch("/api/session",{cache:"no-store"})).ok}catch(_){}LG.retry=true;throw new Error(alive?"和 SuperJLU 后台的连接中断了（教务响应慢或被安全软件拦截），请再点一次重试":"SuperJLU 后台已经退出，请从托盘或开始菜单重新打开 SuperJLU 后再登录")}let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false){const err=new Error(j.error||("HTTP "+r.status));err.payload=j;throw err}return j}
-async function lgDone(){$("#login").close();lgInfo(true);D=Object.assign(D||{},{session_expired:false,session:null,needs_bootstrap:true});try{renderSession()}catch(_){}try{await fullRefresh({toastOnStart:"登录成功，正在刷新各页面…",okToast:null,failPrefix:"登录成功，刷新失败："})}catch(_){}}
-async function lgSendCode(){const j=await lgPost("/api/login/send_code",{});if(j.step==="code_sent"){LG.step="code";LG.retry=false;toast("微信验证码已发送");return true}LG.step="cap";LG.retry=true;lgErr(j.error||"发送失败，请重试");return false}
+let LOGGED=false;function lgInfo(ok){LOGGED=!!ok;if(ok)gradeSessionState="ok";const i=$("#lginfo");if(i)i.textContent=ok?"✓ 已保存教务登录会话，请按当前网络选择校园网直连或校外 WebVPN。":gradeSessionState==="expired"?"登录会话已过期，请选择当前网络对应的方式重新登录；本地成绩单仍可计算。":"请选择当前网络对应的方式，登录后可同步课表、成绩和学业数据；也可离线导入成绩单。";syncLoginChoice()}
+async function openLogin(target){if(LOGIN_MODE===null)await loadNetworkState();target=target==="vpn"||target==="jwxt"?target:LOGIN_MODE==="webvpn"?"vpn":"jwxt";LG={step:"pw",target};$("#lg-vpn-continue").hidden=true;$("#lgt").textContent=target==="vpn"?"校外登录 · WebVPN 与教务":"校园网登录 · 直连教务";lgErr("");$("#lgp").value="";$("#lgok").hidden=!LOGGED;if(LOGGED)$("#lgp").value=PW_MASK;$("#lgw").value="";lgView();try{const j=await (await fetch("/api/login")).json();if(j.saved_username&&!$("#lgu").value)$("#lgu").value=j.saved_username;lgAcc(j.accounts||(j.saved_username?[j.saved_username]:[]));lgSync();const ok=LOGGED||!!(j.session&&j.session.logged_in);if(ok)LOGGED=true;$("#lgok").hidden=!ok;if((ok||(LG.acc||[]).includes($("#lgu").value.trim()))&&(!$("#lgp").value||$("#lgp").value===PW_MASK))$("#lgp").value=PW_MASK}catch(_){}const d=$("#login");if(d.showModal)d.showModal();else d.setAttribute("open","");$("#lgu").value?$("#lgp").focus():$("#lgu").focus()}
+async function lgPost(path,body){let r;try{r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})})}catch(e){let alive=false;try{alive=(await fetch("/api/session",{cache:"no-store"})).ok}catch(_){}LG.retry=true;throw new Error(alive?"和 SuperJLU 后台的连接中断了（教务响应慢或被安全软件拦截），请再点一次重试":"SuperJLU 后台已经退出，请从托盘或开始菜单重新打开 SuperJLU 后再登录")}let j={};try{j=await r.json()}catch(_){}if(!r.ok||j.ok===false){const error=new Error(j.error||("HTTP "+r.status));error.canConnectVpn=!!j.can_connect_vpn;error.payload=j;throw error}return j}
+async function lgDone(result={}){$("#login").close();LOGIN_MODE=LG.target==="vpn"?"webvpn":"direct";await loadNetworkState();await loadLinks();if(LG.target==="vpn"&&!result.jwxt_ready){const message=result.warning||"WebVPN 已连接，但教务尚未验证，请重试登录或同步。";loginFeedback(message);toast(message,true);return}loginFeedback("");lgInfo(true);D=Object.assign(D||{},{session_expired:false,session:null,needs_bootstrap:true});try{renderSession()}catch(_){}try{await fullRefresh({toastOnStart:"登录成功，正在刷新各页面…",okToast:null,failPrefix:"登录成功，刷新失败："})}catch(_){}await loadNetworkState()}
+async function lgSendCode(){const j=await lgPost((LG.target==="vpn"?"/api/vpn/login/":"/api/login/")+"send_code",{});if(j.step==="code_sent"){LG.step="code";LG.retry=false;toast("微信验证码已发送");return true}LG.step="cap";LG.retry=true;lgErr(j.error||"发送失败，请重试");return false}
 async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.disabled=true;try{
- if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value===PW_MASK?"":$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success"){await lgDone();return}LG.step="cap";LG.retry=false;lgView();b.textContent="发送中…";await lgSendCode()}
+ if(LG.step==="pw"){const j=await lgPost((LG.target==="vpn"?"/api/vpn/login/":"/api/login/")+"start",{username:$("#lgu").value.trim(),password:$("#lgp").value===PW_MASK?"":$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value=PW_MASK;if(j.step==="success"){await lgDone(j);return}LG.step="cap";LG.retry=false;lgView();b.textContent="发送中…";await lgSendCode()}
  else if(LG.step==="cap"){await lgSendCode()}
- else{const j=await lgPost("/api/login/verify",{wechat_code:$("#lgw").value.trim()});if(j.step==="success"){await lgDone();return}lgErr(j.error||"验证码不正确")}
-}catch(e){lgErr(e.message);const p=e.payload||{};if(p.vpn_hint||p.network||/无法连接|连接超时|网络连接|NetworkError|校外|VPN/i.test(e.message||""))lgVpnHint(p);if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
+ else{const j=await lgPost((LG.target==="vpn"?"/api/vpn/login/":"/api/login/")+"verify",{wechat_code:$("#lgw").value.trim()});if(j.step==="success"){await lgDone(j);return}lgErr(j.error||"验证码不正确")}
+}catch(e){lgErr(e.message);$("#lg-vpn-continue").hidden=!e.canConnectVpn;const p=e.payload||{};if(p.vpn_hint||p.network||/无法连接|连接超时|网络连接|NetworkError|校外|VPN/i.test(e.message||"")){try{lgVpnHint(p)}catch(_){}}if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
+$("#lg-vpn-continue").onclick=async()=>{const b=$("#lg-vpn-continue");b.disabled=true;try{const result=await api("/api/network/vpn",{});LG.target="vpn";await lgDone(result);fetch("/api/login/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{})}catch(e){lgErr(e.message)}finally{b.disabled=false}};
 $("#lgf").addEventListener("submit",lgSubmit);
-$("#lgx").onclick=()=>{fetch("/api/login/cancel",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});$("#login").close()};
-$("#lgbtn").onclick=openLogin;
+$("#lgx").onclick=()=>{fetch((LG.target==="vpn"?"/api/vpn/login/cancel":"/api/login/cancel"),{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).catch(()=>{});$("#login").close()};
+async function startLogin(){await openLogin()}
+$("#lgbtn").onclick=startLogin;
 </script></body></html>
 """

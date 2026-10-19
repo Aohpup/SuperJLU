@@ -7,7 +7,7 @@
   详情  GET /defaultroot/PortalInformation!getInformation.action?id=<id>&channelId=<ch>
         .content_t 标题 / .content_time 时间+单位 / .content_font 正文
   搜索  &searchnr=<文本>&searchlx=<类型>（旧客户端用 searchlx=3 按日期 yyyyMMdd）
-  访问  校园网内直连；校外经 vpn.jlu.edu.cn（VPNS）。部分时期需要登录 Cookie。
+  访问  OA 原站可经校园网或学校 VPN 访问；本客户端当前仍直连，浏览器 WebVPN 不改变同步路由。
 
 本模块绝不提交任何表单（审批/办理等），只发 GET。--probe 只输出计数与字段名。
 """
