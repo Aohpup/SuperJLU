@@ -165,6 +165,7 @@ dialog#login label{display:block;margin:10px 0 4px;font-size:13px;opacity:.8}
 dialog#login input[type=text],dialog#login input[type=password]{width:100%;box-sizing:border-box}
 dialog#login .cap{display:flex;gap:8px;align-items:center}dialog#login .cap img{height:40px;image-rendering:pixelated;border-radius:6px;cursor:pointer;background:#fff}
 dialog#login .err{color:#d4573b;font-size:13px;min-height:18px;margin:8px 0 0}
+dialog#login .lg-pass-ok{display:block;color:var(--ok);font-size:15px;font-weight:700;letter-spacing:.2px}
 dialog#login .vpn-hint{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--pri2);color:var(--txt);font-size:13px;line-height:1.5}
 dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 #oa-ch{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
@@ -225,18 +226,15 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
 <section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
- <div class="seg" id="rmode"><button class="on" data-m="date">按日期查询</button><button data-m="week">按周次查询</button><button data-m="study">按自习时间</button></div>
  <div class="rgrid">
   <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
   <label>教学楼<select id="rb"><option value="">全部</option></select></label>
   <label>教室类型<select id="rt"><option value="">全部</option></select></label>
-  <label class="m-date">空闲日期<input type="date" id="rd"></label>
-  <label class="m-week" hidden>周次<input id="rw" placeholder="如 6 或 6-8"></label>
+  <label>空闲日期<input type="date" id="rd"></label>
+  <label>周次<input id="rw" placeholder="如 6 或 6-8"></label>
   <label title="隐藏实验室、机房、语音室等专用教室" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rhs" checked>屏蔽特殊教室</label>
-  <label class="m-week" hidden>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
-  <label class="m-study" hidden>自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
+  <label>星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
   <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
-  <div class="m-study" id="rst-presets" hidden style="grid-column:1/-1;display:none;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
   <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
   <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
  </div>
@@ -280,7 +278,7 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
  <div id="lg1"><label for="lgu">账号</label><div id="lga" class="lga" hidden></div><input type="text" id="lgu" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="邮箱前缀">
   <label for="lgp">密码</label><input type="password" id="lgp" autocomplete="current-password" placeholder="密码">
   <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="lgr" checked>记住我（会话失效时免输密码）</label></div>
- <div id="lg2" hidden><p class="sub" id="lgh" style="margin:8px 0 0">账号密码已通过。微信验证码会发到「智慧吉大」的「统一身份认证」消息；若未收到可点「重新发送」。</p>
+ <div id="lg2" hidden><p id="lgh" style="margin:8px 0 0"><b class="lg-pass-ok">✓ 账号密码已通过</b><span class="sub" style="display:block;margin-top:4px">微信验证码会发到「智慧吉大」的「统一身份认证」消息；若未收到可点「重新发送」。</span></p>
   <div id="lg3" hidden><label for="lgw">微信验证码（到「智慧吉大」查看「统一身份认证」消息）</label><input type="text" id="lgw" inputmode="numeric" autocomplete="one-time-code"></div></div>
  <p class="err" id="lge" role="alert"></p>
  <div class="vpn-hint" id="lgvpn" hidden></div>
@@ -520,32 +518,15 @@ document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTh
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
 $("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
 $("#refresh").onclick=()=>fullRefresh({}).catch(()=>{});
-/* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期 */
+/* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期。
+   空教室只保留一套表单，不再按日期/周次/自习时间切换。 */
 function rdToWeek(){const v=$("#rd").value;if(!v)return;const d=new Date(v+"T00:00:00");$("#rwd").value=String(d.getDay()||7);if(D&&D.first_monday){const w=weekOf(d);if(w>=1)$("#rw").value=String(w)}}
 function weekToRd(){const fm=D&&D.first_monday,raw=($("#rw").value||"").trim(),wm=/^(\d+)/.exec(raw),w=wm?+wm[1]:0,wd=+$("#rwd").value;if(!fm||!(w>=1)||!(wd>=1))return;const d=new Date(fm+"T00:00:00");d.setDate(d.getDate()+(w-1)*7+wd-1);$("#rd").value=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)}
 $("#rd").addEventListener("change",rdToWeek);$("#rw").addEventListener("change",weekToRd);$("#rwd").addEventListener("change",weekToRd);
-/* 自习时间 ↔ 空闲节次：按教务节次表（或内置默认）互相换算，查询仍走节次参数。
-   DEF_PERIODS 必须在顶部 IIFE 调用 periodsToStudy() 之前初始化，否则 const TDZ 会让整页脚本中断，#boot 永远不消失。 */
-const DEF_PERIODS={1:["08:00","08:45"],2:["08:55","09:40"],3:["10:00","10:45"],4:["10:55","11:40"],5:["13:30","14:15"],6:["14:25","15:10"],7:["15:30","16:15"],8:["16:25","17:10"],9:["18:30","19:15"],10:["19:25","20:10"],11:["20:20","21:05"]};
-function periodMap(){const p=D&&D.periods;return(p&&Object.keys(p).length)?p:DEF_PERIODS}
-function periodsToStudy(){const a=+$("#rp1").value,b=+$("#rp2").value,m=periodMap(),x=m[a]||m[String(a)],y=m[b]||m[String(b)];if(x&&x[0])$("#rst").value=x[0];if(y&&y[1])$("#ret").value=y[1]}
-function studyToPeriods(){const s=$("#rst").value,e=$("#ret").value,m=periodMap();if(!s||!e||s>=e)return;let lo=null,hi=null;Object.keys(m).forEach(k=>{const n=+k,t=m[k];if(!(n>=1)||!t||t.length<2)return;if(t[0]<e&&t[1]>s){if(lo===null||n<lo)lo=n;if(hi===null||n>hi)hi=n}});if(lo!==null){$("#rp1").value=lo;$("#rp2").value=hi}}
-let _rSync=false;
-(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek();periodsToStudy()})();
-$("#rp1").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value;periodsToStudy()}finally{_rSync=false}});
-$("#rp2").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value;periodsToStudy()}finally{_rSync=false}});
-$("#rst").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
-$("#ret").addEventListener("change",()=>{if(_rSync)return;_rSync=true;try{studyToPeriods()}finally{_rSync=false}});
-document.querySelectorAll("#rst-presets [data-sp]").forEach(b=>b.onclick=()=>{const[a,c]=b.dataset.sp.split("-").map(Number);$("#rp1").value=a;$("#rp2").value=c;periodsToStudy()});
-let RM="date",RR=[],RS={k:"name",d:1};
-function setRoomMode(m){RM=m;document.querySelectorAll("#rmode button").forEach(x=>x.classList.toggle("on",x.dataset.m===m));
- document.querySelectorAll(".m-date").forEach(e=>e.hidden=!(m==="date"||m==="study"));
- document.querySelectorAll(".m-week").forEach(e=>e.hidden=m!=="week");
- const studyOn=m==="study";document.querySelectorAll(".m-study").forEach(e=>e.hidden=!studyOn);
- const pre=$("#rst-presets");if(pre){pre.style.display=studyOn?"flex":"none"}
- if(m==="week")rdToWeek();else{weekToRd();rdToWeek()}
- if(studyOn)periodsToStudy()}
-document.querySelectorAll("#rmode button").forEach(b=>b.onclick=()=>setRoomMode(b.dataset.m));
+(function(){$("#rd").value=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);rdToWeek()})();
+$("#rp1").addEventListener("change",()=>{if(+$("#rp2").value<+$("#rp1").value)$("#rp2").value=$("#rp1").value});
+$("#rp2").addEventListener("change",()=>{if(+$("#rp1").value>+$("#rp2").value)$("#rp1").value=$("#rp2").value});
+let RR=[],RS={k:"name",d:1};
 const opts=(l,all)=>(all?`<option value="">${all}</option>`:"")+l.map(c=>`<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
 async function loadBuildings(){const c=$("#rc").value;if(!c){$("#rb").innerHTML=opts([],"全部");return}try{const j=await api("/api/rooms/buildings",{campus:c});$("#rb").innerHTML=opts(j.buildings,"全部")}catch(e){toast(e.message)}}
 // 六个校区固定（教务代码表 01–06，已与真实 campuses.json 核对），不再需要「加载」
@@ -559,13 +540,13 @@ document.querySelectorAll("#rcs button").forEach(b=>b.onclick=()=>pickCampus(b.d
 let RMETA=false;
 async function roomsInit(){const last=lsGet(RCKEY);pickCampus(CAMPUSES.some(c=>c.code===last)?last:CAMPUSES[0].code);if(RMETA)return;RMETA=true;try{const t=await api("/api/rooms/types",{});$("#rt").innerHTML=opts(t.types,"全部");const f=await api("/api/rooms/fields",{});$("#rextra").innerHTML=f.fields.map(x=>`<label>${esc(x.caption||x.name)}<input data-f="${esc(x.name)}" placeholder="${esc(x.name)}"></label>`).join("")||'<p class="sub">元数据中没有其它检索字段</p>'}catch(e){RMETA=false;toast(e.message)}}
 document.querySelector('nav button[data-t="js"]').addEventListener("click",()=>{if(!window.__rm){window.__rm=1;roomsInit()}});
-const RCOLS=[["campus","学校校区"],["building","教学楼"],["kind","教室类型"],["name","教室名称"],["free_date","空闲日期"],["free_periods","空闲节次"],["free_time","空闲时间"],["seats","上课座位数"],["exam_seats","考试座位数"]];
+const RCOLS=[["building","教学楼"],["kind","教室类型"],["name","教室名称"],["seats","上课座位数"],["exam_seats","考试座位数"]];
 function renderRooms(j){const box=$("#rres");box.hidden=false;const n=k=>["seats","exam_seats"].includes(k);const rs=[...RR].sort((a,b)=>{const x=a[RS.k],y=b[RS.k];return RS.d*(n(RS.k)?(+x||0)-(+y||0):String(x).localeCompare(String(y),"zh"))});
  const head=j.mode==="week"?`第${esc(j.weeks)}周 周${"一二三四五六日"[j.weekday-1]}`:`${esc(j.date)} <span class="sub">${j.week>0?"第"+j.week+"周 ":""}周${"一二三四五六日"[j.weekday-1]}</span>`;
  box.innerHTML=`<h2>${head} 第${j.periods[0]}-${j.periods[1]}节 <span class="sub">· ${rs.length} 间${j.hidden_special?" · 已屏蔽特殊教室 "+j.hidden_special+" 间":""}</span></h2>`+(rs.length?`<div style="overflow-x:auto"><table class="rt"><thead><tr>${RCOLS.map(([k,l])=>`<th data-k="${k}">${l}${RS.k===k?(RS.d>0?" ▲":" ▼"):""}</th>`).join("")}</tr></thead><tbody>${rs.map(r=>`<tr>${RCOLS.map(([k])=>`<td>${esc(r[k]||"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`:'<p class="empty">没有符合条件的空教室</p>');
  box.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;RS=RS.k===k?{k,d:-RS.d}:{k,d:1};renderRooms(j)})}
 $("#rq").onclick=async()=>{const b=$("#rq");b.disabled=true;b.textContent="查询中…";try{const extra={};document.querySelectorAll("#rextra [data-f]").forEach(i=>{if(i.value.trim())extra[i.dataset.f]=i.value.trim()});
- if(RM==="study")studyToPeriods();const qMode=RM==="study"?"date":RM;const j=await api("/api/rooms",{mode:qMode,campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
+ const j=await api("/api/rooms",{mode:"date",campus:$("#rc").value,building:$("#rb").value,kind:$("#rt").value,date:$("#rd").value,weeks:$("#rw").value,weekday:$("#rwd").value,hide_special:$("#rhs").checked,periods:`${$("#rp1").value}-${$("#rp2").value}`,seat_min:$("#rs1").value,seat_max:$("#rs2").value,exam_min:$("#re1").value,exam_max:$("#re2").value,extra});RR=j.rooms;renderRooms(j)}catch(e){toast("查询失败："+e.message)}finally{b.disabled=false;b.textContent="查询"}};
 let OA=null,OAQ={kw:"",dept:""},OAERR="",OACH="179577",OACHS=null,OAPREFS=null,OACAT=null,OAMANAGE=false,OAPICK=null;
 function oaFilter(items,q){const k=(q.kw||"").trim().toLowerCase();return items.filter(i=>(!q.dept||i.dept===q.dept)&&(!k||(i.title+" "+i.dept).toLowerCase().includes(k)))}
 function oaLink(u,label){try{const p=new URL(u||"");if(!/^https?:$/.test(p.protocol))return"";const h=p.hostname;if(!(h==="jlu.edu.cn"||h.endsWith(".jlu.edu.cn")||/\.(jdyy\.cn|jdey\.com\.cn|zrlyyy\.com)$/.test(h)))return""}catch(_){return""}return`<a class="btn ghost" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`}
@@ -662,7 +643,7 @@ async function lgPost(path,body){let r;try{r=await fetch(path,{method:"POST",hea
 async function lgDone(){$("#login").close();lgInfo(true);D=Object.assign(D||{},{session_expired:false,session:null,needs_bootstrap:true});try{renderSession()}catch(_){}try{await fullRefresh({toastOnStart:"登录成功，正在刷新各页面…",okToast:null,failPrefix:"登录成功，刷新失败："})}catch(_){}}
 async function lgSendCode(){const j=await lgPost("/api/login/send_code",{});if(j.step==="code_sent"){LG.step="code";LG.retry=false;toast("微信验证码已发送");return true}LG.step="cap";LG.retry=true;lgErr(j.error||"发送失败，请重试");return false}
 async function lgSubmit(ev){ev.preventDefault();lgErr("");const b=$("#lgo");b.disabled=true;try{
- if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value===PW_MASK?"":$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value="";if(j.step==="success"){await lgDone();return}LG.step="cap";LG.retry=false;lgView();b.textContent="发送中…";await lgSendCode()}
+ if(LG.step==="pw"){const j=await lgPost("/api/login/start",{username:$("#lgu").value.trim(),password:$("#lgp").value===PW_MASK?"":$("#lgp").value,remember:$("#lgr").checked});$("#lgp").value=PW_MASK;if(j.step==="success"){await lgDone();return}LG.step="cap";LG.retry=false;lgView();b.textContent="发送中…";await lgSendCode()}
  else if(LG.step==="cap"){await lgSendCode()}
  else{const j=await lgPost("/api/login/verify",{wechat_code:$("#lgw").value.trim()});if(j.step==="success"){await lgDone();return}lgErr(j.error||"验证码不正确")}
 }catch(e){lgErr(e.message);const p=e.payload||{};if(p.vpn_hint||p.network||/无法连接|连接超时|网络连接|NetworkError|校外|VPN/i.test(e.message||""))lgVpnHint(p);if(/重新输入账号密码|已失效/.test(e.message))LG.step="pw"}finally{b.disabled=false;lgView()}}
