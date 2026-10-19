@@ -44,8 +44,9 @@ LIB_LOGIN = "https://lib.jlu.edu.cn/login"
 # 已用公开 OA 链接前缀校验：Didida1127Didida → oa.jlu.edu.cn。
 # 历史密钥：wrdvpnisthebest! / jluvpnisthegood!（仍可解码旧链接）。
 VPN_BASE = "https://vpn.jlu.edu.cn"
-VPN_KEY = b"Didida1127Didida"
-VPN_KEY_LEGACY = (b"jluvpnisthegood!", b"wrdvpnisthebest!")
+# 2026-10-18 公共 /login?cas_login=true 跳转；用已知 cas 主机校验 AES-CFB 编码。
+VPN_KEY = b"HqOq4/z3mX/~(W77"
+VPN_KEY_LEGACY = (b"Didida1127Didida", b"jluvpnisthegood!", b"wrdvpnisthebest!")
 
 _SITES_PROBE = (
     ("pay", PAY_LOGIN, "校园缴费"),
@@ -88,7 +89,7 @@ def _encrypt_host(hostname: str, key: bytes = VPN_KEY) -> str:
 def vpn_url(url: str) -> str:
     """校内 URL → `https://vpn.jlu.edu.cn/{scheme}/{iv+ct hex}{path}?{query}`。
 
-    主机名用 AES-128-CFB（key=iv=`Didida1127Didida`）加密。已是 vpn 域名则原样返回。
+    主机名用学校公共入口的 AES-128-CFB 参数编码。已是 vpn 域名则原样返回。
     """
     p = urllib.parse.urlparse((url or "").strip())
     if not p.scheme or not p.hostname:
@@ -224,7 +225,8 @@ def check_vpn(session) -> dict:
     low = (text or "")[:8000].lower()
     if "cas.jlu.edu.cn" in host or jwxt.looks_like_login_redirect(final, text):
         _expire("vpn", "WebVPN 跳到统一身份认证")
-    if any(k in (text or "")[:4000] for k in ("统一身份认证", "师生普通登录", "管理员登录")) and "password" in low:
+    if _path(final).rstrip("/") == "/login" or "统一身份认证登录" in text \
+            or (any(k in (text or "")[:4000] for k in ("统一身份认证", "师生普通登录", "管理员登录")) and "password" in low):
         _expire("vpn", "WebVPN 登录页")
     if code not in (200, 302):
         return {"logged_in": None, "reason": f"status={code}"}

@@ -108,7 +108,10 @@ def test_refresh_errors(srv, monkeypatch):
         raise jwxt.NetworkError("timeout")
     monkeypatch.setattr(oa, "fetch_notices", boom)
     code, j = _post(base + "/api/oa/refresh", {})
-    assert code == 502 and j["offline"] and "vpn.jlu.edu.cn" in j["error"]
+    assert code == 502 and j["offline"] and not j["campus_required"]
+    assert j["browser_vpn_supported"] and not j["app_vpn_supported"]
+    assert "学校 WebVPN" in j["error"] and "OA 同步仍走直连" in j["error"]
+    assert "学院通知" in j["error"] and "先连 vpn" not in j["error"]
 
     def need(*a, **k):
         raise jwxt.LoginError("OA 需要登录")
@@ -120,8 +123,23 @@ def test_refresh_errors(srv, monkeypatch):
 def test_page_has_oa_tab():
     from jlu_toolkit.ui_page import PAGE
     assert 'data-t="oa"' in PAGE and 'id="t-oa"' in PAGE and "/api/oa/notices" in PAGE
-    assert "vpn.jlu.edu.cn" in PAGE and "/api/oa/subscriptions" in PAGE
-    assert "jlu-toolkit oa watch" not in PAGE and "jlu-toolkit oa notices" not in PAGE
+    assert "学校 OA 可经校园网或学校 VPN 访问" in PAGE
+    assert 'href="/api/oa/webvpn"' in PAGE and "OA 通知同步仍走直连" in PAGE
+    assert "需校园网直连" not in PAGE
+    assert "/api/oa/subscriptions" in PAGE
+    # CLI watch/notices wording may appear in empty-state copy; do not require it.
+
+
+def test_oa_webvpn_link_only_redirects_to_official_portal(srv):
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs): return None
+    opener = urllib.request.build_opener(NoRedirect())
+    base, _ = srv
+    with pytest.raises(urllib.error.HTTPError) as error:
+        opener.open(base + "/api/oa/webvpn?target=https://evil.example/")
+    assert error.value.code == 302
+    assert error.value.headers["Location"] == "https://vpn.jlu.edu.cn/"
+    assert error.value.headers.get("Set-Cookie") is None
 
 
 def test_channels_from_file_and_category(srv):

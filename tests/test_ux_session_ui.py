@@ -31,7 +31,7 @@ def test_session_status_messages_are_in_app():
     msg = jwxt.session_status()["message"]
     assert "终端" not in msg and "force-login" not in msg and "jlu-toolkit" not in msg
     err = jwxt.SessionExpiredError()
-    assert "更多 → 账号" in str(err)
+    assert "更多 → 登录" in str(err)
     assert "force-login" not in str(err)
     assert "终端" not in str(err)
 
@@ -44,7 +44,7 @@ def test_emap_errors_are_session_expired(monkeypatch):
     monkeypatch.setattr("jlu_toolkit.sessions.migrate_cas_from_jwxt", lambda *_: 0)
     with pytest.raises(jwxt.SessionExpiredError) as e:
         c.enter_emap_app(APP)
-    assert "更多 → 账号" in str(e.value)
+    assert "更多 → 登录" in str(e.value)
     assert "force-login" not in str(e.value)
 
 
@@ -57,7 +57,7 @@ def test_sync_all_keeps_partial_on_login_error(tmp_path, monkeypatch):
         return [core.Course("高数", "张", "一教", 1, 1, 2, list(range(1, 17)))]
 
     def boom(*a, **k):
-        raise jwxt.SessionExpiredError("教务登录已过期，请在「更多 → 账号」中重新登录。")
+        raise jwxt.SessionExpiredError("教务登录已过期，请在「更多 → 登录」中重新登录。")
 
     monkeypatch.setattr(client, "fetch_schedule", ok_schedule)
     monkeypatch.setattr(client, "fetch_grades", boom)
@@ -99,7 +99,7 @@ def test_api_refresh_returns_snapshot_on_login_error(srv, monkeypatch):
     )
 
     def boom(_store):
-        err = jwxt.SessionExpiredError("教务登录已过期，请在「更多 → 账号」中重新登录。")
+        err = jwxt.SessionExpiredError("教务登录已过期，请在「更多 → 登录」中重新登录。")
         err.partial = {"schedule": {"ok": True, "count": 1}, "grades": {"ok": False, "login_needed": True}}
         raise err
 
@@ -108,6 +108,6 @@ def test_api_refresh_returns_snapshot_on_login_error(srv, monkeypatch):
     assert code == 401
     assert j["ok"] is False and j["session_expired"] is True
     assert "force-login" not in j["error"]
-    assert "更多 → 账号" in j["error"]
+    assert "更多 → 登录" in j["error"]
     assert any(c["name"] == "线代" for c in j["courses"])
     assert j["result"]["schedule"]["ok"] is True

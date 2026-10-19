@@ -26,6 +26,25 @@ from .ui_page import PAGE
 
 ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 
+TEACHING_ACTIONS = {
+    "/api/rooms": "空教室查询", "/api/rooms/campuses": "校区加载",
+    "/api/rooms/buildings": "教学楼加载", "/api/rooms/types": "教室类型加载",
+    "/api/rooms/fields": "查询条件加载", "/api/grades/refresh": "成绩同步",
+    "/api/refresh": "教务同步", "/api/session/keepalive": "会话检查",
+}
+
+
+def teaching_error(path: str, error: Exception) -> tuple[str, bool]:
+    """Keep endpoint probing diagnostics out of normal student-facing errors."""
+    action = TEACHING_ACTIONS.get(path)
+    if not action:
+        return str(error), False
+    if isinstance(error, jwxt.NetworkError) and error.kind == "certificate":
+        return "安全连接验证失败，请检查设备时间和网络后重试。", False
+    if isinstance(error, jwxt.LoginError):
+        return "请在「更多 → 登录」选择当前网络对应的方式，登录后重试。", True
+    return f"{action}失败，请检查网络或在「更多 → 登录」切换登录方式后重试。", True
+
 
 def data_dir() -> Path:
     d = jwxt.config_dir() / "data"
@@ -282,9 +301,7 @@ def refresh_from_jwxt(store: Store) -> dict:
     """用已保存会话拉取全部数据；不做交互登录。"""
     from .sync import sync_all
 
-    client = jwxt.JwxtClient()
-    if not client.load_session():
-        raise jwxt.LoginError("没有已保存的会话，请在「更多 → 账号」中登录")
+    client = _client()
     result = sync_all(client, store.root)
     try:
         store.p("bootstrap_done").write_text(dt.datetime.now().isoformat(timespec="seconds"), encoding="utf-8")
@@ -314,7 +331,13 @@ def refresh_grades_from_jwxt(store: Store, automatic: bool = False) -> dict:
 def _client() -> "jwxt.JwxtClient":
     c = jwxt.JwxtClient()
     if not c.load_session():
-        raise jwxt.LoginError("没有已保存的会话，请在「更多 → 账号」中登录")
+        from . import sessions
+        if c.route == "webvpn" and sessions.load_cookies("vpn"):
+            for cookie in jwxt.jar_from_list(sessions.load_cookies("cas") or []):
+                c.jar.set_cookie(cookie)
+            if c.has_cas_cookie():
+                return c
+        raise jwxt.LoginError("没有已保存的会话，请在「更多 → 登录」中登录")
     return c
 
 
@@ -656,6 +679,12 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
         if "vpn_url" in y and not _link_ok(y["vpn_url"]):
             y.pop("vpn_url")
         y["campus_only"] = bool(y.get("campus_only"))
+        if y["id"] == "jwxt":
+            y["campus_only"] = True
+        if y["id"] == "xsxk":
+            # This public service must not inherit an obsolete VPN override.
+            y["campus_only"] = False
+            y.pop("vpn_url", None)
         if y["campus_only"] and "vpn_url" not in y and rewrite is not None:
             try:
                 v = rewrite(y["url"])
@@ -671,7 +700,9 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
 
 
 def make_handler(store: Store, login: Optional[LoginFlow] = None):
-    login = login or LoginFlow()
+    from . import webvpn
+    login = login or webvpn.direct_login_flow()
+    vpn_login = webvpn.login_flow()
 
     class H(BaseHTTPRequestHandler):
         server_version = "SuperJLU-UI"
@@ -770,6 +801,15 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             if path == "/api/session":
                 # 会话状态 + 离线缓存信息（offline/cached_at），供前端显示「请重新登录」/「离线数据」；只读本地
                 return self._json({**jwxt.session_status(), **cache_info(store)})
+            if path == "/api/network/state":
+                from . import webvpn
+                return self._json(webvpn.state())
+            if path == "/api/oa/webvpn":
+                # Navigation only: never forwards app cookies or user input.
+                self.send_response(302)
+                self.send_header("Location", "https://vpn.jlu.edu.cn/")
+                self.end_headers()
+                return
             if path.startswith("/api/oa/"):
                 import urllib.parse
                 q = {k: v[0] for k, v in urllib.parse.parse_qs(self.path.partition("?")[2]).items()}
@@ -843,6 +883,16 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                     store.save_settings(body)
                 elif self.path == "/api/rooms":
                     return self._json({"ok": True, **rooms_api(store, body)})
+                elif self.path == "/api/network/check":
+                    from . import connectivity
+                    return self._json(connectivity.check_all())
+                elif self.path == "/api/network/vpn":
+                    from . import webvpn
+                    return self._json(webvpn.connect())
+                elif self.path == "/api/network/direct":
+                    from . import webvpn
+                    webvpn.set_mode("direct")
+                    return self._json(webvpn.state())
                 elif self.path == "/api/rooms/buildings":
                     return self._json({"ok": True, **buildings_api(store, body)})
                 elif self.path == "/api/rooms/types":
@@ -871,12 +921,23 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                     return self._json({"ok": True, **login.verify(wechat_code=body.get("wechat_code", ""))})
                 elif self.path == "/api/login/cancel":
                     return self._json({"ok": True, **login.cancel()})
+                elif self.path == "/api/vpn/login/start":
+                    return self._json({"ok": True, **vpn_login.start(body.get("username", ""), body.get("password", ""),
+                                                                     body.get("remember", True) is not False)})
+                elif self.path == "/api/vpn/login/send_code":
+                    return self._json({"ok": True, **vpn_login.send_code()})
+                elif self.path == "/api/vpn/login/verify":
+                    return self._json({"ok": True, **vpn_login.verify(wechat_code=body.get("wechat_code", ""))})
+                elif self.path == "/api/vpn/login/cancel":
+                    return self._json({"ok": True, **vpn_login.cancel()})
                 elif self.path == "/api/oa/refresh":
                     try:
                         return self._json(oa_refresh_api(store, body))
                     except jwxt.NetworkError as e:
-                        return self._json({"ok": False, "error": f"连不上 OA（校外请先连 vpn.jlu.edu.cn）：{e}",
-                                           "offline": True}, 502)
+                        return self._json({"ok": False, "error": f"学校 OA 直连暂不可用，校外可通过学校 WebVPN 访问原站；当前应用内 VPN 仅支持教务，OA 同步仍走直连。学院通知可独立更新。{e}",
+                                           "offline": True, "error_kind": e.kind,
+                                           "campus_required": False, "browser_vpn_supported": True,
+                                           "app_vpn_supported": False}, 502)
                     except jwxt.SessionExpiredError:
                         raise
                     except jwxt.LoginError as e:
@@ -906,10 +967,20 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 else:
                     return self._send(404, b"not found", "text/plain")
                 return self._json({"ok": True, **store.snapshot(body.get("grade_source", "jwxt"))})
+            except jwxt.NetworkError as e:
+                message, connection_action = teaching_error(self.path, e)
+                return self._json({"ok": False, "error": message, "error_kind": e.kind,
+                                   "connection_action": connection_action,
+                                   "network_error": True, "can_connect_vpn":e.can_connect_vpn,
+                                   **cache_info(store)}, 502)
             except jwxt.SessionExpiredError as e:
                 return self._json({"ok": False, "error": str(e), "session_expired": True,
                                    "site": getattr(e, "site", "jwxt")}, 401)
-            except (ValueError, jwxt.JwxtError) as e:
+            except jwxt.JwxtError as e:
+                message, connection_action = teaching_error(self.path, e)
+                return self._json({"ok": False, "error": message,
+                                   "connection_action": connection_action}, 400)
+            except ValueError as e:
                 return self._json({"ok": False, "error": str(e)}, 400)
             except Exception as e:  # noqa: BLE001
                 import logging

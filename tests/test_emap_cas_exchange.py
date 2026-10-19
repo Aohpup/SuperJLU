@@ -42,7 +42,7 @@ def test_no_cas_cookie_asks_relogin_in_app_words(monkeypatch):
     monkeypatch.setattr("jlu_toolkit.sessions.migrate_cas_from_jwxt", lambda *_: 0)
     with pytest.raises(jwxt.LoginError) as e:
         c.enter_emap_app(APP)
-    assert "更多 → 账号" in str(e.value)
+    assert "更多 → 登录" in str(e.value)
 
 
 def test_saved_cas_site_cookies_are_merged(monkeypatch):

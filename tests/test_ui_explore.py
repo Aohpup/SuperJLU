@@ -162,5 +162,5 @@ def test_ui_refresh_without_session(server, tmp_path, monkeypatch):
     assert e.value.code == 401
     body = json.loads(e.value.read().decode())
     assert body["session_expired"] is True
-    assert "更多 → 账号" in body["error"]
+    assert "更多 → 登录" in body["error"]
     assert "force-login" not in body["error"]

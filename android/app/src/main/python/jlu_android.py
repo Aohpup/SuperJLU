@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import os
-import socket
 import threading
 from http.server import ThreadingHTTPServer
 from typing import Optional
@@ -40,15 +39,8 @@ def stop() -> None:
         _httpd = None
 
 
-HOSTS = ("jwxt.jlu.edu.cn", "oa.jlu.edu.cn")
-
-
 def campus_reachable(timeout: float = 3.0) -> bool:
-    """教务/OA 任一主机能连上 80 端口即视为在校园网（或已连 VPN）。"""
-    for h in HOSTS:
-        try:
-            with socket.create_connection((h, 80), timeout=timeout):
-                return True
-        except OSError:
-            continue
-    return False
+    """兼容旧入口：实际 HTTPS 检查，不再把旧站点 TCP:80 当校园网判据。"""
+    from jlu_toolkit.connectivity import TARGETS, check_one
+    # Only a warning about JWXT: OA has its own campus-network requirement.
+    return check_one(TARGETS[1], timeout)["reachable"]

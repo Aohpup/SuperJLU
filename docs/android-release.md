@@ -34,6 +34,26 @@ CI：`.github/workflows/release-android.yml`。推 `v*` 标签 → 签名 releas
 发布前仍应在真机上检查：选择下载目录内的 XLSX / XLS / CSV、取消后重选、未登录时导入，
 以及未保存修改时切换模板的确认弹窗。JVM 回归不能替代不同厂商文件管理器的实际验证。
 
+## 网络与外部浏览器回归
+
+同一 `testDebugUnitTest` 还运行 `BrowserPickerTest` 和 `SchoolHttpTest`（API 28 / 35）。
+指定浏览器暂未实现、按钮禁用。前者只验证占位边界：外链使用系统默认、忽略旧实验偏好、
+接口不弹选择器或全局设置、不支持的链接被拒绝，以及启动失败提示；后者以虚构连接验证
+系统 HTTPS 单跳的请求体、多个 Cookie、重定向/错误状态与连接释放，不调用真实认证。
+需要在真机上验证 Python → Java 的 Chaquopy 桥、家庭 Wi-Fi/流量下的真实登录同步，
+以及正常外链默认打开、浏览器选择按钮不可用。参见 [校外连接说明](offcampus-network.md)。
+
+local.19 在 OPPO Find X8 Ultra / ColorOS 16 / Android 16 上未弹窗，local.20 又列出全部应用。
+按用户要求，local.21 删除选择算法，仅保留 UI 与接口占位。后续 PR 必须列出
+[浏览器选择 TODO](TODO-browser-selection.md)，由后续贡献者研究和真机验证后再启用。
+
+教务采用手动「校园网直连／校外 WebVPN」，不再自动探测并切换路由。真机需分别验证校园网
+直连、流量及家庭 Wi-Fi 下 WebVPN 登录同步，以及取消切换时保留原通道和账号会话。
+换网但未切换方式时，查询失败应显示简短提示和检查登录方式入口，不输出原始端点清单；
+空教室上次查询结果应保留，点击入口只能导航到登录卡片，不能自动切换路由。
+网络失败时保留缓存，不得把连接问题当成账号过期。学校 OA 原站可经校园网或学校 VPN 访问；当前应用内 OA 同步
+仍走直连，浏览器 WebVPN 登录不会自动接通程序的 OA 同步，真机需分别验证这两种访问方式。
+
 ## Chaquopy 与 cryptography
 
 `secure_store` 在 Android 下用 Android Keystore（别名 `jlu-toolkit-storage`，AES/GCM/NoPadding）包裹 32 字节主密钥，

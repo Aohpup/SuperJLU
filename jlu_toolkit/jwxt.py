@@ -38,6 +38,7 @@ from . import secure_store
 from . import core
 from .des_tpass import strEnc
 from . import captcha_util
+from . import network
 
 CAS_BASE = "https://cas.jlu.edu.cn/tpass"
 CAS_LOGIN = f"{CAS_BASE}/login"
@@ -103,11 +104,16 @@ class LoginError(JwxtError):
 class NetworkError(JwxtError):
     """网络不可达（常见于校外访问不到 iedu）。"""
 
+    def __init__(self, message, kind="connection", can_connect_vpn=False):
+        super().__init__(message)
+        self.kind = kind
+        self.can_connect_vpn = can_connect_vpn
+
 
 class SessionExpiredError(LoginError):
     """已保存的会话失效（教务把请求重定向到了 CAS 登录页）。需要重新走微信验证码登录。"""
 
-    def __init__(self, msg: str = "登录会话已过期，请在「更多 → 账号」中重新登录"):
+    def __init__(self, msg: str = "登录会话已过期，请在「更多 → 登录」中重新登录"):
         super().__init__(msg)
 
 
@@ -294,8 +300,8 @@ def session_status() -> dict:
         state = info.get("state") or SESSION_UNKNOWN
     msg = {
         SESSION_OK: "已登录",
-        SESSION_EXPIRED: "登录已过期，请在「更多 → 账号」中重新登录",
-        SESSION_MISSING: "尚未登录，请在「更多 → 账号」中登录",
+        SESSION_EXPIRED: "登录已过期，请在「更多 → 登录」中重新登录",
+        SESSION_MISSING: "尚未登录，请在「更多 → 登录」中登录",
         SESSION_UNKNOWN: "已保存会话，尚未验证是否有效",
     }[state]
     return {
@@ -489,10 +495,17 @@ def _redact_url(url: str) -> str:
 
 
 class JwxtClient:
-    def __init__(self, timeout: float = 25.0, debug: bool = False):
+    def __init__(self, timeout: float = 25.0, debug: bool = False, route=None):
         self.timeout = timeout
         self.debug = debug
+        from . import webvpn
+        self.route = route or webvpn.mode()
+        if self.route not in ("direct", "webvpn"):
+            raise ValueError("请选择校园网直连或校外 WebVPN")
+        self._restore_saved_cas = True
+        self._vpn_cookies_loaded = False
         self.jar = CookieJar()
+        self._native_hosts = set()
         self._rebuild_opener()
         self._logged_in = False
         self.pending: Optional[PendingSecondFactor] = None
@@ -502,6 +515,21 @@ class JwxtClient:
         self.last_status: Optional[int] = None
         self.last_captcha_bytes: Optional[bytes] = None
         self.last_captcha_paths: list = []
+
+    def _restore_vpn_cookies(self):
+        if self.route == "webvpn" and not self._vpn_cookies_loaded:
+            from . import sessions
+            cas = (sessions.load_cookies("cas") or []) if self._restore_saved_cas else []
+            if cas:
+                for cookie in list(self.jar):
+                    if (cookie.domain or "").lstrip(".") == "cas.jlu.edu.cn":
+                        self.jar.clear(cookie.domain, cookie.path, cookie.name)
+                for cookie in jar_from_list(cas):
+                    self.jar.set_cookie(cookie)
+            for cookie in jar_from_list(sessions.load_cookies("vpn") or []):
+                if (cookie.domain or "").lstrip(".") == "vpn.jlu.edu.cn":
+                    self.jar.set_cookie(cookie)
+            self._vpn_cookies_loaded = True
 
     def _dbg(self, **kwargs) -> None:
         self.last_debug.update(kwargs)
@@ -513,9 +541,12 @@ class JwxtClient:
         print("[debug] " + " ".join(parts), flush=True)
 
     def _rebuild_opener(self) -> None:
+        from . import webvpn
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar),
-            urllib.request.HTTPSHandler(context=_ssl_context()),
+            network.SchoolHTTPSHandler(_ssl_context(), self._native_hosts, self._dbg,
+                                      ("cas.jlu.edu.cn", IEDU_HOST, "vpn.jlu.edu.cn")),
+            webvpn.RedirectHandler(self),
         )
 
     def _cookie_names(self) -> list[str]:
@@ -562,12 +593,23 @@ class JwxtClient:
         }
         if headers:
             hdrs.update(headers)
+        from . import webvpn
+        logical_url = url
+        if self.route == "webvpn":
+            self._restore_vpn_cookies()
+            url = webvpn.request_url(url)
+            if urllib.parse.urlsplit(url).hostname == "vpn.jlu.edu.cn":
+                if "Referer" in hdrs:
+                    hdrs["Referer"] = webvpn.request_url(hdrs["Referer"])
+                if "Origin" in hdrs:
+                    hdrs["Origin"] = "https://vpn.jlu.edu.cn"
         if allow_redirects:
             opener = self.opener
         else:
             opener = urllib.request.build_opener(
                 urllib.request.HTTPCookieProcessor(self.jar),
-                urllib.request.HTTPSHandler(context=_ssl_context()),
+                network.SchoolHTTPSHandler(_ssl_context(), self._native_hosts, self._dbg,
+                                          ("cas.jlu.edu.cn", IEDU_HOST, "vpn.jlu.edu.cn")),
                 _NoRedirect(),
             )
         req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
@@ -578,7 +620,19 @@ class JwxtClient:
                 text = raw.decode(charset, errors="replace")
                 self.last_content_type = resp.headers.get("Content-Type")
                 self.last_status = resp.getcode() or 200
-                return self.last_status, text, resp.geturl(), raw
+                final = resp.geturl()
+                if self.route == "webvpn":
+                    original = webvpn.canonical_url(final)
+                    destination = urllib.parse.urlsplit(original)
+                    service = urllib.parse.parse_qs(destination.query).get("service", [""])[0]
+                    vpn_login = destination.hostname == "vpn.jlu.edu.cn" or (
+                        destination.hostname == "cas.jlu.edu.cn" and urllib.parse.urlsplit(service).hostname == "vpn.jlu.edu.cn")
+                    if vpn_login and urllib.parse.urlsplit(logical_url).hostname == IEDU_HOST:
+                        raise NetworkError("应用内 WebVPN 会话不可用，请在「更多 → 登录」选择「校外 WebVPN」重新连接；教务登录和本地数据已保留。", "webvpn")
+                    final = original
+                if urllib.parse.urlsplit(logical_url).hostname == IEDU_HOST and self.last_status < 400:
+                    webvpn.record_connection(self.route)
+                return self.last_status, text, final, raw
         except urllib.error.HTTPError as e:
             raw = e.read() if e.fp else b""
             text = raw.decode("utf-8", errors="replace")
@@ -587,21 +641,15 @@ class JwxtClient:
             # 302 with no-redirect handler lands here
             loc = e.headers.get("Location", "")
             final = urllib.parse.urljoin(url, loc) if loc else url
+            if self.route == "webvpn":
+                final = webvpn.canonical_url(final)
             return e.code, text, final, raw
-        except urllib.error.URLError as e:
-            raise NetworkError(f"无法连接 {url}: {e.reason}") from e
-        except TimeoutError as e:
-            raise NetworkError(f"连接超时 {url}") from e
-        except (ConnectionError, http.client.HTTPException, ssl.SSLError) as e:
-            # 手机切换网络/VPN 时常见 ConnectionAbortedError [Errno 103]：GET 静默重试一次
-            if data is None and (method or "GET") == "GET" and not getattr(self, "_retrying", False):
-                self._retrying = True
-                try:
-                    return self._request(url, data=data, headers=headers, method=method,
-                                         allow_redirects=allow_redirects)
-                finally:
-                    self._retrying = False
-            raise NetworkError(f"网络连接被中断（{type(e).__name__}），请检查网络或 VPN 后重试") from e
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+            # Recovery happens per HTTPS hop. Replaying this whole operation
+            # could repeat a password/OTP POST followed by a failing redirect.
+            kind = network.error_kind(e)
+            message = network.error_message(logical_url, e)
+            raise NetworkError(message, kind) from e
 
     def save_session(self, path: Optional[Path] = None) -> Path:
         """保存 cookie（加密存储见 secure_store），并把会话状态记为 ok。"""
@@ -614,6 +662,12 @@ class JwxtClient:
                 sessions.save_cas_from_jar(self.jar)
             except Exception:  # noqa: BLE001
                 pass
+            if self.route == "webvpn":
+                from . import sessions
+                cookies = [d for d in jar_to_list(self.jar)
+                           if str(d.get("domain") or "").lstrip(".") == "vpn.jlu.edu.cn"]
+                if cookies:
+                    sessions.save_cookies("vpn", cookies)
         return out
 
     def try_cas_refresh(self) -> bool:
@@ -1020,7 +1074,23 @@ class JwxtClient:
                 "Referer": post_url,
                 "Origin": "https://cas.jlu.edu.cn",
             },
+            allow_redirects=False,
         )
+        if code in (301, 302, 303, 307, 308):
+            # Separate OTP validation from the follow-up GET. A failure in the
+            # latter must not be described as a failed POST to the CAS URL.
+            can_connect = False
+            target = urllib.parse.urlsplit(final)
+            ticket = (urllib.parse.parse_qs(target.query).get("ticket") or [""])[0]
+            if self.route == "direct" and target.hostname == IEDU_HOST and ticket.startswith("ST-"):
+                from . import sessions
+                can_connect = bool(sessions.save_cas_from_jar(self.jar))
+            try:
+                code, html, final, _ = self._follow_redirects(final, html, code)
+            except NetworkError as error:
+                hint = "可通过应用内 WebVPN 继续，无需重发验证码。" if can_connect else ""
+                raise NetworkError("二次认证已返回跳转，但后续连接失败；尚未完成登录。" + str(error) + hint,
+                                   error.kind, can_connect) from error
         host = urllib.parse.urlparse(final).hostname or ""
         if "验证码错误" in html:
             return LoginStep.FAILED
@@ -1111,7 +1181,7 @@ class JwxtClient:
             if not self.has_cas_cookie():
                 mark_session_expired("emap_no_cas_cookie")
                 raise SessionExpiredError(
-                    "教务登录已过期，请在「更多 → 账号」中重新登录。"
+                    "教务登录已过期，请在「更多 → 登录」中重新登录。"
                 )
             # 用 CASTGC 对「该应用入口」显式换票
             cas_url = f"{CAS_LOGIN}?service={urllib.parse.quote(app_index, safe='')}"
@@ -1135,14 +1205,14 @@ class JwxtClient:
             if host != IEDU_HOST or 'id="loginForm"' in html:
                 mark_session_expired("emap_cas_exchange_failed")
                 raise SessionExpiredError(
-                    "统一认证的登录状态已失效，请在「更多 → 账号」中重新登录。"
+                    "统一认证的登录状态已失效，请在「更多 → 登录」中重新登录。"
                 )
             self.save_session()
 
         if code == 403:
             raise JwxtError(
                 f"打开教务应用入口被拒绝 HTTP 403：{app_index}。"
-                "可能未完成应用鉴权，请在「更多 → 账号」中重新登录后重试。"
+                "可能未完成应用鉴权，请在「更多 → 登录」中重新登录后重试。"
             )
         if host != IEDU_HOST:
             raise NetworkError(
@@ -1183,7 +1253,7 @@ class JwxtClient:
         if code == 403:
             raise JwxtError(
                 f"{path} HTTP 403：通常是未先进入应用入口（缺少 _WEU 等）。"
-                "请在「更多 → 账号」中重新登录后重试。"
+                "请在「更多 → 登录」中重新登录后重试。"
             )
         if looks_like_login_redirect(final, text if code != 200 or not text.lstrip().startswith("{") else ""):
             if self.try_cas_refresh():
