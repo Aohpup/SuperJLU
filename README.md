@@ -46,7 +46,7 @@
 按培养方案列出每一类课程（通识、学科基础、专业课……）已修了多少、还差多少，点开就能看到具体是哪几门课，再也不怕漏修。
 
 ### 🏫 空教室：找个地方自习
-选校区、教学楼、日期（或第几周星期几）、第几节课，马上列出空着的教室。还能按座位数筛选，自动屏蔽实验室这类特殊教室。
+一张表单选校区、教学楼、日期（与课表周次联动）、空闲节次，马上列出空着的教室。还能按座位数筛选，自动屏蔽实验室这类特殊教室。
 
 ### ⏰ 考试安排：倒计时提醒
 所有考试的时间地点集中在一页，并显示还剩几天，复习节奏心里有数。
@@ -69,11 +69,9 @@
 
 ## 微信小程序（实验版）
 
-[wechat/](wechat/README.md) 提供独立的微信原生小程序。默认通过本人手机 Safari 的学校教务会话读取数据，经复制、预览和确认后导入本机，可离线查看课表；更新时需手动重新读取，不需要电脑常开。可选后端和原生直连适配仍属试验功能，受学校网络与页面校验限制。运行方式、数据处理和已验证范围见该目录说明。
+仓库 [`wechat/`](wechat/README.md) 提供实验版微信原生小程序（手机浏览器辅助同步课表等），运行方式与数据处理见该目录说明。
 
-## 致谢
-
-感谢 [@Aohpup](https://github.com/Aohpup) 在 [PR #44](https://github.com/Runa-Asahi/SuperJLU/pull/44) 中贡献教务成绩优先的加权分析、自定义模板与可选成绩单导入；该贡献经 [PR #45](https://github.com/Runa-Asahi/SuperJLU/pull/45) 保留作者署名并集成至开发分支。
+如需使用或咨询微信小程序，请联系小程序负责人 [@Dramadan-wow](https://github.com/Dramadan-wow)，邮箱 `dramadan070925@qq.com`。**其他 SuperJLU 项目参与者与小程序无关，请勿向其咨询小程序事宜。**
 
 ## 常见问题
 
@@ -104,6 +102,13 @@
 SuperJLU 也提供命令行工具、本地 API，以及接入 AI 助手（MCP）的能力，可以让 Claude、Cursor 等直接回答「我明天有什么课」「这学期绩点多少」。安装方式和全部命令见 [命令行与开发者文档](docs/cli.md)。
 
 本地修改源码后，Windows 可运行仓库内的 `启动SuperJLU.cmd`（需先安装 uv），或在项目目录执行 `uv run --extra captcha python start_local.py`。启动器会运行当前源码、自动打开浏览器，并打印实际地址；8765 已占用时使用其他端口，测试时以本次输出的网址为准。使用期间请保留启动窗口，按 Ctrl+C 停止。
+
+## 特别鸣谢
+
+- **[@Dramadan-wow](https://github.com/Dramadan-wow)**：微信小程序端（[PR #82](https://github.com/Runa-Asahi/SuperJLU/pull/82)）。小程序相关需求请联系 `dramadan070925@qq.com`；其他项目参与者与小程序无关。
+- **[@Aohpup](https://github.com/Aohpup)**：成绩加权分析、模板与导入等（[PR #44](https://github.com/Runa-Asahi/SuperJLU/pull/44) / [#45](https://github.com/Runa-Asahi/SuperJLU/pull/45)、[#67](https://github.com/Runa-Asahi/SuperJLU/pull/67)、[#81](https://github.com/Runa-Asahi/SuperJLU/pull/81)）。
+
+欢迎关注他们的 GitHub ⭐
 
 ---
 
