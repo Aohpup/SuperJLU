@@ -73,8 +73,6 @@
 
 如需使用或咨询微信小程序，请联系小程序负责人 [@Dramadan-wow](https://github.com/Dramadan-wow)，邮箱 `dramadan070925@qq.com`。**其他 SuperJLU 项目参与者与小程序无关，请勿向其咨询小程序事宜。**
 
-## 微信小程序端
-
 > 随 [v1.0.8](https://github.com/Runa-Asahi/SuperJLU/releases/tag/v1.0.8) 发布，代码在仓库的 `wechat/` 目录。
 
 SuperJLU 现在多了一个**微信原生小程序**，没有安卓 App 的同学（比如 iPhone 用户）也能在手机上查自己的教务数据。原有的桌面端、安卓 App 和 Python 包都不受影响。小程序共 12 个页面：课表、成绩与绩点、考试、学业、校园入口、个人设置、隐私说明等。
@@ -103,28 +101,6 @@ SuperJLU 现在多了一个**微信原生小程序**，没有安卓 App 的同�
 - 小程序还要另外经过微信平台审核才能正式上架。
 
 详细说明见 [`wechat/README.md`](wechat/README.md) 和 [`wechat/docs/backend.md`](wechat/docs/backend.md)。
-
-## 致谢
-
-### 特别感谢 Dramadan-wow 🎉
-
-微信小程序端是 [**@Dramadan-wow**](https://github.com/Dramadan-wow) 通过 [PR #82](https://github.com/Runa-Asahi/SuperJLU/pull/82) 一手做出来的，这是 SuperJLU 到目前为止最大的一次外部贡献：
-
-- 从零搭起完整的小程序，共 12 个页面；
-- 设计了手机浏览器加书签的同步方案，绕开了小程序不能直连教务的问题；
-- 在隐私边界上考虑得很细，不碰密码和 Cookie，也不上传任何数据；
-- 补齐了测试（前端 60 项、后端 26 项，原有的 291 项也都通过），还加了独立的 CI 和完整文档。
-
-如果你觉得小程序好用，欢迎去 GitHub **关注 [@Dramadan-wow](https://github.com/Dramadan-wow)** ⭐
-
-### 也感谢 Aohpup
-
-[**@Aohpup**](https://github.com/Aohpup) 一直在帮忙打磨成绩页：
-
-- [PR #67](https://github.com/Runa-Asahi/SuperJLU/pull/67) 改进了模板反馈和吸顶汇总，还修好了安卓上确认框弹不出来的问题；
-- [PR #81](https://github.com/Runa-Asahi/SuperJLU/pull/81) 修好了成绩单解析、拖放和安卓上传，又新增了成绩核对、模板恢复、差值展示和紧凑吸顶。
-
-谢谢你，也欢迎关注 [@Aohpup](https://github.com/Aohpup)！
 
 ## 常见问题
 
