@@ -38,12 +38,29 @@ public class BrowserPickerTest {
         Intent opened;
         boolean missing;
         boolean denied;
+        /** When true, component-less VIEW intents fail (OEM with a broken system default). */
+        static boolean refuseImplicit;
+        /** When true, ACTION_CHOOSER intents fail (OEM that swallows the system panel). */
+        static boolean refuseChooser;
         ComponentName unavailableComponent;
         @Override public void startActivity(Intent intent) {
             if (missing) throw new ActivityNotFoundException();
             if (denied) throw new SecurityException();
-            if (unavailableComponent != null && unavailableComponent.equals(intent.getComponent())) {
+            if (refuseChooser && Intent.ACTION_CHOOSER.equals(intent.getAction())) {
                 throw new ActivityNotFoundException();
+            }
+            if (refuseImplicit && Intent.ACTION_VIEW.equals(intent.getAction())
+                    && intent.getComponent() == null && intent.getPackage() == null) {
+                throw new ActivityNotFoundException();
+            }
+            if (unavailableComponent != null) {
+                if (unavailableComponent.equals(intent.getComponent())) {
+                    throw new ActivityNotFoundException();
+                }
+                if (intent.getPackage() != null
+                        && unavailableComponent.getPackageName().equals(intent.getPackage())) {
+                    throw new ActivityNotFoundException();
+                }
             }
             opened = intent;
         }
@@ -59,6 +76,8 @@ public class BrowserPickerTest {
     private BrowserPicker.CandidateQuery candidateQuery;
 
     @Before public void setup() {
+        CaptureActivity.refuseImplicit = false;
+        CaptureActivity.refuseChooser = false;
         activity = Robolectric.buildActivity(CaptureActivity.class).setup().get();
         matches = new HashMap<>();
         queries = new ArrayList<>();
@@ -99,6 +118,8 @@ public class BrowserPickerTest {
         assertNull(activity.opened.getComponent());
         assertNull(activity.opened.getPackage());
         assertNull(activity.opened.getType());
+        assertTrue(activity.opened.hasCategory(Intent.CATEGORY_DEFAULT));
+        assertTrue(activity.opened.hasCategory(Intent.CATEGORY_BROWSABLE));
         assertTrue(queries.isEmpty());
     }
 
@@ -362,6 +383,8 @@ public class BrowserPickerTest {
         matches.put(null, Arrays.asList(handler("test.removed", "https", null)));
         chooseSetting(1, true);
         matches.put(null, Arrays.asList(handler("test.other", "https", null)));
+        // Package no longer resolves as a browser and cannot be started (uninstalled / disabled).
+        activity.unavailableComponent = new ComponentName("test.removed", "test.removed.WebActivity");
         activity.opened = null;
         browsers.open(Uri.parse("https://example.invalid/"));
         assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
@@ -426,7 +449,41 @@ public class BrowserPickerTest {
         return result;
     }
 
+    @Test public void systemDefaultFailureFallsBackToExplicitDiscoveredBrowser() {
+        matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
+        CaptureActivity.refuseImplicit = true;
+        browsers.open(Uri.parse("https://example.invalid/page"));
+        assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
+        assertEquals(new ComponentName("test.browser", "test.browser.WebActivity"),
+                activity.opened.getComponent());
+        assertEquals(Uri.parse("https://example.invalid/page"), activity.opened.getData());
+    }
+
+    @Test public void chooserDenialFallsBackToExplicitBrowser() {
+        activity.getSharedPreferences("browser-preferences-v1", 0).edit()
+                .putString("mode", "ask").commit();
+        matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
+        CaptureActivity.refuseChooser = true;
+        browsers.open(Uri.parse("https://example.invalid/"));
+        assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
+        assertEquals("test.browser", activity.opened.getComponent().getPackageName());
+    }
+
+    @Test public void packageScopedFallbackOpensPreferredAppWhenComponentGone() {
+        matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
+        chooseSetting(1, true);
+        matches.clear();
+        activity.opened = null;
+        browsers.open(Uri.parse("https://example.invalid/kept"));
+        assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
+        assertEquals("test.browser", activity.opened.getPackage());
+        assertNull(activity.opened.getComponent());
+        assertEquals(Uri.parse("https://example.invalid/kept"), activity.opened.getData());
+        assertNull(ShadowToast.getTextOfLatestToast());
+    }
+
     @Test public void unsupportedLinksAreNotSentToOtherApplications() {
+
         browsers.open(null);
         browsers.open(Uri.parse("file:///data/private/account"));
         browsers.open(Uri.parse("content://private/account"));

@@ -62,36 +62,26 @@ final class BrowserPicker {
         }
         try {
             String mode = preferences.getString("mode", MODE_SYSTEM);
-            if (MODE_SYSTEM.equals(mode)) {
-                try {
-                    activity.startActivity(webIntent(uri, null));
-                    return;
-                } catch (ActivityNotFoundException | SecurityException unavailable) {
-                    resetUnavailableDefault();
-                }
+            // Ask stays wired but unused in settings; ColorOS/MIUI often swallow the panel.
+            if (MODE_ASK.equals(mode)) {
+                openAskChooser(uri, findTargets(uri));
+                return;
             }
-            List<Intent> targets = findTargets(uri);
             if (MODE_APP.equals(mode)) {
+                List<Intent> targets = findTargets(uri);
                 String preferred = preferences.getString("package", null);
-                Intent target = null;
-                for (Intent candidate : targets) {
-                    if (candidate.getComponent().getPackageName().equals(preferred)) {
-                        target = candidate;
-                        break;
-                    }
-                }
-                if (target != null) {
-                    try {
-                        activity.startActivity(target);
-                        return;
-                    } catch (ActivityNotFoundException | SecurityException unavailable) {
-                        // An app may disappear or become unavailable after discovery.
-                        targets.remove(target);
-                    }
-                }
+                Intent target = preferredTarget(targets, preferred);
+                if (target != null && tryStart(target)) return;
+                // Some OEM builds rename the activity; package-scoped VIEW still reaches the app.
+                if (preferred != null && tryStart(packageScoped(uri, preferred))) return;
+                if (target != null) targets.remove(target);
                 resetUnavailableDefault();
+                // After reset, behave like follow-system (do not drop into the fragile chooser).
             }
-            // MODE_ASK (or any unknown mode): keep the system chooser path for future product use.
+            // MODE_SYSTEM: implicit first. OEMs that break the default handler need explicit fallbacks.
+            if (tryStart(webIntent(uri, null))) return;
+            List<Intent> targets = findTargets(uri);
+            if (tryStartFirst(targets)) return;
             openAskChooser(uri, targets);
         } catch (ActivityNotFoundException | SecurityException error) {
             Toast.makeText(activity, R.string.browser_open_failed, Toast.LENGTH_LONG).show();
@@ -113,7 +103,45 @@ final class BrowserPicker {
             // Keep the panel visible even if the system finds only one candidate.
             chooser.putExtra(Intent.EXTRA_AUTO_LAUNCH_SINGLE_CHOICE, false);
         }
-        activity.startActivity(chooser);
+        try {
+            activity.startActivity(chooser);
+        } catch (ActivityNotFoundException | SecurityException chooserDenied) {
+            // ColorOS/MIUI may refuse ACTION_CHOOSER; open an explicit browser instead.
+            if (tryStartFirst(targets)) return;
+            if (tryStart(webIntent(uri, null))) return;
+            throw chooserDenied;
+        }
+    }
+
+    private static Intent preferredTarget(List<Intent> targets, String preferred) {
+        if (preferred == null || preferred.isEmpty()) return null;
+        for (Intent candidate : targets) {
+            if (candidate.getComponent() != null
+                    && preferred.equals(candidate.getComponent().getPackageName())) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean tryStart(Intent intent) {
+        try {
+            activity.startActivity(intent);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException unavailable) {
+            return false;
+        }
+    }
+
+    private boolean tryStartFirst(List<Intent> targets) {
+        for (Intent target : targets) {
+            if (tryStart(target)) return true;
+        }
+        return false;
+    }
+
+    private Intent packageScoped(Uri uri, String packageName) {
+        return webIntent(uri, null).setPackage(packageName);
     }
 
     private void resetUnavailableDefault() {
@@ -149,7 +177,9 @@ final class BrowserPicker {
 
     private static Intent webIntent(Uri uri, String type) {
         // setType() alone would erase the URL; keep both fields together.
+        // DEFAULT helps OEM resolvers that ignore BROWSABLE-only VIEW intents.
         return new Intent(Intent.ACTION_VIEW).setDataAndType(uri, type)
+                .addCategory(Intent.CATEGORY_DEFAULT)
                 .addCategory(Intent.CATEGORY_BROWSABLE);
     }
 
