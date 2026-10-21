@@ -27,6 +27,50 @@ def test_parse_ccst():
     assert items[0]["url"] == "https://ccst.jlu.edu.cn/info/1091/21181.htm"
 
 
+def test_parse_hospital_pages():
+    divli = ('<div class="li"><a href="/wujia_detail_g7yU_62/206646.html" target="_blank">'
+             '<div class="p">部门决算</div><div class="y">2026.08.10</div></a></div>')
+    items = college.parse_list(divli, "zrlyyy-tzgg")
+    assert items[0]["title"] == "部门决算" and items[0]["time"] == "2026-08-10"
+    assert items[0]["url"] == "https://www.zrlyyy.com/wujia_detail_g7yU_62/206646.html"
+    content = ('<a href="/xwzx3/xwdt2/content_105636.html">骨科年会</a><span>2026-10-21</span>'
+               '<a href="/tzgg23/rczp/content_9.html">招聘</a>')
+    items = college.parse_list(content, "jdey-xwdt")
+    assert [i["title"] for i in items] == ["骨科年会"] and items[0]["time"] == "2026-10-21"
+    eyou = ('<li><a href="/index.php?m=home&c=View&a=index&aid=82415">巡视公告</a>'
+            '<span style="color:#666">2026-10-21</span></li>'
+            '<a href="/index.php?m=home&c=View&a=index&aid=1">查看详情</a>'
+            '<a href="/index.php?m=home&c=View&a=index&aid=82415">巡视公告</a>')
+    items = college.parse_list(eyou, "jdyy-kx")
+    assert len(items) == 1 and items[0]["title"] == "巡视公告" and items[0]["time"] == "2026-10-21"
+    assert "aid=82415" in items[0]["url"] and items[0]["url"].startswith("https://www.jdyy.cn/")
+
+
+def test_structured_titles_drop_index_date_and_summary():
+    dce = ('<li><span>2026-10-19</span><a href="../info/1032/11473.htm">'
+           '<strong>1</strong>关于公示研究生学业奖学金的通知</a></li>')
+    items = college.parse_list(dce, "dce-tzgg")
+    assert items[0]["title"] == "关于公示研究生学业奖学金的通知"
+    assert items[0]["time"] == "2026-10-19"
+    phy = ('<li><a href="../info/1052/7267.htm"><div class="tl-date"><b>10</b>'
+           '<span> / 2026-10</span></div><h3>第十四届CALYPSO研讨会</h3></a></li>')
+    items = college.parse_list(phy, "phy-tzgg")
+    assert items[0]["title"] == "第十四届CALYPSO研讨会" and items[0]["time"] == "2026-10-10"
+    spxy = ('<li><a href="info/1044/4209.htm"><div class="date1"><p>19</p><p>2026.10</p></div>'
+            '<p class="title tt1">孵新奖学金评审结果公示</p>'
+            '<p class="info tt1">根据办法现将名单公示。2026年1月2日截止。</p></a></li>')
+    items = college.parse_list(spxy, "spxy-tztg")
+    assert items[0]["title"] == "孵新奖学金评审结果公示" and items[0]["time"] == "2026-10-19"
+    jdey = ('<a href="/tzgg23/tzgg4/content_105527.html"><strong>29</strong>2026-09'
+            '<span class="tit">拟报废资产评估项目公示</span>'
+            '<div>此次报废。2026年9月21日开会。</div><span>探索更多</span></a>')
+    items = college.parse_list(jdey, "jdey-gsgg")
+    assert items[0]["title"] == "拟报废资产评估项目公示" and items[0]["time"] == "2026-09-29"
+    xw = '<a href="/xwzx3/xwdt2/content_1.html">解码&nbsp;路径</a><span>2026-10-21</span>'
+    items = college.parse_list(xw, "jdey-xwdt")
+    assert items[0]["title"] == "解码 路径" and items[0]["time"] == "2026-10-21"
+
+
 def test_offsite_links_dropped():
     html = ('<ul><li><span>2026-01-02</span><a href="https://evil.example/info/1/2.htm" title="x">x</a></li>'
             '<li><span>2026-01-03</span><a href="../info/9/8.htm" title="好">好</a></li></ul>')

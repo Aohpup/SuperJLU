@@ -9,7 +9,7 @@ PAGE = r"""<!doctype html>
 <meta name="theme-color" id="tc-l" content="#f6f7f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" id="tc-d" content="#0e0f12" media="(prefers-color-scheme: dark)">
 <script>/AppleWebKit/.test(navigator.userAgent)&&/SuperJLU-Android/.test(navigator.userAgent)&&document.documentElement.classList.add("in-app");</script>
-<script>/* 首帧前应用主题，避免闪烁 */(function(){var P=window.__PREFS||{},t;try{var S=Storage.prototype,ls=window.localStorage,si=S.setItem,ri=S.removeItem;Object.keys(P).forEach(function(k){if(k.indexOf("jlu-")===0&&ls.getItem(k)!==P[k])si.call(ls,k,P[k])});var sync=function(o){try{fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o),keepalive:true}).catch(function(){})}catch(e){}};S.setItem=function(k,v){si.call(this,k,v);if(this===ls&&String(k).indexOf("jlu-")===0){var o={};o[k]=String(v);sync({set:o})}};S.removeItem=function(k){ri.call(this,k);if(this===ls&&String(k).indexOf("jlu-")===0)sync({remove:[String(k)]})};}catch(e){}t=P["jlu-theme"];if(t===undefined){try{t=localStorage.getItem("jlu-theme")}catch(e){}}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))})};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)})();</script>
+<script>/* 首帧前应用主题，避免闪烁 */(function(){var P=window.__PREFS||{},t;try{var S=Storage.prototype,ls=window.localStorage,si=S.setItem,ri=S.removeItem;Object.keys(P).forEach(function(k){if(k.indexOf("jlu-")===0&&ls.getItem(k)!==P[k])si.call(ls,k,P[k])});var sync=function(o){try{fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o),keepalive:true}).catch(function(){})}catch(e){}};S.setItem=function(k,v){si.call(this,k,v);if(this===ls&&String(k).indexOf("jlu-")===0){var o={};o[k]=String(v);sync({set:o})}};S.removeItem=function(k){ri.call(this,k);if(this===ls&&String(k).indexOf("jlu-")===0)sync({remove:[String(k)]})};}catch(e){}t=P["jlu-theme"];if(t===undefined){try{t=localStorage.getItem("jlu-theme")}catch(e){}}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))});try{if(window.SuperJLU&&SuperJLU.setBars)SuperJLU.setBars(t)}catch(e){}};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);try{if(window.SuperJLU&&SuperJLU.setBars)SuperJLU.setBars(t==="light"||t==="dark"?t:"system")}catch(e){}})();</script>
 <title>SuperJLU · 吉大人的一站式服务</title>
 <style>
 /* ===== 设计变量：柔和中性底色 + 单一沉稳强调色 ===== */
@@ -65,6 +65,18 @@ nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
 .wk{display:flex;align-items:center;gap:8px}
 .wk .n{font-size:18px;font-weight:700;min-width:96px;text-align:center}
 .wk .btn.ghost{width:36px;height:36px;padding:0;font-size:18px}
+.kb-next{display:flex;align-items:center;gap:8px;margin:0 0 8px;min-width:0}
+.kb-next[hidden]{display:none}
+.kb-next .k{flex:none;font-size:11px;font-weight:700;line-height:1.6;color:var(--pri);background:var(--pri2);border-radius:999px;padding:1px 8px}
+.kb-next .k.now{color:var(--ok);background:var(--ok2)}
+.kb-next .main{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;border:0;background:none;color:inherit;font:inherit;padding:2px 0;cursor:pointer}
+.kb-next .main:disabled{cursor:default}
+.kb-next .main b{font-weight:650}
+.kb-next .sub{font-size:12px}
+.kb-next .btn{flex:none;padding:4px 10px;font-size:12px}
+.banner.slim{align-items:center;gap:8px;padding:7px 12px;margin-bottom:8px}
+.banner.slim span{flex:1;min-width:0;font-size:13px;font-weight:650;color:var(--warn)}
+.banner.slim .btn{padding:4px 12px;font-size:13px}
 .grid{display:grid;grid-template-columns:22px repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
 .card.kb{padding:14px 10px}
 .grid .h{font-size:11px;line-height:1.35;color:var(--sub);text-align:center;padding:4px 0;border-radius:10px}
@@ -80,7 +92,8 @@ nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
 .miss,.done{display:inline-block;font-weight:600;font-size:12px;padding:1px 9px;border-radius:99px;line-height:1.6}
 .miss{color:var(--bad);background:var(--bad2)}.done{color:var(--ok);background:var(--ok2)}
 .big{font-size:34px;font-weight:750;color:var(--txt);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
-.cell{min-height:46px;border-radius:10px;background:var(--card2);border:1px dashed var(--line)}
+.cell{min-height:46px;border-radius:10px;background:var(--card2);border:1px dashed var(--line);cursor:pointer}
+.cell:hover{background:color-mix(in srgb,var(--pri) 12%,var(--card2));border-color:color-mix(in srgb,var(--pri) 55%,var(--line))}
 .cls{border-radius:10px;padding:4px 5px;font-size:10.5px;line-height:1.3;color:#fff;overflow:hidden;word-break:break-all;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
 .cls b{display:block;font-size:11px;font-weight:650}
 @media(min-width:640px){.grid{grid-template-columns:36px repeat(7,minmax(0,1fr))}.cls{font-size:12.5px;padding:7px 8px}.cls b{font-size:13.5px}.cell{min-height:52px}}
@@ -205,12 +218,12 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 <div id="sess" hidden></div><div id="offl" hidden></div>
 <div id="boot" class="card"><div class="state"><div class="spin"></div><b>正在读取本地数据…</b><div class="skel"></div><div class="skel" style="max-width:300px"></div></div></div>
 <section class="tab on" id="t-kb">
- <div class="card" id="nextexam" hidden></div>
  <div class="card" id="kb-issues" role="status" hidden></div>
  <div class="card kb">
+  <div class="kb-next" id="kb-next" hidden></div>
   <div class="row wk"><button class="btn ghost" id="prev">‹</button><div class="n" id="wkn">第 1 周</div><button class="btn ghost" id="next">›</button><span class="sp"></span><button class="btn" id="today">本周</button></div>
   <div class="grid" id="grid"></div>
-  <div class="kb-tools"><button type="button" class="btn" id="kb-add">＋ 添加课程</button><span class="sub" style="align-self:center">点一节课可以修改或隐藏</span></div>
+  <div class="kb-tools"><button type="button" class="btn" id="kb-add">＋ 添加课程</button><span class="sub" style="align-self:center">点一节课可以修改或隐藏，双击空白格添加这一节</span></div>
  </div>
 </section>
 <section class="tab" id="t-cj">
@@ -335,6 +348,53 @@ function toast(m,error=false){const t=$("#toast"),el=document.createElement("div
 function point(s){s=String(s).trim();let v=/^\d+(\.\d+)?$/.test(s)?parseFloat(s):(s in LEVEL?LEVEL[s]:null);if(v===null)return null;return v<60?0:Math.min(4,Math.round((1+(v-60)*.1)*100)/100)}
 async function api(path,body){const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(j&&j.network_error===true&&$("#network-summary"))$("#network-summary").textContent="最近请求失败："+j.error;if(j&&j.session_expired===true){if(!j.site||j.site==="jwxt"){gradeSessionState="expired";lgInfo(false)}if(Array.isArray(j.courses)||Array.isArray(j.grades)||Array.isArray(j.exams)||j.completion||j.calendar){const next=gradeRefreshSnapshot(D,j);D=Object.assign({},next,{session_expired:true,offline:true,cached_at:j.cached_at||next.cached_at||next.updated},j.site?{session_site:String(j.site)}:{});try{renderAll()}catch(_){}}else{D=Object.assign(D||{},{session_expired:true},j.site?{session_site:String(j.site)}:{});if(D&&((D.courses||[]).length||(D.grades||[]).length)&&!D.offline){D.offline=true;D.cached_at=D.cached_at||D.updated}try{renderSession();renderOffline()}catch(_){}}}if(j&&j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j;if(!r.ok||j.ok===false){const err=new Error(j.error||(r.status===401?"登录会话已过期，请在「更多 → 登录」中重新登录":r.status));err.payload=j;err.connectionAction=!!(j.connection_action||j.session_expired);throw err}return j}
 function weekOf(date){const fm=D.first_monday;if(!fm)return 1;const d0=new Date(fm+"T00:00:00");return Math.floor((date-d0)/864e5/7)+1}
+function nextClass(courses,periods,firstMonday,now,maxW){
+ const toM=t=>{const m=/^(\d{1,2}):(\d{2})/.exec(String(t||""));return m?+m[1]*60+ +m[2]:NaN};
+ const pad=n=>String(n).padStart(2,"0"),ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+ const pm=periods||{},slot=(n,i)=>{const t=pm[n]!=null?pm[n]:pm[String(n)];return t&&t.length>i?toM(t[i]):NaN};
+ if(!now||typeof now.getFullYear!=="function"||isNaN(+now)||!firstMonday)return null;
+ const fm=new Date(String(firstMonday).slice(0,10)+"T00:00:00");
+ if(isNaN(+fm))return null;
+ const cap=+maxW>0?+maxW:30,cur=+now,today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ const weekNow=Math.floor((today-fm)/864e5/7)+1;
+ let best=null;
+ for(const c of courses||[]){
+  if(!c||c.src==="cancelled")continue;
+  const wd=+c.weekday,a=+c.start,b=+c.end||a;
+  if(!(wd>=1&&wd<=7&&a>=1&&b>=a))continue;
+  const sm=slot(a,0),em=slot(b,1);
+  if(!(sm>=0)||!(em>sm))continue;
+  for(const raw of c.weeks||[]){
+   const w=+raw;if(!(w>=1&&w<=cap))continue;
+   const day=new Date(fm.getFullYear(),fm.getMonth(),fm.getDate()+(w-1)*7+wd-1);
+   const st=+new Date(day.getFullYear(),day.getMonth(),day.getDate(),Math.floor(sm/60),sm%60,0,0);
+   const en=+new Date(day.getFullYear(),day.getMonth(),day.getDate(),Math.floor(em/60),em%60,0,0);
+   if(!(en>cur))continue;
+   const item={kind:st<=cur?"now":"next",name:String(c.name||""),location:String(c.location||""),weekday:wd,start:a,end:b,week:w,hm:pad(Math.floor(sm/60))+":"+pad(sm%60),ymd:ymd(day),mins:st<=cur?Math.ceil((en-cur)/60000):Math.max(0,Math.round((st-cur)/60000)),thisWeek:w===weekNow,startAt:st,endAt:en};
+   if(!best){best=item;continue}
+   const nowWin=item.kind==="now",bestNow=best.kind==="now";
+   if(nowWin!==bestNow){if(nowWin)best=item;continue}
+   if(nowWin){if(item.endAt<best.endAt||(item.endAt===best.endAt&&item.name<best.name))best=item;continue}
+   if(item.startAt<best.startAt||(item.startAt===best.startAt&&(item.endAt<best.endAt||(item.endAt===best.endAt&&item.name<best.name))))best=item;
+  }
+ }
+ if(!best)return null;
+ return {kind:best.kind,name:best.name,location:best.location,weekday:best.weekday,start:best.start,end:best.end,week:best.week,hm:best.hm,ymd:best.ymd,mins:best.mins,thisWeek:best.thisWeek};
+ }
+function nextClassLabel(hit,now){
+ if(!hit)return {k:"课表",t:"本学期没有更多课程",sub:""};
+ const wd="周"+("一二三四五六日"[hit.weekday-1]||"?");
+ const per="第"+hit.start+(hit.end!==hit.start?"-"+hit.end:"")+"节";
+ const tail=per+(hit.location?" · "+hit.location:"");
+ if(hit.kind==="now")return {k:"正在上",t:hit.name||"未命名课程",sub:tail+(hit.mins>0?" · 还剩 "+hit.mins+" 分钟":"")};
+ const p=n=>String(n).padStart(2,"0"),y=d=>d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+ let when=wd+" "+(hit.hm||"");
+ if(now&&typeof now.getFullYear==="function"&&!isNaN(+now)&&hit.ymd){
+  if(hit.ymd===y(now))when="今天 "+(hit.hm||"");
+  else{const tmr=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);if(hit.ymd===y(tmr))when="明天 "+(hit.hm||"");else if(!hit.thisWeek)when="第"+hit.week+"周 "+wd+" "+(hit.hm||"")}
+ }
+ return {k:"下一节",t:hit.name||"未命名课程",sub:(when+" · "+tail).trim()};
+ }
 function maxWeek(){return Math.max((D.calendar&&D.calendar.total_weeks)||16,...D.courses.flatMap(c=>c.weeks))}
 function color(name){let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;return COLORS[h%COLORS.length]}
 function renderGrid(){
@@ -344,7 +404,7 @@ function renderGrid(){
  days.forEach((d,i)=>{let lab="周"+d,today=false;if(fm){const dd=new Date(fm+"T00:00:00");dd.setDate(dd.getDate()+(week-1)*7+i);lab+=`<br>${dd.getMonth()+1}/${dd.getDate()}`;today=dd.toDateString()===now.toDateString()}html+=`<div class="h${today?" today":""}">${lab}</div>`});
  const cs=KB_CS=D.courses.filter(c=>c.weeks.includes(week));
  const maxP=Math.max(11,...cs.map(c=>c.end));
- for(let p=1;p<=maxP;p++){const pt=(D.periods||{})[p];html+=`<div class="p" style="grid-row:${p+1};grid-column:1;flex-direction:column">${p}${pt?`<em>${pt[0]}</em>`:""}</div>`;for(let d=1;d<=7;d++)html+=`<div class="cell" style="grid-row:${p+1};grid-column:${d+1}"></div>`}
+ for(let p=1;p<=maxP;p++){const pt=(D.periods||{})[p];html+=`<div class="p" style="grid-row:${p+1};grid-column:1;flex-direction:column">${p}${pt?`<em>${pt[0]}</em>`:""}</div>`;for(let d=1;d<=7;d++)html+=`<div class="cell" data-d="${d}" data-p="${p}" title="双击添加课程" style="grid-row:${p+1};grid-column:${d+1}"></div>`}
  cs.forEach((c,i)=>{html+=`<div class="cls${kbCls(c)}" data-i="${i}" role="button" tabindex="0" style="grid-row:${c.start+1}/${c.end+2};grid-column:${c.weekday+1};background:${c.src==="cancelled"?"#8a9099":color(c.name)}"><b>${esc(c.name)}</b><i>${esc(c.location)}</i></div>`});
  g.innerHTML=html;
  if(!D.courses.length)g.insertAdjacentHTML("afterend",'<p class="empty" id="noc">还没有课表数据，点右上角「刷新」同步</p>');
@@ -353,6 +413,8 @@ function renderGrid(){
 const KB_WD="一二三四五六日";let KB_CS=[];
 const KB_FIELD={name:"课程名",location:"地点",teacher:"教师",weekday:"星期",start:"开始节",end:"结束节"};
 function kbSlot(c){return "周"+(KB_WD[c.weekday-1]||"?")+" 第"+c.start+(c.end!==c.start?"-"+c.end:"")+"节"}
+function kbOcc(cs){const s=new Set();for(const c of cs||[])for(let p=+c.start;p<=+c.end;p++)s.add((+c.weekday)+"-"+p);return s}
+function kbBlankSeed(weekday,period,occupied,week,maxP){weekday=+weekday;period=+period;week=+week;maxP=+maxP||period;if(!(weekday>=1&&weekday<=7&&period>=1&&week>=1))return null;const occ=p=>occupied&&occupied.has&&occupied.has(weekday+"-"+p);if(occ(period))return null;let start=period,end=period,mate=period%2?period+1:period-1;if(mate>=1&&mate<=maxP&&!occ(mate)){start=Math.min(period,mate);end=Math.max(period,mate)}return {name:"",location:"",teacher:"",weekday,start,end,weeks:[week]}}
 function kbWeeks(ws){ws=[...new Set(ws||[])].sort((a,b)=>a-b);if(!ws.length)return"";if(ws.length>=3&&ws.every((w,i)=>!i||w-ws[i-1]===2))return"第"+ws[0]+"-"+ws[ws.length-1]+"周（"+(ws[0]%2?"单":"双")+"周）";const out=[];let a=ws[0],p=ws[0];for(const w of ws.slice(1).concat([null])){if(w===p+1){p=w;continue}out.push(a===p?String(a):a+"-"+p);a=p=w}return"第"+out.join("、")+"周"}
 function kbPreset(kind,max){const a=[];for(let w=1;w<=max;w++)if(kind==="all"||(kind==="odd"&&w%2===1)||(kind==="even"&&w%2===0))a.push(w);return a}
 function kbTarget(t){const m=/^(.*)\|(\d+)\|(\d+)-(\d+)$/.exec(t||"");return m?{name:m[1],weekday:+m[2],start:+m[3],end:+m[4]}:{name:t||""}}
@@ -374,10 +436,10 @@ function kbOpen(c){if(!c)return;const b=$("#kb-dlg-body"),ed=c.src==="edited";if
   if(!confirm(ed?"撤销你对这门课的修改，恢复教务原样？":c.src==="custom"?"删除你添加的「"+c.name+"」？":"在你的课表里隐藏「"+c.name+"」的所有周？刷新课表也不会再出现，可以在「更多 → 我的课表修改」里恢复。"))return;
   if(await kbPost(kbDeleteReq(c),ed?"已恢复教务原样":"已删除"))$("#kb-dlg").close()};
  const d=$("#kb-dlg");if(!d.open)d.showModal()}
-function kbForm(c){const add=!c,custom=add||c.src==="custom",official=!!c&&c.src==="official",mx=maxWeek(),cur=c||{name:"",location:"",teacher:"",weekday:1,start:1,end:2,weeks:kbPreset("all",mx)};
+function kbForm(c,seed){const add=!c,custom=add||c.src==="custom",official=!!c&&c.src==="official",mx=maxWeek(),cur=c||Object.assign({name:"",location:"",teacher:"",weekday:1,start:1,end:2,weeks:kbPreset("all",mx)},seed||{});
  const opt=(n,v,lab)=>`<option value="${n}"${n==v?" selected":""}>${lab}</option>`,secs=Math.max(12,cur.end,...Object.keys(D.periods||{}).map(Number).filter(n=>n>0)),sel=(id,v)=>`<select id="${id}">${Array.from({length:secs},(_,i)=>opt(i+1,v,"第"+(i+1)+"节")).join("")}</select>`;
  const weeksHtml=custom?`<div class="sub" style="margin-top:10px">上课周</div><div class="row" style="margin:4px 0"><button type="button" class="btn ghost" data-p="all">全选</button><button type="button" class="btn ghost" data-p="odd">单周</button><button type="button" class="btn ghost" data-p="even">双周</button><button type="button" class="btn ghost" data-p="none">清空</button></div><div class="wkpick">${Array.from({length:mx},(_,i)=>`<label><input type="checkbox" value="${i+1}"${cur.weeks.includes(i+1)?" checked":""}>${i+1}</label>`).join("")}</div>`:official?`<div class="kb-scope" role="radiogroup" aria-label="修改范围"><label><input type="radio" name="kb-scope" value="week" checked> 只改本周（第${week}周）</label><label><input type="radio" name="kb-scope" value="all"> 所有周</label></div>`:"";
- const b=$("#kb-dlg-body");b.innerHTML=`<h2 style="margin:0 0 10px">${add?"添加课程":"修改「"+esc(c.name)+"」"}</h2><form id="kb-form" class="kb-form"><label>课程名<input id="kb-f-name" value="${esc(cur.name)}" maxlength="60" required></label><label>地点<input id="kb-f-location" value="${esc(cur.location==="待定"&&add?"":cur.location)}" maxlength="60"></label><label>教师<input id="kb-f-teacher" value="${esc(cur.teacher)}" maxlength="40"></label><div class="row"><label>星期 <select id="kb-f-weekday">${[1,2,3,4,5,6,7].map(d=>opt(d,cur.weekday,"周"+KB_WD[d-1])).join("")}</select></label><label>从 ${sel("kb-f-start",cur.start)}</label><label>到 ${sel("kb-f-end",cur.end)}</label></div>${weeksHtml}<div class="row" style="margin-top:14px"><span class="sp"></span><button type="button" class="btn ghost" id="kb-f-cancel">取消</button><button class="btn pri">保存</button></div></form>`;
+ const b=$("#kb-dlg-body");b.innerHTML=`<h2 style="margin:0 0 10px">${add?"添加课程":"修改「"+esc(c.name)+"」"}</h2>${add&&seed?`<p class="sub" style="margin:0 0 8px">已按空白格填好：${esc(kbSlot(cur))}，${esc(kbWeeks(cur.weeks))}。填写课程名即可保存，星期、节次和周次还能改。</p>`:""}<form id="kb-form" class="kb-form"><label>课程名<input id="kb-f-name" value="${esc(cur.name)}" maxlength="60" required></label><label>地点<input id="kb-f-location" value="${esc(cur.location==="待定"&&add?"":cur.location)}" maxlength="60"></label><label>教师<input id="kb-f-teacher" value="${esc(cur.teacher)}" maxlength="40"></label><div class="row"><label>星期 <select id="kb-f-weekday">${[1,2,3,4,5,6,7].map(d=>opt(d,cur.weekday,"周"+KB_WD[d-1])).join("")}</select></label><label>从 ${sel("kb-f-start",cur.start)}</label><label>到 ${sel("kb-f-end",cur.end)}</label></div>${weeksHtml}<div class="row" style="margin-top:14px"><span class="sp"></span><button type="button" class="btn ghost" id="kb-f-cancel">取消</button><button class="btn pri">保存</button></div></form>`;
  b.onclick=e=>{const p=e.target.dataset&&e.target.dataset.p;if(!p)return;const on=new Set(p==="none"?[]:kbPreset(p,mx));b.querySelectorAll(".wkpick input").forEach(x=>x.checked=on.has(+x.value))};
  $("#kb-f-cancel").onclick=()=>$("#kb-dlg").close();
  $("#kb-form").onsubmit=async e=>{e.preventDefault();const v={name:$("#kb-f-name").value.trim(),location:$("#kb-f-location").value.trim(),teacher:$("#kb-f-teacher").value.trim(),weekday:+$("#kb-f-weekday").value,start:+$("#kb-f-start").value,end:+$("#kb-f-end").value};if(!v.name)return toast("请填写课程名",true);if(v.end<v.start)return toast("结束节不能早于开始节",true);
@@ -389,7 +451,7 @@ function renderAdjToggle(){const a=(D&&D.schedule_adjust)||{enabled:true},el=$("
 function renderKbExtras(){const is=(D&&D.schedule_issues)||[],box=$("#kb-issues");if(!box)return;box.hidden=!is.length;
  box.innerHTML=is.length?`<h2>有 ${is.length} 条课表修改需要你看一下</h2>`+is.map(i=>`<div class="kb-iss"><b>${esc(kbIssueTitle(i))}</b> <span class="sub">「${esc(i.name||"")}」${i.weekday?" "+esc(kbSlot(i)):""}</span><div class="sub">${esc(i.message)}</div><div class="row" style="margin-top:6px">${kbIssueActions(i).map(([a,l])=>`<button type="button" class="btn${a==="remove"?" ghost":""}" data-a="${a}" data-id="${esc(i.oid)}">${l}</button>`).join("")}</div></div>`).join(""):"";
  const ops=(D&&D.schedule_ops)||[],n=ops.length,o=(D&&D.schedule_other_terms)||0;
- $("#kb-edits-sum").textContent=(n?`本学期你改了 ${n} 处课表，刷新课表不会覆盖这些修改。`:"你还没有修改过课表。在课表里点一节课就能修改或隐藏，也可以点「＋ 添加课程」。")+(o?` 其他学期还有 ${o} 处修改，已经保存，不会显示在本学期课表里。`:"");
+ $("#kb-edits-sum").textContent=(n?`本学期你改了 ${n} 处课表，刷新课表不会覆盖这些修改。`:"你还没有修改过课表。在课表里点一节课就能修改或隐藏，也可以点「＋ 添加课程」，或双击空白格按这一节添加。")+(o?` 其他学期还有 ${o} 处修改，已经保存，不会显示在本学期课表里。`:"");
  $("#kb-edits-list").innerHTML=ops.map(x=>`<div class="kb-op"><span>${esc(kbOpText(x))}</span><button type="button" class="btn ghost" data-a="remove" data-id="${esc(x.id)}">撤销</button></div>`).join("");
  $("#kb-reset").hidden=!n;$("#kb-undo").hidden=!(D&&D.schedule_can_undo_reset)}
 const KB_DONE={ack:"好的，不再提醒",detach:"已保留为自定义课",remove:"已删掉这条修改"};
@@ -477,8 +539,6 @@ function fmtTime(e){if(!e.start)return"时间待定";const s=e.start.replace("T"
 function renderExams(){
  const L=D.exams.map(e=>{const c=cd(e);return`<div class="exam"><div class="cd ${c.cls}"><b>${c.big}</b><span>${c.sm}</span></div><div class="t"><b>${esc(e.name)}</b><span class="sub">${esc(fmtTime(e))}<br>${esc(e.location)}${e.seat?" · 座位 "+esc(e.seat):""}${e.kind?" · "+esc(e.kind):""}</span></div></div>`});
  $("#exams").innerHTML=L.join("")||'<p class="empty">暂无考试安排数据（刷新后若教务已发布会显示在这里）</p>';
- const nx=D.exams.find(e=>e.start&&new Date(e.end||e.start)>new Date()),box=$("#nextexam");
- if(nx){const c=cd(nx);box.hidden=false;box.innerHTML=`<div class="exam" style="padding:0"><div class="cd ${c.cls}"><b>${c.big}</b><span>${c.sm}</span></div><div class="t"><span class="sub">下一场考试</span><b>${esc(nx.name)}</b><span class="sub">${esc(fmtTime(nx))} · ${esc(nx.location)}</span></div></div>`}else box.hidden=true;
 }
 function renderOfficial(){const o=D.official_gpa,box=$("#ogpa");if(D.grade_source==="import"){box.hidden=true;return}if(o&&o.available===false){box.hidden=false;box.innerHTML=`<h3>教务官方统计</h3><p class="sub" style="margin:0">吉大教务暂未提供「学分绩点统计」接口；成绩里若含教务单科绩点，会显示其学分加权结果。</p>`;return}if(!o||!o.items||!o.items.length){box.hidden=true;return}box.hidden=false;
  box.innerHTML=`<h3>教务官方统计 <span class="chip">只读</span></h3><div class="ogpa">${o.items.map(i=>`<div><span class="sub">${esc(i.label)}</span><b>${esc(i.value)}</b></div>`).join("")}</div><p class="sub" style="margin:8px 0 0">${o.source==="grades_jw_point"?"按教务单科绩点计算":"来自教务「学分绩点统计」"}${o.plan?" · "+esc(o.plan):""}</p>`}
@@ -545,11 +605,30 @@ async function load(){D=await api("/api/data");week=Math.min(Math.max(1,weekOf(n
 let gradeSyncing=false;
 async function refreshGradeData(automatic=false){if(gradeSyncing)return;gradeSyncing=true;const b=$("#grade-sync");b.disabled=true;b.textContent="⟳ 同步中…";$("#grade-sync-status").textContent="正在使用已保存的登录会话同步教务成绩…";try{const j=await api("/api/grades/refresh",{auto:automatic});if(D.grade_source!=="import"&&!gradeImporting){D=j;renderAll();$("#grade-sync-status").textContent=`已同步当前账号的 ${j.grade_result.count} 门教务课程。`}if(!automatic)toast("教务成绩已同步")}catch(e){if(D.grade_source!=="import")$("#grade-sync-status").textContent="同步失败，保留本机成绩缓存："+e.message;if(!automatic)toast("同步失败："+e.message,true)}finally{gradeSyncing=false;b.disabled=false;b.textContent="⟳ 同步教务成绩";if(D.grade_source==="import"||gradeSessionState==="expired"||gradeSessionState==="missing")$("#grade-sync-status").textContent=gradeStatusText(D,gradeSessionState)}}
 function sessionInfo(d){const s=d&&d.session;const exp=(d&&d.session_expired===true)||(s&&(s.expired===true||s.valid===false||/^(expired|invalid)$/i.test(String(s.status||s.state||""))));if(exp||gradeSessionState==="expired")return s||{};return gradeSessionState==="missing"?{missing:true}:null}
-function renderSession(){const box=$("#sess"),s=sessionInfo(D);if(!s){box.hidden=true;box.innerHTML="";return}box.hidden=false;
- box.innerHTML=`<div class="banner" role="status"><span class="ic">⚠</span><div><b>${s.missing?"尚未登录，无法同步教务数据":(D&&D.session_site?esc(SITEN(D.session_site))+" ":"")+"登录会话已过期"}</b><p class="sub">${s.message?esc(s.message)+" · ":""}本地成绩单仍可导入、计算和保存模板。需要同步教务数据时，请${s.missing?"登录":"重新登录"}。${s.expired_at||s.expires_at?"（过期时间 "+esc(s.expired_at||s.expires_at)+"）":""}</p></div><button class="btn pri" type="button" onclick="openLogin()">${s.missing?"立即登录":"重新登录"}</button></div>`}
-document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0);scheduleGradeCompact();if(b.dataset.t==="cj"&&!gradeHelpSeen())openGradeHelp()});
+function renderNextClass(){
+ const box=$("#kb-next");if(!box)return;
+ if(!D){box.hidden=true;return}
+ const s=sessionInfo(D),courses=D.courses||[];
+ let cap=30;try{cap=maxWeek()}catch(_){}
+ const now=new Date(),hit=D.first_monday?nextClass(courses,periodMap(),D.first_monday,now,cap):null;
+ let lab;
+ if(!courses.length)lab={k:"课表",t:s&&s.missing?"登录后同步课表":"还没有课表",sub:s&&!s.missing?"点右上角刷新":""};
+ else if(!D.first_monday)lab={k:"课表",t:"刷新后显示下一节课",sub:""};
+ else lab=nextClassLabel(hit,now);
+ const login=s?`<button class="btn" type="button" onclick="openLogin()">${s.missing?"登录":"重新登录"}</button>`:"";
+ const html=`<span class="k${hit&&hit.kind==="now"?" now":""}">${esc(lab.k)}</span><button type="button" class="main" id="kb-next-go"${hit?"":" disabled"}><b>${esc(lab.t)}</b>${lab.sub?` <span class="sub">${esc(lab.sub)}</span>`:""}</button>${login}`;
+ box.hidden=false;if(box.dataset.v===html)return;box.dataset.v=html;box.innerHTML=html;
+ const go=$("#kb-next-go");if(go&&hit)go.onclick=()=>{week=Math.min(Math.max(1,hit.week),cap);renderGrid()};
+}
+function renderSession(){try{renderNextClass()}catch(_){}const box=$("#sess"),s=sessionInfo(D),onKb=!!document.querySelector("#t-kb.on");if(!s||onKb){box.hidden=true;box.innerHTML="";return}box.hidden=false;
+ box.innerHTML=`<div class="banner slim" role="status"><span>${s.missing?"尚未登录":(D&&D.session_site?esc(SITEN(D.session_site))+" ":"")+"登录已过期"}</span><button class="btn" type="button" onclick="openLogin()">${s.missing?"登录":"重新登录"}</button></div>`}
+setInterval(()=>{try{if(D)renderNextClass()}catch(_){}},60000);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)return;try{renderNextClass()}catch(_){}});
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0);scheduleGradeCompact();try{renderSession()}catch(_){}if(b.dataset.t==="cj"&&!gradeHelpSeen())openGradeHelp()});
 $("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
+function kbAddAt(el){if(!el||!el.classList||!el.classList.contains("cell"))return;const now=Date.now();if(kbAddAt.lock&&now-kbAddAt.lock<500)return;const maxP=Math.max(11,...(KB_CS||[]).map(c=>+c.end||0));const seed=kbBlankSeed(+el.dataset.d,+el.dataset.p,kbOcc(KB_CS),week,maxP);if(!seed)return;kbAddAt.lock=now;kbForm(null,seed)}
 $("#grid").addEventListener("click",e=>{const el=e.target.closest(".cls");if(el)kbOpen(KB_CS[+el.dataset.i])});
+$("#grid").addEventListener("dblclick",e=>{const el=e.target.closest&&e.target.closest(".cell");if(!el||(e.target.closest&&e.target.closest(".cls")))return;e.preventDefault();kbAddAt(el)});
 $("#grid").addEventListener("keydown",e=>{const el=e.target.closest&&e.target.closest(".cls");if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();kbOpen(KB_CS[+el.dataset.i])}});
 $("#adj-on").onchange=async e=>{const on=e.target.checked;try{const j=await api("/api/settings",{apply_adjustments:on});D=gradeRefreshSnapshot(D,j);renderAll();toast(on?"已开启，调课会显示在课表上":"已关闭，课表按教务原始安排显示")}catch(err){e.target.checked=!on;toast(err.message,true)}};
 $("#kb-add").onclick=()=>kbForm(null);$("#kb-issues").onclick=kbActionClick;$("#kb-edits-list").onclick=kbActionClick;
@@ -561,8 +640,8 @@ $("#kb-paste-ok").onclick=()=>{const t=$("#kb-paste").value.trim();if(!t)return 
 $("#kb-export").onclick=async e=>{if(!/SuperJLU-Android/.test(navigator.userAgent))return;e.preventDefault();let t;try{t=await fetch("/api/schedule/overlay").then(r=>r.text())}catch(_){return toast("读取备份失败",true)}$("#kb-backup-text").value=t;$("#kb-backup-box").hidden=false;try{const f=new File([t],"superjlu-schedule-edits.json",{type:"application/json"});if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"SuperJLU 课表修改备份"})}catch(_){}};
 $("#kb-copy").onclick=async()=>{const t=$("#kb-backup-text");t.select();let ok=false;try{await navigator.clipboard.writeText(t.value);ok=true}catch(_){try{ok=document.execCommand("copy")}catch(_){}}toast(ok?"已复制，可以粘贴到聊天或备忘录里保存":"复制失败，请长按文字手动复制",!ok)};
 $("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
-let tx=null;$("#grid").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
-$("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>60)(dx<0?$("#next"):$("#prev")).click();tx=null});
+let tx=null,kbTap=null;$("#grid").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
+$("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>60){kbTap=null;(dx<0?$("#next"):$("#prev")).click();return}const el=e.target.closest&&e.target.closest(".cell");if(!el||(e.target.closest&&e.target.closest(".cls"))){kbTap=null;return}const now=Date.now(),key=el.dataset.d+"|"+el.dataset.p;if(kbTap&&kbTap.key===key&&now-kbTap.at<450){kbTap=null;kbAddAt(el)}else kbTap={key,at:now}});
 $("#grade-restore").onclick=restoreGradeSelection;
 $("#grade-issues").onclick=e=>{const button=e.target.closest("[data-grade-issue]");if(!button||!gradeReady())return;const kind=button.dataset.gradeIssue,active=$("#grade-status").value===kind;resetGradeFilters(false);$("#grade-status").value=active?"":kind;$("#grade-filter").open=true;renderGrades()};
 $("#gt").onchange=e=>{const k=e.target.dataset.k;if(!k)return;e.target.checked?include.add(k):include.delete(k);renderGrades()};
@@ -614,7 +693,8 @@ $("#grade-use-jwxt").onclick=()=>switchGradeSource("jwxt");$("#grade-view-import
 $("#clrfm").onclick=async()=>{D=await api("/api/settings",{first_monday:""});await load();toast("已恢复为教务校历")};
 document.querySelectorAll(".thm button").forEach(b=>b.onclick=()=>window.__setTheme(b.dataset.theme));window.__setTheme(localStorage.getItem("jlu-theme")||"system");
 $("#savefm").onclick=async()=>{try{D=await api("/api/settings",{first_monday:$("#fm").value});await load();toast("已保存")}catch(e){toast(e.message)}};
-$("#ics").onclick=e=>{if(!D.first_monday){e.preventDefault();toast("请先刷新以读取校历")}};
+async function exportIcs(e){if(!D||!D.first_monday){e.preventDefault();toast("请先刷新以读取校历");return}if(!/SuperJLU-Android/.test(navigator.userAgent))return;e.preventDefault();if(exportIcs.busy)return;exportIcs.busy=1;const btn=e.currentTarget,prev=btn&&btn.textContent;if(btn){btn.textContent="导出中…";btn.setAttribute("aria-busy","true")}try{const r=await fetch("/api/ics"),text=await r.text();if(!r.ok||!text.startsWith("BEGIN:VCALENDAR")){let m="导出失败";try{const j=JSON.parse(text);if(j&&j.error)m=j.error}catch(_){}toast(m,true);return}if(window.SuperJLU&&typeof SuperJLU.shareIcs==="function"){SuperJLU.shareIcs(text);return}const f=new File([text],"jlu-schedule.ics",{type:"text/calendar"});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:"吉大课表"});return}toast("没有可以打开课表的应用",true)}catch(err){if(err&&err.name==="AbortError")return;toast("导出失败",true)}finally{exportIcs.busy=0;if(btn){btn.textContent=prev||"导出 iCal (.ics)";btn.removeAttribute("aria-busy")}}}
+$("#ics").onclick=exportIcs;
 $("#refresh").onclick=()=>fullRefresh({}).catch(()=>{});
 /* 日期与「周次+星期」双向联动：改日期自动换算周次/星期，改周次/星期（单周）自动换算日期 */
 function rdToWeek(){const v=$("#rd").value;if(!v)return;const d=new Date(v+"T00:00:00");$("#rwd").value=String(d.getDay()||7);if(D&&D.first_monday){const w=weekOf(d);if(w>=1)$("#rw").value=String(w)}}
