@@ -787,5 +787,5 @@ $("#lgbtn").onclick=startLogin;
 
 # Android 原生设置保存应用内默认；桌面端保持 hidden，由 loadNetworkState 按 UA 显示。
 SHOW_BROWSER_PREFERENCES = True
-BROWSER_PREFERENCES_CARD = '<div class="card" id="browser-preferences" hidden><h2>外部浏览器</h2><p class="sub" id="browser-preferences-hint">选择默认浏览器，或在每次打开网页时询问。仅影响本应用。</p><a class="btn ghost" id="browser-settings-button" href="superjlu://browser-settings" aria-describedby="browser-preferences-hint">设置默认浏览器</a></div>'
+BROWSER_PREFERENCES_CARD = '<div class="card" id="browser-preferences" hidden><h2>外部浏览器</h2><p class="sub" id="browser-preferences-hint">跟随系统默认浏览器，或指定一个应用。仅影响本应用。</p><a class="btn ghost" id="browser-settings-button" href="superjlu://browser-settings" aria-describedby="browser-preferences-hint">设置默认浏览器</a></div>'
 PAGE = PAGE.replace("<!--BROWSER_PREFERENCES_CARD-->", BROWSER_PREFERENCES_CARD if SHOW_BROWSER_PREFERENCES else "", 1)

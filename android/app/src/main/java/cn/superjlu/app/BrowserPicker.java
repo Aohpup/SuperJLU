@@ -12,7 +12,6 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
-import android.os.Build;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,7 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** System web chooser with a separately configured, app-local default. */
+/** App-local web default: follow the system browser, or open a chosen app. */
 final class BrowserPicker {
     interface CandidateQuery {
         List<ResolveInfo> query(Intent intent, int flags);
@@ -34,6 +33,7 @@ final class BrowserPicker {
     static final int QUERY_FLAGS = PackageManager.MATCH_ALL | PackageManager.MATCH_DEFAULT_ONLY
             | PackageManager.GET_RESOLVED_FILTER;
     private static final String[] WEB_TYPES = {null, "text/html", "application/xhtml+xml"};
+    /** Legacy mode from earlier builds; treated as follow-system and rewritten on read. */
     private static final String MODE_ASK = "ask";
     private static final String MODE_SYSTEM = "system";
     private static final String MODE_APP = "app";
@@ -60,18 +60,10 @@ final class BrowserPicker {
             return;
         }
         try {
-            String mode = preferences.getString("mode", MODE_ASK);
-            if (MODE_SYSTEM.equals(mode)) {
-                try {
-                    activity.startActivity(webIntent(uri, null));
-                    return;
-                } catch (ActivityNotFoundException | SecurityException unavailable) {
-                    resetUnavailableDefault();
-                }
-            }
-            List<Intent> targets = findTargets(uri);
+            String mode = resolvedMode();
             if (MODE_APP.equals(mode)) {
                 String preferred = preferences.getString("package", null);
+                List<Intent> targets = findTargets(uri);
                 Intent target = null;
                 for (Intent candidate : targets) {
                     if (candidate.getComponent().getPackageName().equals(preferred)) {
@@ -85,32 +77,29 @@ final class BrowserPicker {
                         return;
                     } catch (ActivityNotFoundException | SecurityException unavailable) {
                         // An app may disappear or become unavailable after discovery.
-                        targets.remove(target);
                     }
                 }
                 resetUnavailableDefault();
             }
-            Intent view = targets.isEmpty() ? webIntent(uri, null) : targets.get(0);
-            Intent chooser = Intent.createChooser(view, activity.getString(R.string.browser_chooser_title));
-            if (targets.size() > 1) {
-                // INITIAL_INTENTS is limited to two additions on Android 10+. Alternate payloads
-                // retain the exact component, URL and MIME that matched each browser.
-                chooser.putExtra(Intent.EXTRA_ALTERNATE_INTENTS,
-                        targets.subList(1, targets.size()).toArray(new Intent[0]));
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // This belongs on ACTION_CHOOSER, not its nested ACTION_VIEW.
-                // Keep the panel visible even if the system finds only one candidate.
-                chooser.putExtra(Intent.EXTRA_AUTO_LAUNCH_SINGLE_CHOICE, false);
-            }
-            activity.startActivity(chooser);
+            activity.startActivity(webIntent(uri, null));
         } catch (ActivityNotFoundException | SecurityException error) {
             Toast.makeText(activity, R.string.browser_open_failed, Toast.LENGTH_LONG).show();
         }
     }
 
+    /** Follow system unless a concrete app package is saved. Legacy "ask" becomes system. */
+    private String resolvedMode() {
+        String mode = preferences.getString("mode", MODE_SYSTEM);
+        if (MODE_ASK.equals(mode)) {
+            preferences.edit().putString("mode", MODE_SYSTEM).remove("package").apply();
+            return MODE_SYSTEM;
+        }
+        if (MODE_APP.equals(mode)) return MODE_APP;
+        return MODE_SYSTEM;
+    }
+
     private void resetUnavailableDefault() {
-        preferences.edit().putString("mode", MODE_ASK).remove("package").apply();
+        preferences.edit().putString("mode", MODE_SYSTEM).remove("package").apply();
         Toast.makeText(activity, R.string.browser_default_unavailable, Toast.LENGTH_LONG).show();
     }
 
@@ -122,7 +111,7 @@ final class BrowserPicker {
             try {
                 matches = query.query(request, QUERY_FLAGS);
             } catch (SecurityException denied) {
-                // Query restrictions must not prevent the system chooser fallback.
+                // Query restrictions must not prevent the system default fallback.
                 continue;
             }
             if (matches == null) continue;
@@ -170,8 +159,6 @@ final class BrowserPicker {
         close();
         PackageManager pm = activity.getPackageManager();
         List<BrowserChoice> choices = new ArrayList<>();
-        choices.add(new BrowserChoice(MODE_ASK, null, activity.getString(R.string.browser_always_ask),
-                activity.getDrawable(android.R.drawable.ic_menu_help)));
         choices.add(new BrowserChoice(MODE_SYSTEM, null, activity.getString(R.string.browser_follow_system),
                 activity.getDrawable(android.R.drawable.ic_menu_view)));
         // A neutral network URL only queries local capability declarations; it is never opened.
@@ -188,7 +175,7 @@ final class BrowserPicker {
             }
             choices.add(new BrowserChoice(MODE_APP, packageName, label, icon));
         }
-        String mode = preferences.getString("mode", MODE_ASK);
+        String mode = resolvedMode();
         String packageName = preferences.getString("package", null);
         final int[] selection = {0};
         boolean currentFound = false;
@@ -248,7 +235,6 @@ final class BrowserPicker {
 
     void close() {
         if (settingsDialog != null) settingsDialog.dismiss();
-        settingsDialog = null;
     }
 
     private static final class BrowserChoice {
