@@ -2,17 +2,26 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const src=fs.readFileSync(__dirname+'/../jlu_toolkit/ui_page.py','utf8').split('\n');
 const pick=n=>{const i=src.findIndex(l=>l.startsWith(n));if(i<0)throw Error('missing '+n);let j=i+1;while(j<src.length&&/^[ \t]/.test(src[j]))j++;return src.slice(i,j).join('\n')};
-const names=['const KB_WD=','const KB_FIELD=','function kbSlot(','function kbWeeks(','function kbPreset(','function kbTarget(','function kbOpText(',
+const names=['function nextClass(','function nextClassLabel(','const KB_WD=','const KB_FIELD=','function kbSlot(','function kbOcc(','function kbBlankSeed(','function kbWeeks(','function kbPreset(','function kbTarget(','function kbOpText(',
  'function kbIssueTitle(','function kbIssueActions(','function kbCls(','function kbSrcText(','function kbCourse(','function kbOpSet(','function kbSkipReq(',
  'function kbDeleteReq(','function kbEditReq(','function adjInfoText(','function renderAdjToggle(','function renderKbExtras(','const KB_DONE=','function kbActionClick(','function kbImportText(','async function kbPost('];
 const nodes=new Map(),node=id=>{if(!nodes.has(id))nodes.set(id,{id,hidden:false,innerHTML:'',textContent:''});return nodes.get(id)};
 const calls=[],toasts=[];
 const ctx=vm.createContext({D:null,$:node,esc:s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),toast:(m,bad)=>toasts.push([m,!!bad]),
  renderGrid:()=>calls.push('grid'),api:async(p,b)=>{calls.push([p,b]);if(b.action==='bad')throw new Error('找不到要修改的课程，请刷新后重试');return{ok:true,schedule_edits:9}}});
-vm.runInContext(names.map(pick).join('\n')+'\nthis.KB={adjInfoText,renderAdjToggle,kbSlot,kbWeeks,kbPreset,kbTarget,kbOpText,kbIssueActions,kbCls,kbSkipReq,kbDeleteReq,kbEditReq,renderKbExtras,kbActionClick,kbImportText,kbPost,kbSrcText};',ctx);
+vm.runInContext(names.map(pick).join('\n')+'\nthis.KB={nextClass,nextClassLabel,adjInfoText,renderAdjToggle,kbSlot,kbOcc,kbBlankSeed,kbWeeks,kbPreset,kbTarget,kbOpText,kbIssueActions,kbCls,kbSkipReq,kbDeleteReq,kbEditReq,renderKbExtras,kbActionClick,kbImportText,kbPost,kbSrcText};',ctx);
 const K=ctx.KB,J=x=>x===undefined?x:JSON.parse(JSON.stringify(x)),eq=(a,b)=>assert.deepEqual(J(a),J(b));
 (async()=>{
  assert.equal(K.kbSlot({weekday:1,start:1,end:2}),'周一 第1-2节');
+ const occ=K.kbOcc([{weekday:3,start:1,end:2},{weekday:3,start:5,end:5}]);
+ eq(K.kbBlankSeed(3,3,occ,6,11),{name:'',location:'',teacher:'',weekday:3,start:3,end:4,weeks:[6]});
+ eq(K.kbBlankSeed(3,4,occ,6,11),{name:'',location:'',teacher:'',weekday:3,start:3,end:4,weeks:[6]});
+ eq(K.kbBlankSeed(3,1,occ,6,11),null);
+ eq(K.kbBlankSeed(3,5,occ,6,11),null);
+ eq(K.kbBlankSeed(3,6,occ,6,11),{name:'',location:'',teacher:'',weekday:3,start:6,end:6,weeks:[6]});
+ eq(K.kbBlankSeed(1,11,occ,6,11),{name:'',location:'',teacher:'',weekday:1,start:11,end:11,weeks:[6]});
+ assert.equal(K.kbBlankSeed(0,1,occ,6,11),null);
+ assert.equal(K.kbBlankSeed(1,1,occ,0,11),null);
  assert.equal(K.kbSlot({weekday:7,start:5,end:5}),'周日 第5节');
  assert.equal(K.kbWeeks([5,1,2,3,8,9,12]),'第1-3、5、8-9、12周');
  assert.equal(K.kbWeeks([]),'');assert.equal(K.kbWeeks([1,3,5,7]),'第1-7周（单周）');assert.equal(K.kbWeeks([2,4,6]),'第2-6周（双周）');assert.equal(K.kbWeeks([1,3]),'第1、3周');
@@ -81,5 +90,38 @@ const K=ctx.KB,J=x=>x===undefined?x:JSON.parse(JSON.stringify(x)),eq=(a,b)=>asse
  assert.equal(K.kbCls({src:'cancelled',adj:'停课：原 周一'}),' cancelled');
  assert.match(K.kbSrcText({src:'cancelled',adj:'停课：原 周一 第1-2节 第8周 · 经信A101（2026-10-01 申请）'}),/^教务停课：原 周一.*申请/);
  assert.match(K.adjInfoText({enabled:true,applied:2}),/灰色带「停」字/);
+ // 下一节：按当前时间，停课不算；正在上优先于之后的课
+ const P={1:["08:00","08:45"],2:["08:55","09:40"],3:["10:00","10:45"],4:["10:55","11:40"],5:["13:30","14:15"],6:["14:25","15:10"]};
+ const FM="2026-09-07"; // 周一；2026-10-22 是第 7 周周四
+ const cs=[
+  {name:"已结束",location:"A",weekday:4,start:1,end:1,weeks:[7]},
+  {name:"停课",location:"B",weekday:4,start:3,end:4,weeks:[7],src:"cancelled"},
+  {name:"离散数学",location:"逸夫楼",weekday:4,start:3,end:4,weeks:["7"]},
+  {name:"高等数学",location:"经信",weekday:5,start:1,end:2,weeks:[7]},
+  {name:"大学英语",location:"东荣",weekday:1,start:1,end:1,weeks:[8]},
+ ];
+ const at=(h,mi,day=22)=>new Date(2026,9,day,h,mi,0);
+ const hit930=K.nextClass(cs,P,FM,at(9,30),16);
+ eq(hit930,{kind:"next",name:"离散数学",location:"逸夫楼",weekday:4,start:3,end:4,week:7,hm:"10:00",ymd:"2026-10-22",mins:30,thisWeek:true});
+ eq(K.nextClassLabel(hit930,at(9,30)),{k:"下一节",t:"离散数学",sub:"今天 10:00 · 第3-4节 · 逸夫楼"});
+ const hit1030=K.nextClass(cs,P,FM,at(10,30),16);
+ assert.equal(hit1030.kind,"now");assert.equal(hit1030.name,"离散数学");assert.equal(hit1030.mins,70);
+ eq(K.nextClassLabel(hit1030,at(10,30)),{k:"正在上",t:"离散数学",sub:"第3-4节 · 逸夫楼 · 还剩 70 分钟"});
+ const hitNight=K.nextClass(cs,P,FM,at(21,0),16);
+ assert.equal(hitNight.name,"高等数学");assert.equal(hitNight.ymd,"2026-10-23");
+ eq(K.nextClassLabel(hitNight,at(21,0)),{k:"下一节",t:"高等数学",sub:"明天 08:00 · 第1-2节 · 经信"});
+ const hitFri=K.nextClass(cs,P,FM,at(18,0,23),16);
+ assert.equal(hitFri.name,"大学英语");assert.equal(hitFri.week,8);assert.equal(hitFri.thisWeek,false);
+ eq(K.nextClassLabel(hitFri,at(18,0,23)),{k:"下一节",t:"大学英语",sub:"第8周 周一 08:00 · 第1节 · 东荣"});
+ assert.equal(K.nextClass(cs,P,FM,at(9,0,26),16),null);
+ eq(K.nextClassLabel(null,at(9,0)),{k:"课表",t:"本学期没有更多课程",sub:""});
+ assert.equal(K.nextClass([],P,"",at(9,30),16),null);
+ const overlap=K.nextClass([
+  {name:"长课",location:"",weekday:4,start:1,end:4,weeks:[7]},
+  {name:"短课",location:"",weekday:4,start:3,end:4,weeks:[7]},
+ ],P,FM,at(10,30),16);
+ assert.equal(overlap.kind,"now");assert.equal(overlap.name,"短课");
+ assert.ok(!src.some(l=>l.includes("nextexam")||l.includes("下一场考试")));
+ assert.ok(src.some(l=>l.includes('id="kb-next"')));
  console.log('js_schedule_edit_test ok');
 })().catch(e=>{console.error(e);process.exit(1)});

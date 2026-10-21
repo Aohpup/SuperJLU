@@ -49,6 +49,12 @@ def test_app_name_icon_and_insets():
     assert (ANDROID / "res" / "mipmap-anydpi-v26" / "ic_launcher.xml").is_file()
     act = next(ANDROID.rglob("MainActivity.java")).read_text(encoding="utf-8")
     assert "setOnApplyWindowInsetsListener" in act and "displayCutout" in act
+    assert "setInsetHeight(R.id.status_inset" in act and "setInsetHeight(R.id.nav_inset" in act
+    assert "#0B4EA2" not in act and "#f6f7f9" in act and "#ffffff" in act
+    assert "shareIcs" in act and "/api/ics" in act
+    layout = (ANDROID / "res" / "layout" / "activity_main.xml").read_text(encoding="utf-8")
+    assert "#0B4EA2" not in layout and "status_inset" in layout and "nav_inset" in layout
+    assert "ExportProvider" in (ANDROID / "AndroidManifest.xml").read_text(encoding="utf-8")
     assert "api/session/keepalive" in act and "onPause" in act
     gradle = (ROOT / "android" / "app" / "build.gradle").read_text(encoding="utf-8")
     assert 'applicationId "cn.superjlu.app"' in gradle
