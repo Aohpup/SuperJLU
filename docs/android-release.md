@@ -37,7 +37,7 @@ CI：`.github/workflows/release-android.yml`。推 `v*` 标签 → 签名 releas
 ## 网络与外部浏览器回归
 
 同一 `testDebugUnitTest` 还运行 `BrowserPickerTest` 和 `SchoolHttpTest`（API 28 / 35）。
-当前分支提供应用内默认设置：跟随系统或指定应用（已去掉「每次询问」）。
+当前分支提供应用内默认设置：跟随系统或指定应用（设置里已隐藏「每次询问」（代码钩子保留））。
 `BrowserPickerTest` 验证默认跟随系统外链、忽略旧实验偏好、旧 ask 偏好迁移、
 设置对话框不打开网址或全局设置、不支持的链接被拒绝，以及启动失败提示；
 `SchoolHttpTest` 以虚构连接验证系统 HTTPS 单跳的请求体、多个 Cookie、重定向/错误状态与连接释放，不调用真实认证。

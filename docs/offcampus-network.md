@@ -84,7 +84,7 @@ browser-trial.23 新增普通网页、HTML 和 XHTML 的有限可见性查询，
 
 browser-trial.24 删除诊断 Toast，开放 Android「更多 → 外部浏览器 → 设置默认浏览器」。可选跟随系统默认或具体应用；仅点击保存后记录模式与包名。固定应用每次按当前网址重新查找可用组件，不记录网址／MIME／票据，不修改系统默认；默认失效时提示并恢复跟随系统。
 
-browser-trial.25 按产品反馈去掉「每次询问」（该模式在部分 ColorOS 上不可靠）；旧 ask 偏好迁移为跟随系统。默认设置的 Android／Python 回归应通过，真机重启保留和跨系统表现待验证。
+browser-trial.25 按产品反馈设置隐藏「每次询问」（钩子保留）（该模式在部分 ColorOS 上不可靠）；旧 ask 偏好迁移为跟随系统。默认设置的 Android／Python 回归应通过，真机重启保留和跨系统表现待验证。
 
 后续工作见 [TODO：Android 指定外部浏览器](TODO-browser-selection.md) 和[系统面板调查](browser-chooser-investigation.md)，包含失败记录、实现边界和后续验收范围。后续 PR 应明确区分第 23 版真机反馈与第 24／25 版默认功能的自动验证。
 

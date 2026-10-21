@@ -115,16 +115,35 @@ public class BrowserPickerTest {
         assertTrue(queries.isEmpty());
     }
 
-    @Test public void legacyAskPreferenceMigratesToFollowSystem() {
+    @Test public void askPreferenceStillOpensSystemChooserHooks() {
+        // Ask is hidden from settings but MODE_ASK / openAskChooser stay wired for later.
         activity.getSharedPreferences("browser-preferences-v1", 0).edit()
                 .putString("mode", "ask").commit();
         Uri uri = Uri.parse("https://example.invalid/");
         browsers.open(uri);
-        assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
-        assertNull(activity.opened.getComponent());
-        assertTrue(queries.isEmpty());
-        assertEquals("system", activity.getSharedPreferences("browser-preferences-v1", 0)
+        assertEquals(Intent.ACTION_CHOOSER, activity.opened.getAction());
+        assertEquals("选择浏览器打开", activity.opened.getStringExtra(Intent.EXTRA_TITLE));
+        Intent view = activity.opened.getParcelableExtra(Intent.EXTRA_INTENT);
+        assertNotNull(view);
+        assertEquals(Intent.ACTION_VIEW, view.getAction());
+        assertEquals(uri, view.getData());
+        assertEquals("ask", activity.getSharedPreferences("browser-preferences-v1", 0)
                 .getString("mode", null));
+    }
+
+    @Test public void singleCandidateAutoLaunchIsDisabledOnSupportedAndroidVersions() {
+        activity.getSharedPreferences("browser-preferences-v1", 0).edit()
+                .putString("mode", "ask").commit();
+        browsers.open(Uri.parse("https://example.invalid/"));
+        assertEquals(Intent.ACTION_CHOOSER, activity.opened.getAction());
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            assertTrue(activity.opened.hasExtra(Intent.EXTRA_AUTO_LAUNCH_SINGLE_CHOICE));
+            assertFalse(activity.opened.getBooleanExtra(Intent.EXTRA_AUTO_LAUNCH_SINGLE_CHOICE, true));
+        } else {
+            assertFalse(activity.opened.hasExtra(Intent.EXTRA_AUTO_LAUNCH_SINGLE_CHOICE));
+        }
+        Intent view = activity.opened.getParcelableExtra(Intent.EXTRA_INTENT);
+        assertFalse(view.hasExtra(Intent.EXTRA_AUTO_LAUNCH_SINGLE_CHOICE));
     }
 
     @Test public void settingsShowUsableChoicesWithoutOpeningAnyWebsiteOrGlobalSettings() {
