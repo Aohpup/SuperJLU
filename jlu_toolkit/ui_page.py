@@ -9,7 +9,7 @@ PAGE = r"""<!doctype html>
 <meta name="theme-color" id="tc-l" content="#f6f7f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" id="tc-d" content="#0e0f12" media="(prefers-color-scheme: dark)">
 <script>/AppleWebKit/.test(navigator.userAgent)&&/SuperJLU-Android/.test(navigator.userAgent)&&document.documentElement.classList.add("in-app");</script>
-<script>/* 首帧前应用主题，避免闪烁 */(function(){var P=window.__PREFS||{},t;try{var S=Storage.prototype,ls=window.localStorage,si=S.setItem,ri=S.removeItem;Object.keys(P).forEach(function(k){if(k.indexOf("jlu-")===0&&ls.getItem(k)!==P[k])si.call(ls,k,P[k])});var sync=function(o){try{fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o),keepalive:true}).catch(function(){})}catch(e){}};S.setItem=function(k,v){si.call(this,k,v);if(this===ls&&String(k).indexOf("jlu-")===0){var o={};o[k]=String(v);sync({set:o})}};S.removeItem=function(k){ri.call(this,k);if(this===ls&&String(k).indexOf("jlu-")===0)sync({remove:[String(k)]})};}catch(e){}t=P["jlu-theme"];if(t===undefined){try{t=localStorage.getItem("jlu-theme")}catch(e){}}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))});try{if(window.SuperJLU&&SuperJLU.setBars)SuperJLU.setBars(t)}catch(e){}};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);try{if(window.SuperJLU&&SuperJLU.setBars)SuperJLU.setBars(t==="light"||t==="dark"?t:"system")}catch(e){}})();</script>
+<script>/* 首帧前应用主题，避免闪烁 */(function(){var P=window.__PREFS||{},t;try{var S=Storage.prototype,ls=window.localStorage,si=S.setItem,ri=S.removeItem;Object.keys(P).forEach(function(k){if(k.indexOf("jlu-")===0&&ls.getItem(k)!==P[k])si.call(ls,k,P[k])});var sync=function(o){try{fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o),keepalive:true}).catch(function(){})}catch(e){}};S.setItem=function(k,v){si.call(this,k,v);if(this===ls&&String(k).indexOf("jlu-")===0){var o={};o[k]=String(v);sync({set:o})}};S.removeItem=function(k){ri.call(this,k);if(this===ls&&String(k).indexOf("jlu-")===0)sync({remove:[String(k)]})};}catch(e){}t=P["jlu-theme"];if(t===undefined){try{t=localStorage.getItem("jlu-theme")}catch(e){}}window.__setTheme=function(t){var r=document.documentElement,l=document.getElementById("tc-l"),d=document.getElementById("tc-d");if(t==="light"||t==="dark")r.setAttribute("data-theme",t);else{r.removeAttribute("data-theme");t="system"}try{t==="system"?localStorage.removeItem("jlu-theme"):localStorage.setItem("jlu-theme",t)}catch(e){}if(l&&d){if(t==="system"){l.media="(prefers-color-scheme: light)";d.media="(prefers-color-scheme: dark)"}else{var c=t==="dark"?"#0e0f12":"#f6f7f9";l.content=d.content=c;l.media=d.media="all"}if(t==="system"){l.content="#f6f7f9";d.content="#0e0f12"}}document.querySelectorAll(".thm button").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.theme===t))});window.__sjBars&&window.__sjBars(t)};if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);window.__sjBars=function(t){try{if(!window.SuperJLU)return;if(t!=="light"&&t!=="dark")t="system";var dk=t==="dark"||(t==="system"&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches);if(SuperJLU.setBars)SuperJLU.setBars(t);if(SuperJLU.setBarColors)SuperJLU.setBarColors(dk?"#0e0f12":"#f6f7f9",dk?"#17191e":"#ffffff",!!dk)}catch(e){}};window.__sjBars(t);try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){var c=document.documentElement.getAttribute("data-theme");window.__sjBars(c||"system")})}catch(e){}})();</script>
 <title>SuperJLU · 吉大人的一站式服务</title>
 <style>
 /* ===== 设计变量：柔和中性底色 + 单一沉稳强调色 ===== */
@@ -93,7 +93,9 @@ nav button.on{color:var(--pri);font-weight:650;background:var(--pri2)}
 .miss{color:var(--bad);background:var(--bad2)}.done{color:var(--ok);background:var(--ok2)}
 .big{font-size:34px;font-weight:750;color:var(--txt);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
 .cell{min-height:46px;border-radius:10px;background:var(--card2);border:1px dashed var(--line);cursor:pointer}
-.cell:hover{background:color-mix(in srgb,var(--pri) 12%,var(--card2));border-color:color-mix(in srgb,var(--pri) 55%,var(--line))}
+.cell{position:relative}.cell::after{content:"双击添加课程";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:2px;font-size:10px;line-height:1.2;color:var(--pri);opacity:0;transition:opacity .15s;pointer-events:none}
+@media(hover:hover){.cell:hover{background:color-mix(in srgb,var(--pri) 12%,var(--card2));border-color:color-mix(in srgb,var(--pri) 55%,var(--line))}.cell:hover::after{opacity:.85}}
+.cell.hint,.cell:focus-visible{background:color-mix(in srgb,var(--pri) 12%,var(--card2));border-color:color-mix(in srgb,var(--pri) 55%,var(--line))}.cell.hint::after,.cell:focus-visible::after{opacity:.85}
 .cls{border-radius:10px;padding:4px 5px;font-size:10.5px;line-height:1.3;color:#fff;overflow:hidden;word-break:break-all;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
 .cls b{display:block;font-size:11px;font-weight:650}
 @media(min-width:640px){.grid{grid-template-columns:36px repeat(7,minmax(0,1fr))}.cls{font-size:12.5px;padding:7px 8px}.cls b{font-size:13.5px}.cell{min-height:52px}}
@@ -163,7 +165,31 @@ select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px 
 #toast{position:fixed;right:20px;bottom:96px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:100;max-width:min(420px,90vw);pointer-events:none}.toast-item{background:var(--txt);color:var(--bg);padding:10px 18px;border-radius:var(--r-sm);font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:toast-in .18s ease-out}.toast-item.bad{background:var(--bad);color:#fff}.toast-item.leaving{opacity:0;transform:translateY(-5px);transition:opacity .35s,transform .35s}@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.toast-item{animation:none}.toast-item.leaving{transition:none}}
 .seg{display:flex;gap:4px;margin-bottom:14px;background:var(--card2);border:1px solid var(--line);padding:4px;border-radius:999px}.seg button{flex:1;padding:7px;border:0;background:transparent;border-radius:999px;color:var(--sub);font:inherit;font-size:14px;cursor:pointer}.seg button.on{background:var(--card);color:var(--pri);font-weight:650;box-shadow:var(--sh)}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:5px;color:var(--sub);font-weight:550}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
-.rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:12px}
+.rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}
+#t-js .room-form h2{margin-bottom:6px}
+.rgrp{padding:10px 0;border-top:1px solid var(--line)}
+.rgrp:first-of-type{border-top:0;padding-top:4px}
+.rgrp-h{font-size:12px;font-weight:650;color:var(--sub);margin-bottom:6px;letter-spacing:.02em}
+#t-js .rgrid.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:0}
+#t-js .rgrid.r2 .r-full{grid-column:1/-1}
+#t-js .rgrid label{font-size:12px;gap:3px}
+#t-js .rgrid select,#t-js .rgrid input{height:34px;padding:4px 8px;font-size:13px;border-radius:8px;min-width:0}
+#t-js .rng{gap:4px;color:var(--sub)}
+#t-js input[type=time]{border:1px solid var(--line);background:var(--card2);color:var(--txt);font:inherit;font-size:13px;color-scheme:light dark}
+#t-js .rng input{flex:1;text-align:center}
+.rchips.seg{flex-wrap:nowrap;overflow-x:auto;margin:0;padding:3px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.rchips.seg::-webkit-scrollbar{display:none}
+.rchips.seg button{flex:1 0 auto;padding:5px 12px;font-size:13px;min-width:52px}
+.rchips-row{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:nowrap}
+.rchips-row .sub{font-size:12px;margin-right:2px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:999px;padding:4px 12px;font:inherit;font-size:12px;cursor:pointer;line-height:1.4}
+.chip:active,.chip.on{background:var(--pri2);color:var(--pri);border-color:transparent}
+.rcheck{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--txt)}
+.rcheck input{width:16px;height:16px;margin:0}
+#rmore summary{font-size:13px;color:var(--sub);cursor:pointer}
+#rmore #rextra{margin-top:8px}
+.rq-btn{width:100%;margin-top:10px;padding:9px 14px;font-size:15px}
+details#rmore{margin-top:12px}
 table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none;position:static;top:auto;background:transparent}
 details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}
 details>summary::before{content:"›";display:inline-block;width:14px;color:var(--sub);transition:transform .15s;font-weight:700}details[open]>summary::before{transform:rotate(90deg)}
@@ -188,6 +214,8 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 html.in-app header{padding-top:10px}
+/* 安卓原生层已经按真实系统栏高度垫了上下色块，网页不再叠加 safe-area，避免底栏上方多出一截空白 */
+.in-app body{padding-bottom:84px}.in-app nav{padding-bottom:4px}.in-app #toast{bottom:84px}
 dialog#login{border:0;border-radius:16px;padding:20px;width:min(92vw,380px);background:var(--card,#fff);color:inherit;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 dialog#login::backdrop{background:rgba(0,0,0,.4)}
 dialog#login label{display:block;margin:10px 0 4px;font-size:13px;opacity:.8}
@@ -256,23 +284,32 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
  <p class="sub" style="text-align:center">筛选只改变列表显示；上方结果始终统计所有已勾选课程。</p>
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
-<section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
- <div class="rgrid">
-  <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
-  <label>教学楼<select id="rb"><option value="">全部</option></select></label>
-  <label>教室类型<select id="rt"><option value="">全部</option></select></label>
-  <label class="m-date">空闲日期<input type="date" id="rd"></label>
-  <label class="m-week">周次<input id="rw" placeholder="如 6 或 6-8"></label>
-  <label title="隐藏实验室、机房、语音室等专用教室" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rhs" checked>屏蔽特殊教室</label>
-  <label class="m-week">星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
-  <label class="m-study">自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
-  <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
-  <div class="m-study" id="rst-presets" style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
-  <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
-  <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
+<section class="tab" id="t-js"><div class="card room-form"><h2>空教室</h2>
+ <div class="rgrp"><div class="rgrp-h">校区</div><div class="seg rchips" id="rcs" role="radiogroup" aria-label="学校校区"></div><input type="hidden" id="rc"></div>
+ <div class="rgrp"><div class="rgrp-h">时间</div>
+  <div class="rgrid r2">
+   <label class="m-date">日期<input type="date" id="rd"></label>
+   <label class="m-week">星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+   <label class="m-week">周次<input id="rw" placeholder="如 6 或 6-8"></label>
+   <label>节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1" aria-label="起始节次">–<input type="number" id="rp2" min="1" max="14" value="2" aria-label="结束节次"></span></label>
+   <label class="m-study r-full">自习时间<span class="rng"><input type="time" id="rst" value="08:00" aria-label="开始时间">–<input type="time" id="ret" value="09:40" aria-label="结束时间"></span></label>
+  </div>
+  <div class="m-study rchips-row" id="rst-presets"><span class="sub">快捷</span><button type="button" class="chip" data-sp="1-4">上午</button><button type="button" class="chip" data-sp="5-8">下午</button><button type="button" class="chip" data-sp="9-11">晚上</button></div>
  </div>
- <details id="rmore"><summary>更多条件</summary><div class="rgrid" id="rextra"><p class="sub">加载中…</p></div></details>
- <div class="row" style="margin-top:8px"><span style="flex:1"></span><button class="btn pri" id="rq">查询</button></div>
+ <div class="rgrp"><div class="rgrp-h">地点</div>
+  <div class="rgrid r2">
+   <label>教学楼<select id="rb"><option value="">全部</option></select></label>
+   <label>教室类型<select id="rt"><option value="">全部</option></select></label>
+  </div>
+  <label class="rcheck" title="隐藏实验室、机房、语音室等专用教室"><input type="checkbox" id="rhs" checked>屏蔽特殊教室（实验室、机房等）</label>
+ </div>
+ <details id="rmore" class="rgrp"><summary>座位数与更多条件</summary>
+  <div class="rgrid r2" style="margin-top:8px">
+   <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限" aria-label="上课座位数下限">–<input type="number" id="rs2" min="0" placeholder="不限" aria-label="上课座位数上限"></span></label>
+   <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限" aria-label="考试座位数下限">–<input type="number" id="re2" min="0" placeholder="不限" aria-label="考试座位数上限"></span></label>
+  </div>
+  <div class="rgrid r2" id="rextra"><p class="sub">加载中…</p></div></details>
+ <button class="btn pri rq-btn" id="rq">查询空教室</button>
  <p class="sub" id="rauto" role="status" style="margin:8px 0 0"></p>
  <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
  <div class="banner err room-error" id="room-error" role="alert" hidden><div><b>查询未成功</b><p class="sub" id="room-error-message"></p></div><button class="btn" id="room-switch-login" type="button">检查登录方式</button></div>
@@ -310,7 +347,7 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
   <div class="row" style="margin-top:10px"><a class="btn" id="kb-export" href="/api/schedule/overlay" download="superjlu-schedule-edits.json">导出备份</a><button type="button" class="btn" id="kb-import-btn">导入备份</button><input type="file" id="kb-import" accept=".json,application/json,text/plain" hidden><button type="button" class="btn ghost" id="kb-reset" hidden>恢复教务原样</button><button type="button" class="btn ghost" id="kb-undo" hidden>撤销恢复</button></div>
   <div id="kb-backup-box" hidden><p class="sub">把下面的内容复制下来保存好（比如发给自己），换手机后用「粘贴备份内容」恢复。</p><textarea id="kb-backup-text" readonly rows="5"></textarea><button type="button" class="btn" id="kb-copy">复制</button></div>
   <details style="margin-top:8px"><summary class="sub">粘贴备份内容</summary><textarea id="kb-paste" rows="4" placeholder="把之前复制的备份内容粘贴到这里"></textarea><button type="button" class="btn" id="kb-paste-ok">导入</button></details></div>
- <div class="card" id="ver-card"><h2>版本</h2><p class="sub" id="upd-s" role="status">当前版本 v<span id="upd-v"></span></p><div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button><label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="upd-auto" checked>自动检查新版本</label></div></div>
+ <div class="card" id="ver-card"><h2>版本</h2><p class="sub" id="upd-s" role="status">当前版本 v<span id="upd-v"></span><span id="upd-m"></span></p><details class="sub" id="upd-tech" hidden><summary>技术信息</summary><code id="upd-why" style="word-break:break-all"></code></details><div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button><label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="upd-auto" checked>自动检查新版本</label></div></div>
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据只保存在本机，不会上传到任何服务器。“刷新”使用已保存的登录会话；会话失效时请到「登录」重新登录。</p></div>
 </section>
 </main>
@@ -627,7 +664,7 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden)return;try{
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#t-"+b.dataset.t).classList.add("on");scrollTo(0,0);scheduleGradeCompact();try{renderSession()}catch(_){}if(b.dataset.t==="cj"&&!gradeHelpSeen())openGradeHelp()});
 $("#prev").onclick=()=>{if(week>1){week--;renderGrid()}};$("#next").onclick=()=>{if(week<maxWeek()){week++;renderGrid()}};
 function kbAddAt(el){if(!el||!el.classList||!el.classList.contains("cell"))return;const now=Date.now();if(kbAddAt.lock&&now-kbAddAt.lock<500)return;const maxP=Math.max(11,...(KB_CS||[]).map(c=>+c.end||0));const seed=kbBlankSeed(+el.dataset.d,+el.dataset.p,kbOcc(KB_CS),week,maxP);if(!seed)return;kbAddAt.lock=now;kbForm(null,seed)}
-$("#grid").addEventListener("click",e=>{const el=e.target.closest(".cls");if(el)kbOpen(KB_CS[+el.dataset.i])});
+$("#grid").addEventListener("click",e=>{const el=e.target.closest(".cls");if(el)return kbOpen(KB_CS[+el.dataset.i]);const c=e.target.closest(".cell");if(c&&e.detail<2)kbHint(c)});
 $("#grid").addEventListener("dblclick",e=>{const el=e.target.closest&&e.target.closest(".cell");if(!el||(e.target.closest&&e.target.closest(".cls")))return;e.preventDefault();kbAddAt(el)});
 $("#grid").addEventListener("keydown",e=>{const el=e.target.closest&&e.target.closest(".cls");if(el&&(e.key==="Enter"||e.key===" ")){e.preventDefault();kbOpen(KB_CS[+el.dataset.i])}});
 $("#adj-on").onchange=async e=>{const on=e.target.checked;try{const j=await api("/api/settings",{apply_adjustments:on});D=gradeRefreshSnapshot(D,j);renderAll();toast(on?"已开启，调课会显示在课表上":"已关闭，课表按教务原始安排显示")}catch(err){e.target.checked=!on;toast(err.message,true)}};
@@ -641,7 +678,8 @@ $("#kb-export").onclick=async e=>{if(!/SuperJLU-Android/.test(navigator.userAgen
 $("#kb-copy").onclick=async()=>{const t=$("#kb-backup-text");t.select();let ok=false;try{await navigator.clipboard.writeText(t.value);ok=true}catch(_){try{ok=document.execCommand("copy")}catch(_){}}toast(ok?"已复制，可以粘贴到聊天或备忘录里保存":"复制失败，请长按文字手动复制",!ok)};
 $("#today").onclick=()=>{week=Math.min(Math.max(1,weekOf(new Date())),maxWeek());renderGrid()};
 let tx=null,kbTap=null;$("#grid").addEventListener("touchstart",e=>tx=e.touches[0].clientX,{passive:true});
-$("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>60){kbTap=null;(dx<0?$("#next"):$("#prev")).click();return}const el=e.target.closest&&e.target.closest(".cell");if(!el||(e.target.closest&&e.target.closest(".cls"))){kbTap=null;return}const now=Date.now(),key=el.dataset.d+"|"+el.dataset.p;if(kbTap&&kbTap.key===key&&now-kbTap.at<450){kbTap=null;kbAddAt(el)}else kbTap={key,at:now}});
+$("#grid").addEventListener("touchend",e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>60){kbTap=null;(dx<0?$("#next"):$("#prev")).click();return}const el=e.target.closest&&e.target.closest(".cell");if(!el||(e.target.closest&&e.target.closest(".cls"))){kbTap=null;return}const now=Date.now(),key=el.dataset.d+"|"+el.dataset.p;if(kbTap&&kbTap.key===key&&now-kbTap.at<450){kbTap=null;kbHint(null);kbAddAt(el)}else{kbTap={key,at:now};kbHint(el)}});
+let kbHintT=0;function kbHint(el){document.querySelectorAll("#grid .cell.hint").forEach(c=>{if(c!==el)c.classList.remove("hint")});clearTimeout(kbHintT);if(!el)return;el.classList.add("hint");kbHintT=setTimeout(()=>el.classList.remove("hint"),1800)}
 $("#grade-restore").onclick=restoreGradeSelection;
 $("#grade-issues").onclick=e=>{const button=e.target.closest("[data-grade-issue]");if(!button||!gradeReady())return;const kind=button.dataset.gradeIssue,active=$("#grade-status").value===kind;resetGradeFilters(false);$("#grade-status").value=active?"":kind;$("#grade-filter").open=true;renderGrades()};
 $("#gt").onchange=e=>{const k=e.target.dataset.k;if(!k)return;e.target.checked?include.add(k):include.delete(k);renderGrades()};
@@ -828,12 +866,19 @@ document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{
 // ---- 新版本提醒：不弹窗、不强制，只在「更多」里显示，并在导航上加一个小圆点 ----
 let UPD=null;
 function updAuto(){try{return localStorage.getItem("jlu-update-auto")!=="off"}catch(_){return true}}
-function updRender(j,manual){const s=$("#upd-s"),go=$("#upd-go"),nav=document.querySelector('nav button[data-t="sz"]');if(j&&j.current)$("#upd-v").textContent=j.current;const has=!!(j&&j.has_update&&j.latest);go.hidden=!has;if(has)go.href=j.url;let seen=null;try{seen=localStorage.getItem("jlu-update-seen")}catch(_){}if(nav)nav.classList.toggle("upd-dot",has&&seen!==j.latest);if(has)s.innerHTML=`当前版本 v${esc(j.current)} · <b style="color:var(--pri)">有新版本 v${esc(j.latest)}</b>，可随时下载，不更新也能照常使用。`;else if(manual)s.textContent=j&&j.unavailable?`当前版本 v${j.current||""} · 暂时查不到新版本信息，稍后再试`:`当前版本 v${j&&j.current||""} · 已是最新版本`}
-async function updCheck(manual){try{const r=await fetch("/api/update"+(manual?"?force=1":""));const j=await r.json();UPD=j;updRender(j,manual)}catch(_){if(manual)$("#upd-s").textContent="暂时查不到新版本信息，稍后再试"}}
+const UPD_TXT={ok:"当前已是最新版本哦！",fail:"暂时连不上 GitHub，稍后再试",page:"页面没拿到版本信息，请稍后重试"};
+// 版本号放在独立的 #upd-v 里，状态只写 #upd-m，避免覆盖掉版本号（#122 之前点「检查更新」会清掉 #upd-v 导致报错）
+function updVer(j){const v=$("#upd-v");if(!v)return;let c=j&&j.current;if(!c){try{c=window.SuperJLU&&SuperJLU.appVersion&&SuperJLU.appVersion()}catch(_){}}if(c)v.textContent=String(c).replace(/^v/i,"");}
+function updMsg(html){const m=$("#upd-m");if(m)m.innerHTML=html?" · "+html:""}
+function updWhy(r){const t=$("#upd-tech"),w=$("#upd-why");if(!t||!w)return;w.textContent=r||"";t.hidden=!r}
+function updRender(j,manual){const go=$("#upd-go"),nav=document.querySelector('nav button[data-t="sz"]');updVer(j);const has=!!(j&&j.has_update&&j.latest);go.hidden=!has;if(has)go.href=j.url;let seen=null;try{seen=localStorage.getItem("jlu-update-seen")}catch(_){}if(nav)nav.classList.toggle("upd-dot",has&&seen!==j.latest);updWhy(j&&j.unavailable?(j.reason||"unavailable")+(j.checked_at?" @ "+j.checked_at:""):"");if(has)updMsg(`<b style="color:var(--pri)">有新版本 v${esc(j.latest)}</b>，可随时下载，不更新也能照常使用。`);else if(manual){updMsg(esc(j&&j.unavailable?UPD_TXT.fail:"已是最新版本"));toast(j&&j.unavailable?UPD_TXT.fail:UPD_TXT.ok,!!(j&&j.unavailable))}}
+async function updCheck(manual){let j;try{const ctl=typeof AbortController=="function"?new AbortController():null;const tm=ctl&&setTimeout(()=>ctl.abort(),25000);try{const r=await fetch("/api/update"+(manual?"?force=1":""),ctl?{signal:ctl.signal}:{});j=await r.json()}finally{if(tm)clearTimeout(tm)}}catch(e){if(manual){updVer(null);updMsg(esc(UPD_TXT.page));updWhy("page "+((e&&e.name)||"error")+": "+((e&&e.message)||"").slice(0,80));toast(UPD_TXT.page,true)}return}UPD=j;try{updRender(j,manual)}catch(e){updWhy("render "+((e&&e.message)||e))}}
+updVer(null);
 $("#upd-auto").checked=updAuto();$("#upd-auto").onchange=e=>{try{localStorage.setItem("jlu-update-auto",e.target.checked?"on":"off")}catch(_){}if(!e.target.checked)document.querySelector('nav button[data-t="sz"]').classList.remove("upd-dot")};
-$("#upd-chk").onclick=()=>{$("#upd-s").textContent="正在检查…";updCheck(true)};
+$("#upd-chk").onclick=()=>{updMsg("正在检查…");updCheck(true)};
 document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(UPD&&UPD.has_update&&UPD.latest){try{localStorage.setItem("jlu-update-seen",UPD.latest)}catch(_){}document.querySelector('nav button[data-t="sz"]').classList.remove("upd-dot")}});
 setTimeout(()=>{if(updAuto())updCheck(false);else fetch("/api/update?local=1").then(r=>r.json()).then(j=>updRender(j,false)).catch(()=>{})},4000);
+fetch("/api/update?local=1").then(r=>r.json()).then(updVer).catch(()=>{});
 
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};
