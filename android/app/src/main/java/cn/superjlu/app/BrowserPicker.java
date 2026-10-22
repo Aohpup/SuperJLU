@@ -284,17 +284,18 @@ final class BrowserPicker {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         close();
         List<BrowserChoice> choices = new ArrayList<>();
+        // "Ask every time" sits at the top; follow-system stays the default selection.
+        choices.add(new BrowserChoice(MODE_ASK, null, activity.getString(R.string.browser_always_ask),
+                activity.getDrawable(android.R.drawable.ic_menu_help)));
         choices.add(new BrowserChoice(MODE_SYSTEM, null, activity.getString(R.string.browser_follow_system),
                 activity.getDrawable(android.R.drawable.ic_menu_view)));
         // A neutral network URL only queries local capability declarations; it is never opened.
         for (Intent target : findTargets(Uri.parse("https://example.org/"))) {
             choices.add(describe(target.getComponent().getPackageName(), MODE_APP));
         }
-        choices.add(new BrowserChoice(MODE_ASK, null, activity.getString(R.string.browser_always_ask),
-                activity.getDrawable(android.R.drawable.ic_menu_help)));
         String mode = preferences.getString("mode", MODE_SYSTEM);
         String packageName = preferences.getString("package", null);
-        final int[] selection = {0};
+        final int[] selection = {1};
         boolean currentFound = false;
         for (int i = 0; i < choices.size(); i++) {
             BrowserChoice choice = choices.get(i);

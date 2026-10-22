@@ -174,11 +174,11 @@ public class BrowserPickerTest {
         assertTrue(dialog.isShowing());
         assertTrue(dialog.getListView().isShown());
         assertEquals(3, dialog.getListView().getAdapter().getCount());
-        assertEquals("跟随系统默认浏览器", dialog.getListView().getAdapter().getItem(0).toString());
-        assertEquals(0, dialog.getListView().getCheckedItemPosition());
+        assertEquals("跟随系统默认浏览器", dialog.getListView().getAdapter().getItem(1).toString());
+        assertEquals(1, dialog.getListView().getCheckedItemPosition());
         assertNull(activity.opened);
         assertNull(ShadowToast.getTextOfLatestToast());
-        assertFalse(dialog.getListView().getAdapter().getItem(0).toString().contains("询问"));
+        assertEquals("每次询问", dialog.getListView().getAdapter().getItem(0).toString());
     }
 
     @Test public void settingsDiscoveryUsesMimeQueriesAndKeepsNeutralProbeUrl() {
@@ -208,7 +208,7 @@ public class BrowserPickerTest {
         matches.put(null, Arrays.asList(handler("test.general", "https", null)));
         matches.put("text/html", Arrays.asList(handler("test.html", "https", "text/html")));
         matches.put("application/xhtml+xml", Arrays.asList(handler("test.xhtml", "https", "application/xhtml+xml")));
-        chooseSetting(2, true); // test.html (system=0, general=1, html=2)
+        chooseSetting(3, true); // test.html (ask=0, system=1, general=2, html=3)
         Uri uri = Uri.parse("https://example.invalid/path?value=1#part");
         activity.opened = null;
         queries.clear();
@@ -234,7 +234,7 @@ public class BrowserPickerTest {
         html.activityInfo.name = "test.browser.HtmlActivity";
         matches.put(null, Arrays.asList(general));
         matches.put("text/html", Arrays.asList(html));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         activity.opened = null;
         browsers.open(Uri.parse("https://example.invalid/"));
         assertEquals("test.browser.WebActivity", activity.opened.getComponent().getClassName());
@@ -244,7 +244,7 @@ public class BrowserPickerTest {
     @Test public void htmlOnlyNetworkEntryPreservesItsMatchedMimeAndAddress() {
         // Settings probes https://example.org/, so the candidate must declare https.
         matches.put("text/html", Arrays.asList(handler("test.html", "https", "text/html")));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         Uri uri = Uri.parse("https://example.invalid/page?one=1&two=2#part");
         activity.opened = null;
         browsers.open(uri);
@@ -273,7 +273,7 @@ public class BrowserPickerTest {
         browsers.showSettings();
         assertEquals(3, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
         assertEquals("test.browser", ShadowAlertDialog.getLatestAlertDialog()
-                .getListView().getAdapter().getItem(1).toString());
+                .getListView().getAdapter().getItem(2).toString());
     }
 
     @Test public void missingMatchedFilterCannotBeAssumedToBeAGenericBrowser() {
@@ -284,7 +284,7 @@ public class BrowserPickerTest {
         browsers.showSettings();
         assertEquals(3, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
         assertEquals("test.browser", ShadowAlertDialog.getLatestAlertDialog()
-                .getListView().getAdapter().getItem(1).toString());
+                .getListView().getAdapter().getItem(2).toString());
     }
 
     @Test public void queryRestrictionsStillAllowFollowSystemOpen() {
@@ -308,12 +308,12 @@ public class BrowserPickerTest {
         assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
         assertNull(activity.opened.getComponent());
         browsers.showSettings();
-        assertEquals(0, ShadowAlertDialog.getLatestAlertDialog().getListView().getCheckedItemPosition());
+        assertEquals(1, ShadowAlertDialog.getLatestAlertDialog().getListView().getCheckedItemPosition());
     }
 
     @Test public void savedAppDefaultSurvivesPickerRecreationAndUsesTheCurrentUrlAndMime() {
         matches.put("text/html", Arrays.asList(handler("test.html", "https", "text/html")));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         assertNull(activity.opened);
         assertNull(ShadowToast.getTextOfLatestToast());
         browsers = new BrowserPicker(activity, candidateQuery);
@@ -324,12 +324,12 @@ public class BrowserPickerTest {
         assertEquals(uri, activity.opened.getData());
         assertEquals("text/html", activity.opened.getType());
         browsers.showSettings();
-        assertEquals(1, ShadowAlertDialog.getLatestAlertDialog().getListView().getCheckedItemPosition());
+        assertEquals(2, ShadowAlertDialog.getLatestAlertDialog().getListView().getCheckedItemPosition());
     }
 
     @Test public void savedPackageUsesItsUpdatedActivityInsteadOfAnObsoleteComponent() {
         matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         ResolveInfo changed = handler("test.browser", "https", null);
         changed.activityInfo.name = "test.browser.NewActivity";
         matches.put(null, Arrays.asList(changed));
@@ -341,8 +341,8 @@ public class BrowserPickerTest {
 
     @Test public void selectingADifferentDefaultAndCancellingKeepsThePreviousDefault() {
         matches.put(null, Arrays.asList(handler("test.first", "https", null), handler("test.second", "https", null)));
-        chooseSetting(1, true);
-        chooseSetting(2, false);
+        chooseSetting(2, true);
+        chooseSetting(3, false);
         activity.opened = null;
         browsers.open(Uri.parse("https://example.invalid/"));
         assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
@@ -351,12 +351,12 @@ public class BrowserPickerTest {
 
     @Test public void savedDefaultCanBeChangedToAnotherAppOrBackToFollowSystem() {
         matches.put(null, Arrays.asList(handler("test.first", "https", null), handler("test.second", "https", null)));
-        chooseSetting(1, true);
         chooseSetting(2, true);
+        chooseSetting(3, true);
         activity.opened = null;
         browsers.open(Uri.parse("https://example.invalid/"));
         assertEquals("test.second", activity.opened.getComponent().getPackageName());
-        chooseSetting(0, true);
+        chooseSetting(1, true);
         activity.opened = null;
         queries.clear();
         browsers.open(Uri.parse("https://example.invalid/next"));
@@ -366,7 +366,7 @@ public class BrowserPickerTest {
     }
 
     @Test public void followSystemDefaultUsesAnUntypedWebIntentAndNoAppEnumeration() {
-        chooseSetting(0, true);
+        chooseSetting(1, true);
         queries.clear();
         Uri uri = Uri.parse("https://example.invalid/path?value=1");
         browsers.open(uri);
@@ -381,7 +381,7 @@ public class BrowserPickerTest {
 
     @Test public void unavailableSavedAppResetsToFollowSystem() {
         matches.put(null, Arrays.asList(handler("test.removed", "https", null)));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         matches.put(null, Arrays.asList(handler("test.other", "https", null)));
         // Package no longer resolves as a browser and cannot be started (uninstalled / disabled).
         activity.unavailableComponent = new ComponentName("test.removed", "test.removed.WebActivity");
@@ -391,12 +391,12 @@ public class BrowserPickerTest {
         assertNull(activity.opened.getComponent());
         assertTrue(ShadowToast.getTextOfLatestToast().contains("已恢复跟随系统"));
         browsers.showSettings();
-        assertEquals(0, ShadowAlertDialog.getLatestAlertDialog().getListView().getCheckedItemPosition());
+        assertEquals(1, ShadowAlertDialog.getLatestAlertDialog().getListView().getCheckedItemPosition());
     }
 
     @Test public void savedAppLaunchFailureFallsBackToFollowSystem() {
         matches.put(null, Arrays.asList(handler("test.failed", "https", null), handler("test.other", "https", null)));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         activity.unavailableComponent = new ComponentName("test.failed", "test.failed.WebActivity");
         activity.opened = null;
         browsers.open(Uri.parse("https://example.invalid/"));
@@ -447,13 +447,13 @@ public class BrowserPickerTest {
 
     @Test public void settingsOfferAskEveryTimeAndSaveIt() {
         matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
-        chooseSetting(2, true);
+        chooseSetting(0, true);
         assertEquals("ask", activity.getSharedPreferences("browser-preferences-v1", 0)
                 .getString("mode", null));
         browsers.showSettings();
         AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
-        assertEquals("每次询问", dialog.getListView().getAdapter().getItem(2).toString());
-        assertEquals(2, dialog.getListView().getCheckedItemPosition());
+        assertEquals("每次询问", dialog.getListView().getAdapter().getItem(0).toString());
+        assertEquals(0, dialog.getListView().getCheckedItemPosition());
     }
 
     private void chooseSetting(int index, boolean save) {
@@ -510,7 +510,7 @@ public class BrowserPickerTest {
 
     @Test public void packageScopedFallbackOpensPreferredAppWhenComponentGone() {
         matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
-        chooseSetting(1, true);
+        chooseSetting(2, true);
         matches.clear();
         activity.opened = null;
         browsers.open(Uri.parse("https://example.invalid/kept"));
