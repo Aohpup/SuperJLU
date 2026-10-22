@@ -9,6 +9,7 @@ import json
 import re
 import threading
 import time
+import urllib.error
 import urllib.request
 
 from . import __version__
@@ -42,7 +43,7 @@ def _safe_url(u):
 
 def summarize(release, current=__version__):
     """Turn a GitHub release JSON into the small payload the UI needs."""
-    if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+    if not isinstance(release, dict) or not release.get("tag_name") or release.get("draft") or release.get("prerelease"):
         return {"ok": True, "current": current, "has_update": False}
     tag = str(release.get("tag_name") or "")
     latest = tag.lstrip("vV") or None
@@ -53,12 +54,46 @@ def summarize(release, current=__version__):
     return out
 
 
-def _fetch(timeout):
-    req = urllib.request.Request(API, headers={
+def _request():
+    return urllib.request.Request(API, headers={
         "Accept": "application/vnd.github+json",
         "User-Agent": f"SuperJLU/{__version__}"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+
+
+def _fetch_urllib(timeout):
+    with urllib.request.urlopen(_request(), timeout=timeout) as r:
         return json.loads(r.read(200_000).decode("utf-8"))
+
+
+def _fetch_native(timeout):
+    """Android/Windows system HTTPS stack (system CA store)."""
+    from . import network
+    if not network.native_available():
+        raise OSError("no native transport")
+    r = network.native_open(_request(), timeout)
+    code = getattr(r, "code", 200)
+    if code == 404:
+        return {}  # 仓库还没有正式版：视为没有更新，而不是失败
+    if code >= 400:
+        raise OSError(f"HTTP {code}")
+    return json.loads(r.read(200_000).decode("utf-8"))
+
+
+def _fetch(timeout):
+    # 安卓上内置 Python 的 ssl 拿不到系统 CA 证书，直接 urllib 访问
+    # api.github.com 会证书校验失败，于是“手动检查更新”总被当成查询失败。
+    # 先走系统 HTTPS（与教务请求同一条通道），失败再退回 urllib。
+    errors = []
+    for fn in (_fetch_native, _fetch_urllib):
+        try:
+            return fn(timeout)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return {}
+            errors.append(e)
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+    raise errors[-1]
 
 
 def check(force=False, timeout=6, fetch=None, now=None):
