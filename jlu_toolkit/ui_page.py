@@ -165,7 +165,31 @@ select:focus,input:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px 
 #toast{position:fixed;right:20px;bottom:96px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:100;max-width:min(420px,90vw);pointer-events:none}.toast-item{background:var(--txt);color:var(--bg);padding:10px 18px;border-radius:var(--r-sm);font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:toast-in .18s ease-out}.toast-item.bad{background:var(--bad);color:#fff}.toast-item.leaving{opacity:0;transform:translateY(-5px);transition:opacity .35s,transform .35s}@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.toast-item{animation:none}.toast-item.leaving{transition:none}}
 .seg{display:flex;gap:4px;margin-bottom:14px;background:var(--card2);border:1px solid var(--line);padding:4px;border-radius:999px}.seg button{flex:1;padding:7px;border:0;background:transparent;border-radius:999px;color:var(--sub);font:inherit;font-size:14px;cursor:pointer}.seg button.on{background:var(--card);color:var(--pri);font-weight:650;box-shadow:var(--sh)}
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}.rgrid label{display:flex;flex-direction:column;font-size:12px;gap:5px;color:var(--sub);font-weight:550}.rgrid select,.rgrid input{width:100%;box-sizing:border-box}
-.rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}details#rmore{margin-top:12px}
+.rng{display:flex;align-items:center;gap:4px}.rng input{min-width:0}
+#t-js .room-form h2{margin-bottom:6px}
+.rgrp{padding:10px 0;border-top:1px solid var(--line)}
+.rgrp:first-of-type{border-top:0;padding-top:4px}
+.rgrp-h{font-size:12px;font-weight:650;color:var(--sub);margin-bottom:6px;letter-spacing:.02em}
+#t-js .rgrid.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:0}
+#t-js .rgrid.r2 .r-full{grid-column:1/-1}
+#t-js .rgrid label{font-size:12px;gap:3px}
+#t-js .rgrid select,#t-js .rgrid input{height:34px;padding:4px 8px;font-size:13px;border-radius:8px;min-width:0}
+#t-js .rng{gap:4px;color:var(--sub)}
+#t-js input[type=time]{border:1px solid var(--line);background:var(--card2);color:var(--txt);font:inherit;font-size:13px;color-scheme:light dark}
+#t-js .rng input{flex:1;text-align:center}
+.rchips.seg{flex-wrap:nowrap;overflow-x:auto;margin:0;padding:3px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.rchips.seg::-webkit-scrollbar{display:none}
+.rchips.seg button{flex:1 0 auto;padding:5px 12px;font-size:13px;min-width:52px}
+.rchips-row{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:nowrap}
+.rchips-row .sub{font-size:12px;margin-right:2px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:999px;padding:4px 12px;font:inherit;font-size:12px;cursor:pointer;line-height:1.4}
+.chip:active,.chip.on{background:var(--pri2);color:var(--pri);border-color:transparent}
+.rcheck{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--txt)}
+.rcheck input{width:16px;height:16px;margin:0}
+#rmore summary{font-size:13px;color:var(--sub);cursor:pointer}
+#rmore #rextra{margin-top:8px}
+.rq-btn{width:100%;margin-top:10px;padding:9px 14px;font-size:15px}
+details#rmore{margin-top:12px}
 table.rt{border-collapse:collapse;width:100%;font-size:13px}.rt th,.rt td{padding:8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.rt th{cursor:pointer;user-select:none;position:static;top:auto;background:transparent}
 details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}
 details>summary::before{content:"›";display:inline-block;width:14px;color:var(--sub);transition:transform .15s;font-weight:700}details[open]>summary::before{transform:rotate(90deg)}
@@ -260,23 +284,32 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
  <p class="sub" style="text-align:center">筛选只改变列表显示；上方结果始终统计所有已勾选课程。</p>
 </section>
 <section class="tab" id="t-xy"><div id="prog"></div></section>
-<section class="tab" id="t-js"><div class="card"><h2>空教室</h2>
- <div class="rgrid">
-  <div style="grid-column:1/-1"><span class="sub">学校校区</span><div class="seg" id="rcs" role="radiogroup" aria-label="学校校区" style="flex-wrap:wrap"></div><input type="hidden" id="rc"></div>
-  <label>教学楼<select id="rb"><option value="">全部</option></select></label>
-  <label>教室类型<select id="rt"><option value="">全部</option></select></label>
-  <label class="m-date">空闲日期<input type="date" id="rd"></label>
-  <label class="m-week">周次<input id="rw" placeholder="如 6 或 6-8"></label>
-  <label title="隐藏实验室、机房、语音室等专用教室" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rhs" checked>屏蔽特殊教室</label>
-  <label class="m-week">星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
-  <label class="m-study">自习时间<span class="rng"><input type="time" id="rst" value="08:00">–<input type="time" id="ret" value="09:40"></span></label>
-  <label>空闲节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1">–<input type="number" id="rp2" min="1" max="14" value="2"></span></label>
-  <div class="m-study" id="rst-presets" style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px"><span class="sub">快捷：</span><button type="button" class="btn ghost" data-sp="1-4">上午</button><button type="button" class="btn ghost" data-sp="5-8">下午</button><button type="button" class="btn ghost" data-sp="9-11">晚上</button></div>
-  <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限">–<input type="number" id="rs2" min="0" placeholder="不限"></span></label>
-  <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限">–<input type="number" id="re2" min="0" placeholder="不限"></span></label>
+<section class="tab" id="t-js"><div class="card room-form"><h2>空教室</h2>
+ <div class="rgrp"><div class="rgrp-h">校区</div><div class="seg rchips" id="rcs" role="radiogroup" aria-label="学校校区"></div><input type="hidden" id="rc"></div>
+ <div class="rgrp"><div class="rgrp-h">时间</div>
+  <div class="rgrid r2">
+   <label class="m-date">日期<input type="date" id="rd"></label>
+   <label class="m-week">星期<select id="rwd"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option></select></label>
+   <label class="m-week">周次<input id="rw" placeholder="如 6 或 6-8"></label>
+   <label>节次<span class="rng"><input type="number" id="rp1" min="1" max="14" value="1" aria-label="起始节次">–<input type="number" id="rp2" min="1" max="14" value="2" aria-label="结束节次"></span></label>
+   <label class="m-study r-full">自习时间<span class="rng"><input type="time" id="rst" value="08:00" aria-label="开始时间">–<input type="time" id="ret" value="09:40" aria-label="结束时间"></span></label>
+  </div>
+  <div class="m-study rchips-row" id="rst-presets"><span class="sub">快捷</span><button type="button" class="chip" data-sp="1-4">上午</button><button type="button" class="chip" data-sp="5-8">下午</button><button type="button" class="chip" data-sp="9-11">晚上</button></div>
  </div>
- <details id="rmore"><summary>更多条件</summary><div class="rgrid" id="rextra"><p class="sub">加载中…</p></div></details>
- <div class="row" style="margin-top:8px"><span style="flex:1"></span><button class="btn pri" id="rq">查询</button></div>
+ <div class="rgrp"><div class="rgrp-h">地点</div>
+  <div class="rgrid r2">
+   <label>教学楼<select id="rb"><option value="">全部</option></select></label>
+   <label>教室类型<select id="rt"><option value="">全部</option></select></label>
+  </div>
+  <label class="rcheck" title="隐藏实验室、机房、语音室等专用教室"><input type="checkbox" id="rhs" checked>屏蔽特殊教室（实验室、机房等）</label>
+ </div>
+ <details id="rmore" class="rgrp"><summary>座位数与更多条件</summary>
+  <div class="rgrid r2" style="margin-top:8px">
+   <label>上课座位数<span class="rng"><input type="number" id="rs1" min="0" placeholder="不限" aria-label="上课座位数下限">–<input type="number" id="rs2" min="0" placeholder="不限" aria-label="上课座位数上限"></span></label>
+   <label>考试座位数<span class="rng"><input type="number" id="re1" min="0" placeholder="不限" aria-label="考试座位数下限">–<input type="number" id="re2" min="0" placeholder="不限" aria-label="考试座位数上限"></span></label>
+  </div>
+  <div class="rgrid r2" id="rextra"><p class="sub">加载中…</p></div></details>
+ <button class="btn pri rq-btn" id="rq">查询空教室</button>
  <p class="sub" id="rauto" role="status" style="margin:8px 0 0"></p>
  <p class="sub" id="rinfo" style="margin:8px 0 0">需要已保存会话；结果实时来自教务，自动翻页取全。</p></div>
  <div class="banner err room-error" id="room-error" role="alert" hidden><div><b>查询未成功</b><p class="sub" id="room-error-message"></p></div><button class="btn" id="room-switch-login" type="button">检查登录方式</button></div>
