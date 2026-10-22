@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
             try {
                 ensurePython();
                 String url = Python.getInstance().getModule("jlu_android")
-                        .callAttr("start", getFilesDir().getAbsolutePath()).toString();
+                        .callAttr("start", getFilesDir().getAbsolutePath(), appVersion(this)).toString();
                 baseUrl = url;
                 main.post(() -> { web.loadUrl(url); scheduleKeepalive(); });
             } catch (Throwable t) {
@@ -319,6 +319,9 @@ public class MainActivity extends Activity {
     }
 
     public final class PageBridge {
+        /** 本机版本号（APK versionName），供「版本」卡片兜底显示。 */
+        @JavascriptInterface public String appVersion() { return MainActivity.appVersion(MainActivity.this); }
+
         @JavascriptInterface public void setBars(String theme) {
             String next = "dark".equals(theme) || "light".equals(theme) ? theme : "system";
             barTheme = next;
@@ -432,5 +435,15 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (web.canGoBack()) web.goBack(); else super.onBackPressed();
+    }
+
+    /** APK 的 versionName；拿不到时返回空串，由 Python 侧退回包内版本常量。 */
+    static String appVersion(android.content.Context ctx) {
+        try {
+            String v = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).versionName;
+            return v == null ? "" : v;
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

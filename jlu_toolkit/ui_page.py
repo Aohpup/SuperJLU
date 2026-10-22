@@ -347,7 +347,7 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
   <div class="row" style="margin-top:10px"><a class="btn" id="kb-export" href="/api/schedule/overlay" download="superjlu-schedule-edits.json">导出备份</a><button type="button" class="btn" id="kb-import-btn">导入备份</button><input type="file" id="kb-import" accept=".json,application/json,text/plain" hidden><button type="button" class="btn ghost" id="kb-reset" hidden>恢复教务原样</button><button type="button" class="btn ghost" id="kb-undo" hidden>撤销恢复</button></div>
   <div id="kb-backup-box" hidden><p class="sub">把下面的内容复制下来保存好（比如发给自己），换手机后用「粘贴备份内容」恢复。</p><textarea id="kb-backup-text" readonly rows="5"></textarea><button type="button" class="btn" id="kb-copy">复制</button></div>
   <details style="margin-top:8px"><summary class="sub">粘贴备份内容</summary><textarea id="kb-paste" rows="4" placeholder="把之前复制的备份内容粘贴到这里"></textarea><button type="button" class="btn" id="kb-paste-ok">导入</button></details></div>
- <div class="card" id="ver-card"><h2>版本</h2><p class="sub" id="upd-s" role="status">当前版本 v<span id="upd-v"></span></p><div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button><label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="upd-auto" checked>自动检查新版本</label></div></div>
+ <div class="card" id="ver-card"><h2>版本</h2><p class="sub" id="upd-s" role="status">当前版本 v<span id="upd-v"></span><span id="upd-m"></span></p><details class="sub" id="upd-tech" hidden><summary>技术信息</summary><code id="upd-why" style="word-break:break-all"></code></details><div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button><label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="upd-auto" checked>自动检查新版本</label></div></div>
  <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据只保存在本机，不会上传到任何服务器。“刷新”使用已保存的登录会话；会话失效时请到「登录」重新登录。</p></div>
 </section>
 </main>
@@ -866,12 +866,19 @@ document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{
 // ---- 新版本提醒：不弹窗、不强制，只在「更多」里显示，并在导航上加一个小圆点 ----
 let UPD=null;
 function updAuto(){try{return localStorage.getItem("jlu-update-auto")!=="off"}catch(_){return true}}
-function updRender(j,manual){const s=$("#upd-s"),go=$("#upd-go"),nav=document.querySelector('nav button[data-t="sz"]');if(j&&j.current)$("#upd-v").textContent=j.current;const has=!!(j&&j.has_update&&j.latest);go.hidden=!has;if(has)go.href=j.url;let seen=null;try{seen=localStorage.getItem("jlu-update-seen")}catch(_){}if(nav)nav.classList.toggle("upd-dot",has&&seen!==j.latest);if(has)s.innerHTML=`当前版本 v${esc(j.current)} · <b style="color:var(--pri)">有新版本 v${esc(j.latest)}</b>，可随时下载，不更新也能照常使用。`;else if(manual)s.textContent=j&&j.unavailable?`当前版本 v${j.current||""} · 暂时查不到新版本信息，稍后再试`:`当前版本 v${j&&j.current||""} · 已是最新版本`;if(manual&&!has)toast(j&&j.unavailable?"暂时查不到新版本信息，稍后再试":"当前已是最新版本哦！")}
-async function updCheck(manual){try{const r=await fetch("/api/update"+(manual?"?force=1":""));const j=await r.json();UPD=j;updRender(j,manual)}catch(_){if(manual){$("#upd-s").textContent="暂时查不到新版本信息，稍后再试";toast("暂时查不到新版本信息，稍后再试",true)}}}
+const UPD_TXT={ok:"当前已是最新版本哦！",fail:"暂时连不上 GitHub，稍后再试",page:"页面没拿到版本信息，请稍后重试"};
+// 版本号放在独立的 #upd-v 里，状态只写 #upd-m，避免覆盖掉版本号（#122 之前点「检查更新」会清掉 #upd-v 导致报错）
+function updVer(j){const v=$("#upd-v");if(!v)return;let c=j&&j.current;if(!c){try{c=window.SuperJLU&&SuperJLU.appVersion&&SuperJLU.appVersion()}catch(_){}}if(c)v.textContent=String(c).replace(/^v/i,"");}
+function updMsg(html){const m=$("#upd-m");if(m)m.innerHTML=html?" · "+html:""}
+function updWhy(r){const t=$("#upd-tech"),w=$("#upd-why");if(!t||!w)return;w.textContent=r||"";t.hidden=!r}
+function updRender(j,manual){const go=$("#upd-go"),nav=document.querySelector('nav button[data-t="sz"]');updVer(j);const has=!!(j&&j.has_update&&j.latest);go.hidden=!has;if(has)go.href=j.url;let seen=null;try{seen=localStorage.getItem("jlu-update-seen")}catch(_){}if(nav)nav.classList.toggle("upd-dot",has&&seen!==j.latest);updWhy(j&&j.unavailable?(j.reason||"unavailable")+(j.checked_at?" @ "+j.checked_at:""):"");if(has)updMsg(`<b style="color:var(--pri)">有新版本 v${esc(j.latest)}</b>，可随时下载，不更新也能照常使用。`);else if(manual){updMsg(esc(j&&j.unavailable?UPD_TXT.fail:"已是最新版本"));toast(j&&j.unavailable?UPD_TXT.fail:UPD_TXT.ok,!!(j&&j.unavailable))}}
+async function updCheck(manual){let j;try{const ctl=typeof AbortController=="function"?new AbortController():null;const tm=ctl&&setTimeout(()=>ctl.abort(),25000);try{const r=await fetch("/api/update"+(manual?"?force=1":""),ctl?{signal:ctl.signal}:{});j=await r.json()}finally{if(tm)clearTimeout(tm)}}catch(e){if(manual){updVer(null);updMsg(esc(UPD_TXT.page));updWhy("page "+((e&&e.name)||"error")+": "+((e&&e.message)||"").slice(0,80));toast(UPD_TXT.page,true)}return}UPD=j;try{updRender(j,manual)}catch(e){updWhy("render "+((e&&e.message)||e))}}
+updVer(null);
 $("#upd-auto").checked=updAuto();$("#upd-auto").onchange=e=>{try{localStorage.setItem("jlu-update-auto",e.target.checked?"on":"off")}catch(_){}if(!e.target.checked)document.querySelector('nav button[data-t="sz"]').classList.remove("upd-dot")};
-$("#upd-chk").onclick=()=>{$("#upd-s").textContent="正在检查…";updCheck(true)};
+$("#upd-chk").onclick=()=>{updMsg("正在检查…");updCheck(true)};
 document.querySelector('nav button[data-t="sz"]').addEventListener("click",()=>{if(UPD&&UPD.has_update&&UPD.latest){try{localStorage.setItem("jlu-update-seen",UPD.latest)}catch(_){}document.querySelector('nav button[data-t="sz"]').classList.remove("upd-dot")}});
 setTimeout(()=>{if(updAuto())updCheck(false);else fetch("/api/update?local=1").then(r=>r.json()).then(j=>updRender(j,false)).catch(()=>{})},4000);
+fetch("/api/update?local=1").then(r=>r.json()).then(updVer).catch(()=>{});
 
 function fromHash(){const h=new URLSearchParams(location.hash.slice(1));const tab=[...h.keys()][0];const b=document.querySelector(`nav button[data-t="${tab}"]`);if(b)b.click();const s=h.get("scheme");if(s&&D.schemes[s]){$("#scheme").value=s;applyScheme(s)}}
 const _ra=renderAll;renderAll=function(){_ra();renderSession()};

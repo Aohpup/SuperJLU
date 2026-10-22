@@ -15,9 +15,15 @@ PREFERRED_PORT = 18765
 _httpd: Optional[ThreadingHTTPServer] = None
 
 
-def start(files_dir: str) -> str:
-    """启动服务并返回 URL；重复调用返回同一个地址。"""
+def start(files_dir: str, app_version: Optional[str] = None) -> str:
+    """启动服务并返回 URL；重复调用返回同一个地址。
+
+    app_version 是 APK 的 versionName（MainActivity 传入），让「版本」卡片和
+    更新检查以安装包版本为准；为空时 update_check 退回 jlu_toolkit.__version__。
+    """
     global _httpd
+    if app_version and str(app_version).strip():
+        os.environ["SUPERJLU_APP_VERSION"] = str(app_version).strip()
     if _httpd is not None:
         return f"http://127.0.0.1:{_httpd.server_address[1]}/"
     os.environ["XDG_CONFIG_HOME"] = os.path.join(files_dir, "config")

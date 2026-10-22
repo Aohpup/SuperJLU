@@ -905,7 +905,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 return
             if path in ("/", "/index.html"):
                 from . import ui_prefs
-                page = PAGE.replace("<script>/* 首帧前应用主题", ui_prefs.inline_script(store.root) + "<script>/* 首帧前应用主题", 1)
+                import html as _html
+                from . import update_check
+                page = PAGE.replace('<span id="upd-v"></span>', '<span id="upd-v">' + _html.escape(update_check.current_version()) + '</span>', 1)
+                page = page.replace("<script>/* 首帧前应用主题", ui_prefs.inline_script(store.root) + "<script>/* 首帧前应用主题", 1)
                 return self._send(200, page.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
             if path in ("/favicon.svg", "/favicon.ico"):  # SuperJLU 官方标志
@@ -958,7 +961,7 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 from urllib.parse import parse_qs, urlsplit
                 q = parse_qs(urlsplit(self.path).query)
                 if q.get("local") == ["1"]:  # 关闭自动检查时只显示本机版本，不联网
-                    return self._json({"ok": True, "current": update_check.__version__, "has_update": False})
+                    return self._json(update_check.local())
                 return self._json(update_check.check(force=q.get("force") == ["1"]))
             if path == "/api/links":
                 from . import sso

@@ -59,13 +59,19 @@ def test_update_check_up_to_date_is_not_failure():
 def test_update_check_prefers_native_transport_then_urllib(monkeypatch):
     from jlu_toolkit import update_check as uc
     calls = []
-    def native(t):
+    def native(req, t):
         calls.append("native"); raise OSError("no native")
-    def plain(t):
-        calls.append("urllib"); return {"tag_name": "v0.0.1"}
-    monkeypatch.setattr(uc, "_fetch_native", native)
-    monkeypatch.setattr(uc, "_fetch_urllib", plain)
-    assert uc._fetch(1) == {"tag_name": "v0.0.1"} and calls == ["native", "urllib"]
+    def plain(req, t):
+        calls.append("urllib")
+        class R:
+            code = 200
+            headers = {}
+            def read(self, n=-1): return b'{"tag_name": "v0.0.1"}'
+        return R()
+    monkeypatch.setattr(uc, "_native_ok", lambda: True)
+    monkeypatch.setattr(uc, "_open_native", native)
+    monkeypatch.setattr(uc, "_open_urllib", plain)
+    assert uc._fetch(1) == {"tag_name": "v0.0.1"} and calls == ["native", "native", "urllib"]
 
 
 def test_room_form_is_grouped_and_compact():
