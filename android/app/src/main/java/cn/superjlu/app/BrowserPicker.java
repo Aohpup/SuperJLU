@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** App-local web default: follow system or a chosen app. Ask-mode chooser hooks kept for later. */
+/** App-local web default: follow system, a chosen app, or ask every time (in-app list first). */
 final class BrowserPicker {
     interface CandidateQuery {
         List<ResolveInfo> query(Intent intent, int flags);
@@ -34,7 +34,7 @@ final class BrowserPicker {
     static final int QUERY_FLAGS = PackageManager.MATCH_ALL | PackageManager.MATCH_DEFAULT_ONLY
             | PackageManager.GET_RESOLVED_FILTER;
     private static final String[] WEB_TYPES = {null, "text/html", "application/xhtml+xml"};
-    /** Kept for prefs compatibility and a later UI re-enable; not offered in settings. */
+    /** Ask every time: in-app list of discovered browsers, so OEM chooser quirks do not matter. */
     private static final String MODE_ASK = "ask";
     private static final String MODE_SYSTEM = "system";
     private static final String MODE_APP = "app";
@@ -42,6 +42,7 @@ final class BrowserPicker {
     private final CandidateQuery query;
     private final SharedPreferences preferences;
     private AlertDialog settingsDialog;
+    private AlertDialog askDialog;
 
     BrowserPicker(Activity activity) {
         this(activity, (intent, flags) -> activity.getPackageManager().queryIntentActivities(intent, flags));
@@ -62,9 +63,13 @@ final class BrowserPicker {
         }
         try {
             String mode = preferences.getString("mode", MODE_SYSTEM);
-            // Ask stays wired but unused in settings; ColorOS/MIUI often swallow the panel.
+            // ColorOS/MIUI/HyperOS often swallow ACTION_CHOOSER, so ask mode lists browsers itself
+            // and launches the picked one explicitly; the system panel is only a last resort.
             if (MODE_ASK.equals(mode)) {
-                openAskChooser(uri, findTargets(uri));
+                List<Intent> targets = findTargets(uri);
+                if (targets.size() == 1 && tryStart(targets.get(0))) return;
+                if (targets.size() > 1) { showAskDialog(uri, targets); return; }
+                openAskChooser(uri, targets);
                 return;
             }
             if (MODE_APP.equals(mode)) {
@@ -111,6 +116,64 @@ final class BrowserPicker {
             if (tryStart(webIntent(uri, null))) return;
             throw chooserDenied;
         }
+    }
+
+    /** In-app "ask every time" list: icon + label per browser, then explicit launch. */
+    private void showAskDialog(Uri uri, List<Intent> targets) {
+        closeAsk();
+        List<BrowserChoice> choices = new ArrayList<>();
+        for (Intent target : targets) choices.add(describe(target.getComponent().getPackageName(), MODE_APP));
+        choices.add(new BrowserChoice(MODE_SYSTEM, null, activity.getString(R.string.browser_use_system_panel),
+                activity.getDrawable(android.R.drawable.ic_menu_more)));
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setTitle(R.string.browser_chooser_title)
+                .setAdapter(iconAdapter(choices, android.R.layout.select_dialog_item), (d, which) -> {
+                    if (which < targets.size()) launchPicked(uri, targets.get(which));
+                    else openAskChooser(uri, targets);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        dialog.setOnDismissListener(d -> { if (askDialog == dialog) askDialog = null; });
+        askDialog = dialog;
+        dialog.show();
+    }
+
+    private void launchPicked(Uri uri, Intent target) {
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        if (tryStart(target)) return;
+        if (tryStart(packageScoped(uri, target.getComponent().getPackageName()))) return;
+        if (tryStart(webIntent(uri, null))) return;
+        Toast.makeText(activity, R.string.browser_open_failed, Toast.LENGTH_LONG).show();
+    }
+
+    private BrowserChoice describe(String packageName, String mode) {
+        PackageManager pm = activity.getPackageManager();
+        CharSequence label = packageName;
+        Drawable icon = pm.getDefaultActivityIcon();
+        try {
+            ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
+            label = info.loadLabel(pm);
+            icon = info.loadIcon(pm);
+        } catch (PackageManager.NameNotFoundException | SecurityException unavailable) {
+            // Keep the discovered candidate identifiable if its label cannot be read.
+        }
+        return new BrowserChoice(mode, packageName, label, icon);
+    }
+
+    private ArrayAdapter<BrowserChoice> iconAdapter(List<BrowserChoice> choices, int layout) {
+        int iconSize = Math.round(32 * activity.getResources().getDisplayMetrics().density);
+        return new ArrayAdapter<BrowserChoice>(activity, layout, choices) {
+            @Override public View getView(int position, View recycled, ViewGroup parent) {
+                TextView row = (TextView) super.getView(position, recycled, parent);
+                Drawable icon = getItem(position).icon;
+                if (icon != null) {
+                    icon.setBounds(0, 0, iconSize, iconSize);
+                    row.setCompoundDrawablesRelative(icon, null, null, null);
+                    row.setCompoundDrawablePadding(iconSize / 3);
+                }
+                return row;
+            }
+        };
     }
 
     private static Intent preferredTarget(List<Intent> targets, String preferred) {
@@ -172,6 +235,21 @@ final class BrowserPicker {
                         .setComponent(new ComponentName(info.packageName, info.name)));
             }
         }
+        if (targets.isEmpty()) {
+            // Some OEM builds (EMUI/HyperOS) return no matched filter; accept exported VIEW
+            // handlers that also answer for an unrelated host, i.e. generic browsers.
+            Intent probe = webIntent(Uri.parse(uri.getScheme() + "://superjlu-probe.invalid/"), null);
+            List<ResolveInfo> loose;
+            try { loose = query.query(probe, QUERY_FLAGS); } catch (SecurityException denied) { loose = null; }
+            if (loose != null) for (ResolveInfo match : loose) {
+                if (match == null || match.activityInfo == null || match.filter != null) continue;
+                ActivityInfo info = match.activityInfo;
+                if (!info.exported || !info.enabled || info.packageName == null || info.name == null) continue;
+                if (activity.getPackageName().equals(info.packageName)) continue;
+                targets.putIfAbsent(info.packageName, webIntent(uri, null)
+                        .setComponent(new ComponentName(info.packageName, info.name)));
+            }
+        }
         return new ArrayList<>(targets.values());
     }
 
@@ -205,28 +283,16 @@ final class BrowserPicker {
     void showSettings() {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         close();
-        PackageManager pm = activity.getPackageManager();
         List<BrowserChoice> choices = new ArrayList<>();
-        // Ask mode is intentionally not listed; MODE_ASK / openAskChooser remain for a later release.
         choices.add(new BrowserChoice(MODE_SYSTEM, null, activity.getString(R.string.browser_follow_system),
                 activity.getDrawable(android.R.drawable.ic_menu_view)));
         // A neutral network URL only queries local capability declarations; it is never opened.
         for (Intent target : findTargets(Uri.parse("https://example.org/"))) {
-            String packageName = target.getComponent().getPackageName();
-            CharSequence label = packageName;
-            Drawable icon = pm.getDefaultActivityIcon();
-            try {
-                ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
-                label = info.loadLabel(pm);
-                icon = info.loadIcon(pm);
-            } catch (PackageManager.NameNotFoundException | SecurityException unavailable) {
-                // Keep the discovered candidate identifiable if its label cannot be read.
-            }
-            choices.add(new BrowserChoice(MODE_APP, packageName, label, icon));
+            choices.add(describe(target.getComponent().getPackageName(), MODE_APP));
         }
+        choices.add(new BrowserChoice(MODE_ASK, null, activity.getString(R.string.browser_always_ask),
+                activity.getDrawable(android.R.drawable.ic_menu_help)));
         String mode = preferences.getString("mode", MODE_SYSTEM);
-        // Hidden ask preference displays as follow-system until the user saves another choice.
-        if (MODE_ASK.equals(mode)) mode = MODE_SYSTEM;
         String packageName = preferences.getString("package", null);
         final int[] selection = {0};
         boolean currentFound = false;
@@ -240,18 +306,7 @@ final class BrowserPicker {
         }
         String message = activity.getString(R.string.browser_settings_hint);
         if (MODE_APP.equals(mode) && !currentFound) message = activity.getString(R.string.browser_saved_missing) + "\n\n" + message;
-        int iconSize = Math.round(32 * activity.getResources().getDisplayMetrics().density);
-        ArrayAdapter<BrowserChoice> adapter = new ArrayAdapter<BrowserChoice>(activity,
-                android.R.layout.simple_list_item_single_choice, choices) {
-            @Override public View getView(int position, View recycled, ViewGroup parent) {
-                TextView row = (TextView) super.getView(position, recycled, parent);
-                Drawable icon = getItem(position).icon;
-                icon.setBounds(0, 0, iconSize, iconSize);
-                row.setCompoundDrawablesRelative(icon, null, null, null);
-                row.setCompoundDrawablePadding(iconSize / 3);
-                return row;
-            }
-        };
+        ArrayAdapter<BrowserChoice> adapter = iconAdapter(choices, android.R.layout.simple_list_item_single_choice);
         // AlertDialog's setMessage hides its choice list on Android. Keep explanatory text
         // in the title area so the radio list remains visible and fully scrollable.
         LinearLayout heading = new LinearLayout(activity);
@@ -287,6 +342,12 @@ final class BrowserPicker {
     void close() {
         if (settingsDialog != null) settingsDialog.dismiss();
         settingsDialog = null;
+        closeAsk();
+    }
+
+    private void closeAsk() {
+        if (askDialog != null) askDialog.dismiss();
+        askDialog = null;
     }
 
     private static final class BrowserChoice {

@@ -137,7 +137,7 @@ public class BrowserPickerTest {
     }
 
     @Test public void askPreferenceStillOpensSystemChooserHooks() {
-        // Ask is hidden from settings but MODE_ASK / openAskChooser stay wired for later.
+        // No browsers discovered: ask mode falls back to the system chooser panel.
         activity.getSharedPreferences("browser-preferences-v1", 0).edit()
                 .putString("mode", "ask").commit();
         Uri uri = Uri.parse("https://example.invalid/");
@@ -173,7 +173,7 @@ public class BrowserPickerTest {
         AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
         assertTrue(dialog.isShowing());
         assertTrue(dialog.getListView().isShown());
-        assertEquals(2, dialog.getListView().getAdapter().getCount());
+        assertEquals(3, dialog.getListView().getAdapter().getCount());
         assertEquals("跟随系统默认浏览器", dialog.getListView().getAdapter().getItem(0).toString());
         assertEquals(0, dialog.getListView().getCheckedItemPosition());
         assertNull(activity.opened);
@@ -200,7 +200,7 @@ public class BrowserPickerTest {
                     | PackageManager.GET_RESOLVED_FILTER, (int) queryFlags.get(i));
         }
         AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
-        assertEquals(4, dialog.getListView().getAdapter().getCount());
+        assertEquals(5, dialog.getListView().getAdapter().getCount());
         assertNull(activity.opened);
     }
 
@@ -225,7 +225,7 @@ public class BrowserPickerTest {
         for (int i = 0; i < 6; i++) found.add(handler("test.browser" + i, "https", null));
         matches.put(null, found);
         browsers.showSettings();
-        assertEquals(7, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
+        assertEquals(8, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
     }
 
     @Test public void duplicateBrowserKeepsItsUntypedWebEntryWhenOpeningSavedApp() {
@@ -271,7 +271,7 @@ public class BrowserPickerTest {
         ResolveInfo self = handler(activity.getPackageName(), "https", "text/html");
         matches.put("text/html", Arrays.asList(file, domain, path, disabled, hidden, suspended, protectedApp, self, good));
         browsers.showSettings();
-        assertEquals(2, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
+        assertEquals(3, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
         assertEquals("test.browser", ShadowAlertDialog.getLatestAlertDialog()
                 .getListView().getAdapter().getItem(1).toString());
     }
@@ -282,7 +282,7 @@ public class BrowserPickerTest {
         unknown.filter = null;
         matches.put(null, Arrays.asList(browser, unknown));
         browsers.showSettings();
-        assertEquals(2, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
+        assertEquals(3, ShadowAlertDialog.getLatestAlertDialog().getListView().getAdapter().getCount());
         assertEquals("test.browser", ShadowAlertDialog.getLatestAlertDialog()
                 .getListView().getAdapter().getItem(1).toString());
     }
@@ -415,6 +415,45 @@ public class BrowserPickerTest {
         browsers.open(Uri.parse("https://example.invalid/"));
         assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
         assertNull(activity.opened.getComponent());
+    }
+
+    @Test public void askModeWithSeveralBrowsersShowsInAppListAndLaunchesPickedExplicitly() {
+        activity.getSharedPreferences("browser-preferences-v1", 0).edit()
+                .putString("mode", "ask").commit();
+        matches.put(null, Arrays.asList(handler("test.one", "https", null), handler("test.two", "https", null)));
+        Uri uri = Uri.parse("https://example.invalid/pick");
+        browsers.open(uri);
+        assertNull(activity.opened);
+        AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
+        assertTrue(dialog.isShowing());
+        assertEquals(3, dialog.getListView().getAdapter().getCount());
+        Shadows.shadowOf(dialog).clickOnItem(1);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(Intent.ACTION_VIEW, activity.opened.getAction());
+        assertEquals("test.two", activity.opened.getComponent().getPackageName());
+        assertEquals(uri, activity.opened.getData());
+    }
+
+    @Test public void askModeLastRowFallsBackToSystemPanel() {
+        activity.getSharedPreferences("browser-preferences-v1", 0).edit()
+                .putString("mode", "ask").commit();
+        matches.put(null, Arrays.asList(handler("test.one", "https", null), handler("test.two", "https", null)));
+        browsers.open(Uri.parse("https://example.invalid/"));
+        AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
+        Shadows.shadowOf(dialog).clickOnItem(2);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(Intent.ACTION_CHOOSER, activity.opened.getAction());
+    }
+
+    @Test public void settingsOfferAskEveryTimeAndSaveIt() {
+        matches.put(null, Arrays.asList(handler("test.browser", "https", null)));
+        chooseSetting(2, true);
+        assertEquals("ask", activity.getSharedPreferences("browser-preferences-v1", 0)
+                .getString("mode", null));
+        browsers.showSettings();
+        AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
+        assertEquals("每次询问", dialog.getListView().getAdapter().getItem(2).toString());
+        assertEquals(2, dialog.getListView().getCheckedItemPosition());
     }
 
     private void chooseSetting(int index, boolean save) {

@@ -7,8 +7,9 @@
     <string name="browser_chooser_title">选择浏览器打开</string>
     <string name="browser_open_failed">无法打开网页，请检查手机是否有可用浏览器。</string>
     <string name="browser_settings_title">默认浏览器</string>
-    <string name="browser_settings_hint">仅用于 SuperJLU。可跟随系统默认浏览器，或指定一个应用打开外链。</string>
+    <string name="browser_settings_hint">仅用于 SuperJLU。可跟随系统默认浏览器、指定一个应用，或每次打开外链时询问。</string>
     <string name="browser_always_ask">每次询问</string>
+    <string name="browser_use_system_panel">使用系统选择面板…</string>
     <string name="browser_follow_system">跟随系统默认浏览器</string>
     <string name="browser_save_default">保存</string>
     <string name="browser_default_unavailable">默认浏览器暂不可用，已恢复跟随系统。</string>

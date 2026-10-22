@@ -175,8 +175,16 @@ public class MainActivity extends Activity {
             int night = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
             dark = night == Configuration.UI_MODE_NIGHT_YES;
         }
-        int bg = dark ? DARK_BG : LIGHT_BG;
-        int nav = dark ? DARK_NAV : LIGHT_NAV;
+        paintBars(dark ? DARK_BG : LIGHT_BG, dark ? DARK_NAV : LIGHT_NAV, dark);
+    }
+
+    /**
+     * 跟随系统时以网页实际解析出的颜色为准（WebView 的 prefers-color-scheme 和
+     * Configuration.uiMode 在部分 ROM 上不一致，会出现上下黑边）。窗口、decor 也一起刷，
+     * 避免 edge-to-edge / 手势条下露出主题默认底色。
+     */
+    @SuppressWarnings("deprecation")
+    private void paintBars(int bg, int nav, boolean dark) {
         View root = findViewById(R.id.root);
         View status = findViewById(R.id.status_inset);
         View gesture = findViewById(R.id.nav_inset);
@@ -185,6 +193,7 @@ public class MainActivity extends Activity {
         if (gesture != null) gesture.setBackgroundColor(nav);
         if (web != null) web.setBackgroundColor(bg);
         Window w = getWindow();
+        w.getDecorView().setBackgroundColor(bg);
         w.setStatusBarColor(bg);
         w.setNavigationBarColor(nav);
         if (Build.VERSION.SDK_INT >= 29) {
@@ -314,6 +323,18 @@ public class MainActivity extends Activity {
             String next = "dark".equals(theme) || "light".equals(theme) ? theme : "system";
             barTheme = next;
             main.post(() -> applyBars(next));
+        }
+
+        /** 网页把当前真正生效的底色/导航栏色发过来（含跟随系统），原生栏直接照抄。 */
+        @JavascriptInterface public void setBarColors(String bg, String nav, boolean dark) {
+            final int b, n;
+            try {
+                b = Color.parseColor(bg);
+                n = Color.parseColor(nav);
+            } catch (RuntimeException bad) {
+                return;
+            }
+            main.post(() -> paintBars(b, n, dark));
         }
 
         @JavascriptInterface public void shareIcs(String body) {
