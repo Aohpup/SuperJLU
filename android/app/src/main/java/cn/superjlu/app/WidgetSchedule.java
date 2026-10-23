@@ -18,7 +18,7 @@ final class WidgetSchedule {
         Item(String n, String l, int wd, int s, int e, int sm, int em) {
             name = n; location = l; weekday = wd; start = s; end = e; startMin = sm; endMin = em;
         }
-        String hm(boolean end) { int m = end ? endMin : startMin; return String.format("%02d:%02d", m / 60, m % 60); }
+        String hm(boolean end) { int m = end ? endMin : startMin; return String.format(java.util.Locale.ROOT, "%02d:%02d", m / 60, m % 60); }
         String periodText() { return "第" + start + (end != start ? "-" + end : "") + "节"; }
     }
 

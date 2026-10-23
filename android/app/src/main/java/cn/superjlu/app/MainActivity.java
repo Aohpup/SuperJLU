@@ -373,6 +373,15 @@ public class MainActivity extends Activity {
             return BackgroundHelper.hint(BackgroundHelper.brand());
         }
 
+        @JavascriptInterface public boolean canPinWidget() { return WidgetUpdater.canPin(MainActivity.this); }
+
+        @JavascriptInterface public void pinWidget(int kind) {
+            main.post(() -> {
+                if (!WidgetUpdater.pin(MainActivity.this, kind))
+                    Toast.makeText(MainActivity.this, "桌面不支持，请长按桌面添加", Toast.LENGTH_LONG).show();
+            });
+        }
+
         @JavascriptInterface public String brandLabel() {
             return BackgroundHelper.brandLabel(BackgroundHelper.brand());
         }

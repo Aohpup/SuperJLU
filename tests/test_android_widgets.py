@@ -20,5 +20,18 @@ def test_page_has_android_extras_card():
 
 def test_manifest_declares_widgets_and_boot():
     m = (ROOT / "android/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
-    for s in ("TodayWidget", "WeekWidget", "BOOT_COMPLETED", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", "POST_NOTIFICATIONS"):
+    for s in ("TodayWidget", "WeekWidget", "NextWidget", "BOOT_COMPLETED", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", "POST_NOTIFICATIONS"):
         assert s in m
+
+
+def test_widget_providers_picker_friendly():
+    import re
+    xml = ROOT / "android/app/src/main/res/xml"
+    for n in ("today", "week", "next"):
+        t = (xml / f"widget_{n}_info.xml").read_text(encoding="utf-8")
+        assert 'android:widgetCategory="home_screen"' in t  # 不带 keyguard：ColorOS 等会隐藏
+        assert "android:previewImage=" in t and "android:minWidth=" in t and "android:minHeight=" in t
+        img = re.search(r'previewImage="@drawable/(\w+)"', t).group(1)
+        assert (ROOT / f"android/app/src/main/res/drawable-nodpi/{img}.png").exists()
+    m = (ROOT / "android/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+    assert m.count("android.appwidget.provider") == 3 and "LOCALE_CHANGED" in m
