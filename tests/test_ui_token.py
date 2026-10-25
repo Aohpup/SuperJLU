@@ -96,7 +96,7 @@ def test_sso_ticket_not_reachable_without_token(srv, monkeypatch):
     monkeypatch.setattr(sessions, "load_cookies", lambda s: CK if s == "cas" else None)
     monkeypatch.setattr(sessions, "save_cas_from_jar", lambda jar: 1)
     monkeypatch.setattr(jwxt.JwxtClient, "_request",
-                        lambda self, url, **k: (302, "", "https://iedu.jlu.edu.cn/?ticket=ST-1-abc", b""))
+                        lambda self, url, **k: (302, "", jwxt.IEDU_PORTAL + "?ticket=ST-1-abc", b""))
     st, hdrs, _ = _req(port, "GET", "/api/sso/jump?id=jwxt&n=" + ui.SSO_NONCE)
     assert st == 401 and "ST-" not in str(hdrs)
     st, hdrs, _ = _req(port, "GET", "/api/sso/jump?id=jwxt&n=" + ui.SSO_NONCE,

@@ -44,9 +44,8 @@ SITES: Dict[str, Site] = {s.id: s for s in (
     # 以下认证方式来自露娜的探测（PR #18）
     Site("pay", "校园缴费", "ip.jlu.edu.cn", "own", captcha=True),      # 卡号+密码+验证码
     Site("xsxk", "选课系统", "icourses.jlu.edu.cn", "own", captcha=True),  # AES 加密密码+验证码，token 头鉴权
-    # 邮箱+密码+验证码；课程中心入口可能走 CAS，尚未确认
-    # 经 /api/sso/jump 用统一认证免登进入，登录状态与教务一致
-    Site("ilearn", "学在吉大", "ilearntec.jlu.edu.cn", "own", captcha=True, follows="jwxt"),
+    # Browser handoff is possible, but JWXT login is not proof of an ilearn session.
+    Site("ilearn", "学在吉大", "ilearntec.jlu.edu.cn", "own", captcha=True),
     Site("vpn", "WebVPN", "vpn.jlu.edu.cn", "cas", vpn=False),
     # 首页无需登录；个人中心走 CAS（optional_login：没登录也算可用）
     Site("lib", "图书馆", "lib.jlu.edu.cn", "cas", optional_login=True),

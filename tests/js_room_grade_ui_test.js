@@ -76,7 +76,7 @@ assert.match(rules['#grade-policy'].innerHTML,/基础规则/);
 
 const status=vm.createContext({esc:s=>s,SST:{missing:['未登录','chip']}});
 vm.runInContext(page.slice(page.indexOf('function siteHasLoginStatus('),page.indexOf('let LOGIN_MODE=')),status);
-for(const id of ['xsxk','lib'])for(const state of ['missing','unknown','ok'])assert.equal(status.stBadge({id,state,checked_at:'today'}),'');
+for(const id of ['xsxk','lib','ilearn'])for(const state of ['missing','unknown','ok'])assert.equal(status.stBadge({id,state,checked_at:'today'}),'');
 assert.match(status.stBadge({id:'jwxt',state:'missing'}),/未登录/);
 console.log('Room names retain room codes and special names; location prefixes shortened without changing source data. Room colors: 1–8 columns, wide tiles and 10-color adjacency passed. Grade batch scope, folded rules and external login badges passed.');
 
