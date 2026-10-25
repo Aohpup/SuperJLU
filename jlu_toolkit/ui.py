@@ -1020,7 +1020,7 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
         y["campus_only"] = bool(y.get("campus_only"))
         if y["id"] == "jwxt":
             y["campus_only"] = True
-        if y["id"] == "xsxk":
+        if y["id"] in ("xsxk", "ilearn"):
             # This public service must not inherit an obsolete VPN override.
             y["campus_only"] = False
             y.pop("vpn_url", None)
@@ -1052,7 +1052,7 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None, token: Optiona
             pass
 
         def _sso_jump(self):
-            """GET /api/sso/jump?id=&n= —— 同源 nonce 校验后 302 到带 ST 的目标；失败退回普通地址 ?sso=failed。"""
+            """Authenticated browser handoff; setup instructions are explicitly requested."""
             import hmac, urllib.parse
             from . import sso
             q = {k: v[0] for k, v in urllib.parse.parse_qs(self.path.partition("?")[2]).items()}
@@ -1062,9 +1062,65 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None, token: Optiona
             site = (self.headers.get("Sec-Fetch-Site") or "").lower()
             if site and site not in ("same-origin", "none"):
                 return self._send(403, b"cross-site", "text/plain")
-            if not sso.capable(sid):
+            if sid not in sso.BROWSER_TARGETS:
                 return self._send(404, b"not sso-capable", "text/plain")
-            loc, _ok = sso.jump_url(sid)
+            route, stage = q.get("route", "direct"), q.get("stage", "target")
+            if route not in ("direct", "webvpn") or stage not in ("start", "target", "setup"):
+                return self._send(400, b"bad route or stage", "text/plain")
+            from html import escape
+            from . import ui_prefs
+
+            def jump_link(site_id, via="direct", step="start"):
+                return "/api/sso/jump?" + urllib.parse.urlencode({"id": site_id, "route": via,
+                                                                "stage": step, "n": SSO_NONCE})
+
+            def page(title, content, status=200):
+                # Reuse the app's design tokens, including the selected theme.
+                css = re.search(r"<style>(.*?)</style>", PAGE, re.S).group(1)
+                theme = ui_prefs.load(store.root).get("jlu-theme", "system")
+                theme_attr = f' data-theme="{theme}"' if theme in ("light", "dark") else ""
+                html = (f'<!doctype html><html lang="zh-CN"{theme_attr}><head><meta charset="utf-8">'
+                        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                        f'<title>{escape(title)} · SuperJLU</title><style>{css}'
+                        'body{padding:24px 12px}main{max-width:680px;margin:0 auto}'
+                        '.handoff-step{padding:16px 0;border-top:1px solid var(--line)}'
+                        '.handoff-step p{line-height:1.7}</style></head><body><main><div class="card">'
+                        f'<h2>{escape(title)}</h2>{content}<p><a href="/#sz">返回校园服务</a></p>'
+                        '</div></main></body></html>')
+                return self._send(status, html.encode(), "text/html; charset=utf-8", {
+                    "Referrer-Policy": "no-referrer",
+                    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"})
+
+            if route == "webvpn" and sid != "vpn" and stage == "setup":
+                # No undocumented redirect parameter or cross-origin cookie injection.
+                # The user completes the official VPN callback in the same browser,
+                # then requests a fresh site ticket only when clicking step two.
+                native = "SuperJLU-Android" in self.headers.get("User-Agent", "")
+                target = "" if native else ' target="_blank"'
+                return page("浏览器 VPN 登录说明", '<p class="sub">应用内与外部浏览器的登录会话独立。首次使用或浏览器登录过期时，请先完成第 1 步；已在该浏览器登录 WebVPN 可直接继续。</p>'
+                    '<div class="handoff-step"><h3>1. 在浏览器连接 WebVPN</h3>'
+                    '<p>尝试使用统一认证免登打开学校 VPN。看到 VPN 门户后，回到本页继续；若仍要求认证，请先完成学校页面上的登录。</p>'
+                    f'<a class="btn pri" href="{escape(jump_link("vpn"))}"{target} rel="noopener noreferrer">连接浏览器 WebVPN ↗</a></div>'
+                    '<div class="handoff-step"><h3>2. 进入目标服务</h3>'
+                    '<p>请使用与第 1 步相同的浏览器。校园网缴费仍需网站账号登录。</p>'
+                    f'<a class="btn pri" href="{escape(jump_link(sid, "webvpn", "target"))}"{target} rel="noopener noreferrer">继续打开服务 ↗</a></div>')
+            try:
+                if sso.capable(sid):
+                    loc = sso.issue_ticket(sid, route=route)
+                else:
+                    loc = sso.BROWSER_TARGETS[sid]
+                    if route == "webvpn":
+                        from .campus import vpn_url
+                        loc = vpn_url(loc)
+            except sso.BrowserJumpError as error:
+                fallback = sso.BROWSER_TARGETS[sid]
+                if route == "webvpn" and sid != "vpn":
+                    from .campus import vpn_url
+                    fallback = vpn_url(fallback)
+                return page("暂未完成免登", f'<p role="alert">{escape(str(error))}</p>'
+                    '<p class="sub">未将浏览器标记为已登录。应用内现有会话和本地数据保留。</p>'
+                    f'<div class="row"><a class="btn pri" href="{escape(jump_link(sid, route, stage))}">重试免登</a>'
+                    f'<a class="btn ghost" href="{escape(fallback)}" rel="noreferrer">在网站独立登录 ↗</a></div>', 409)
             if not sso._jlu_https(loc):
                 return self._send(502, b"bad target", "text/plain")
             return self._send(302, b"", "text/plain", {"Location": loc, "Referrer-Policy": "no-referrer"})
@@ -1215,11 +1271,17 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None, token: Optiona
                     return self._json(update_check.local())
                 return self._json(update_check.check(force=q.get("force") == ["1"]))
             if path == "/api/links":
-                from . import sso
+                from . import sso, webvpn
                 j = campus_links_api()
                 for x in j.get("links") or []:
                     if isinstance(x, dict) and sso.capable(x.get("id", "")):
                         x["sso_url"] = "/api/sso/jump?id=" + x["id"] + "&n=" + SSO_NONCE
+                        x["handoff"] = sso.last_status(x["id"])
+                        if x["id"] == "vpn":
+                            x["vpn_help_url"] = "/api/sso/jump?id=jwxt&route=webvpn&stage=setup&n=" + SSO_NONCE
+                    if isinstance(x, dict) and x.get("vpn_url") and x.get("id") in sso.BROWSER_TARGETS:
+                        x["vpn_sso_url"] = "/api/sso/jump?id=" + x["id"] + "&route=webvpn&stage=target&n=" + SSO_NONCE
+                j["route"] = webvpn.mode()
                 return self._json(j)
             if path == "/api/sso/jump":
                 return self._sso_jump()
@@ -1261,6 +1323,12 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None, token: Optiona
                 if self.path == "/api/prefs":
                     from . import ui_prefs
                     return self._json({"ok": True, "prefs": ui_prefs.update(store.root, body.get("set"), body.get("remove"))})
+                elif self.path == "/api/sessions/check":
+                    from . import sessions
+                    sid = body.get("site", "jwxt")
+                    if sid not in ("jwxt", "vpn"):
+                        raise ValueError("仅支持验证应用内教务或 WebVPN；外部浏览器登录结果无法由应用确认")
+                    return self._json({"ok": True, "site": sessions.check(sid)})
                 elif self.path == "/api/schemes":
                     store.save_scheme(body.get("name", ""), body.get("include") or [], body.get("base"),
                                       body.get("grade_source", "jwxt"))
