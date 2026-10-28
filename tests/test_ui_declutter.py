@@ -24,3 +24,8 @@ def test_campus_links_are_compact_tiles():
     assert "不常用但用得到的入口" not in PAGE
     assert 'class="lgrid"' in PAGE and 'class="go"' in PAGE
     assert "minmax(88px,1fr)" in PAGE
+
+
+def test_grad_students_not_supported_note():
+    assert "目前仅支持本科生教务，研究生暂不支持" in PAGE
+    assert "研究生能用吗" in (ROOT / "README.md").read_text(encoding="utf-8")
