@@ -14,9 +14,8 @@ def test_catalog_has_categories_and_scrape_cols():
     ids = {c["id"] for c in college.colleges_flat()}
     assert {"csw", "ccst", "sai", "law", "medicine", "spxy"} <= ids
     assert college.channels()["csw-xytz"] == "软件学院·学院通知"
-    assert "sai-site" in college.link_channels()
-    assert college.is_link_channel("sai-site")
-    assert college.link_home("sai-site").startswith("https://sai.jlu.edu.cn")
+    assert college.channels()["sai-xytz"] == "人工智能学院·学院通知"
+    assert "sai-site" not in college.link_channels()
 
 
 def test_prefs_default_and_apply_home(tmp_path):
@@ -32,15 +31,23 @@ def test_prefs_default_and_apply_home(tmp_path):
     assert any(i.startswith("csw-") for i in ids)
 
 
-def test_prefs_link_college(tmp_path):
+def test_prefs_scraped_college(tmp_path):
     college.apply_home_college(tmp_path, "sai")
     p = college.load_prefs(tmp_path)
-    assert "sai-site" in p["enabled"]
-    r = college.fetch("sai-site")
-    assert r["status"] == "link_only" and r["source_url"].startswith("https://sai.jlu.edu.cn")
+    assert "sai-xytz" in p["enabled"] and "sai-site" not in p["enabled"]
+
+
+def test_link_only_channel_still_opens_home(tmp_path, monkeypatch):
+    """没有栏目的学院仍只给官网入口，不假装有列表。"""
+    real = college.college_by_id
+    monkeypatch.setattr(college, "link_channels", lambda: {"zzz-site": "示例学院（官网）"})
+    monkeypatch.setattr(college, "college_by_id", lambda cid: {
+        "id": "zzz", "name": "示例学院", "home": "https://zzz.jlu.edu.cn/", "host": "zzz.jlu.edu.cn",
+    } if cid == "zzz" else real(cid))
+    r = college.fetch("zzz-site")
+    assert r["status"] == "link_only" and r["source_url"] == "https://zzz.jlu.edu.cn/"
     college.save(tmp_path, r)
-    st = ui.Store(tmp_path)
-    n = ui.oa_notices_api(st, {"category": "sai-site"})
+    n = ui.oa_notices_api(ui.Store(tmp_path), {"category": "zzz-site"})
     assert n["status"] == "link_only" and n["count"] == 0 and n["source_url"]
 
 

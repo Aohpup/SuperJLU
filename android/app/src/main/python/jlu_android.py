@@ -3,6 +3,9 @@
 不修改桌面端代码：通过 XDG_CONFIG_HOME 把配置/数据目录指到应用私有目录，
 会话、账号密码和缓存由 secure_store 的 Android Keystore 后端加密
 （密钥别名 jlu-toolkit-storage，见 #14），不再设置 JLU_TOOLKIT_NO_KEYRING。
+
+同机其它 App 也能连 127.0.0.1，所以接口要求本地令牌（见 ui.TOKEN_COOKIE / TOKEN_HEADER）；
+令牌文件在应用私有目录，由 auth_token() 交给 MainActivity。
 """
 from __future__ import annotations
 
@@ -15,9 +18,15 @@ PREFERRED_PORT = 18765
 _httpd: Optional[ThreadingHTTPServer] = None
 
 
-def start(files_dir: str) -> str:
-    """启动服务并返回 URL；重复调用返回同一个地址。"""
+def start(files_dir: str, app_version: Optional[str] = None) -> str:
+    """启动服务并返回 URL；重复调用返回同一个地址。
+
+    app_version 是 APK 的 versionName（MainActivity 传入），让「版本」卡片和
+    更新检查以安装包版本为准；为空时 update_check 退回 jlu_toolkit.__version__。
+    """
     global _httpd
+    if app_version and str(app_version).strip():
+        os.environ["SUPERJLU_APP_VERSION"] = str(app_version).strip()
     if _httpd is not None:
         return f"http://127.0.0.1:{_httpd.server_address[1]}/"
     os.environ["XDG_CONFIG_HOME"] = os.path.join(files_dir, "config")
@@ -35,6 +44,13 @@ def start(files_dir: str) -> str:
     threading.Thread(target=httpd.serve_forever, name="jlu-ui", daemon=True).start()
     _httpd = httpd
     return f"http://127.0.0.1:{httpd.server_address[1]}/"
+
+
+def auth_token() -> str:
+    """本地接口令牌（start() 之后调用）：MainActivity 用它给 WebView 种 Cookie、给原生请求加请求头。"""
+    if _httpd is None:
+        raise RuntimeError("UI server not started")
+    return _httpd.RequestHandlerClass.auth_token
 
 
 def stop() -> None:

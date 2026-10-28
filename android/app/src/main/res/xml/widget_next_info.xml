@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- home_screen only: ColorOS / some launchers hide keyguard-tagged widgets. previewImage (PNG) for pre-12 and OEM pickers; previewLayout wins on 12+. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:minWidth="110dp" android:minHeight="40dp"
+    android:minResizeWidth="57dp" android:minResizeHeight="40dp"
+    android:targetCellWidth="2" android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_next"
+    android:previewImage="@drawable/widget_preview_next"
+    android:previewLayout="@layout/widget_next"
+    android:description="@string/widget_next_desc"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    tools:ignore="UnusedAttribute" />
