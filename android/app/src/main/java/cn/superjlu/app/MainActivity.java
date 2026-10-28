@@ -70,9 +70,6 @@ public class MainActivity extends Activity {
                 web.setVisibility(View.VISIBLE);
             }
         });
-        View banner = findViewById(R.id.banner);
-        banner.setOnClickListener(v -> v.setVisibility(View.GONE));
-
         new Thread(() -> {
             try {
                 ensurePython();
@@ -85,16 +82,6 @@ public class MainActivity extends Activity {
                         .setText("启动失败：" + t));
             }
         }, "jlu-start").start();
-
-        new Thread(() -> {
-            boolean ok;
-            try {
-                ensurePython();
-                ok = Python.getInstance().getModule("jlu_android")
-                        .callAttr("campus_reachable").toBoolean();
-            } catch (Throwable t) { ok = false; }
-            if (!ok) main.post(() -> banner.setVisibility(View.VISIBLE));
-        }, "jlu-netcheck").start();
     }
 
     /**

@@ -58,4 +58,4 @@ def test_page_offline_ui():
     assert "离线数据 · 更新于" in PAGE
     # 401 + offline 缓存时不抛错，直接返回缓存
     assert "j.offline===true&&j.ok!==false&&(r.ok||r.status===401))return j" in PAGE
-    assert "经 VPN 打开" in PAGE
+    assert ">经 VPN</a>" in PAGE
