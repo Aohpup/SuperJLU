@@ -1,30 +1,42 @@
-"""校园服务单点跳转：用已保存的 CAS cookie（站点 'cas'）向 CAS 换一张 ST，把浏览器 302 到带 ticket 的目标地址。
+"""Browser handoff using fresh CAS tickets, never exported cookies.
 
-只读、只用已保存的 cookie，不提交密码/验证码；ticket 与 cookie 只出现在 302 Location 里，不进任何 JSON。
+Only a redirect Location may contain a ticket. Status records contain enums only.
+The browser redeems the ticket; following its callback here would consume it.
 """
 from __future__ import annotations
 
+import json
+import threading
+import time
 import urllib.parse
 from typing import Optional, Tuple
-
 from . import jwxt, sessions
 
-# site id → (CAS service, 直接打开时的目标 URL)
-# ilearn：ilearntec → ilearn.jlu.edu.cn/cas-server → cas.jlu.edu.cn/tpass/login?service=jwcidentity…（2026-10-15 只读探测）
 SSO_TARGETS = {
-    # jwxt：不能用 CLI 首登的短 service（https://iedu.jlu.edu.cn/）。浏览器带 ticket 落在根路径后，
-    # 金智 EMAP 门户/应用的 CAS 过滤器只认「该入口 URL」作 service（同 JwxtClient 的 emap_cas_exchange），
-    # 浏览器又没有 cas.jlu.edu.cn 的 CASTGC，于是又被送回登录页。与 CLI 换票一致：service = 门户入口本身。
     "jwxt": (jwxt.IEDU_PORTAL, jwxt.IEDU_PORTAL),
     "ilearn": ("https://jwcidentity.jlu.edu.cn/iplat-pass-jlu/thirdLogin/jlu/login",
                "https://ilearntec.jlu.edu.cn/coursecenter/main/index"),
+    "vpn": ("https://vpn.jlu.edu.cn/login?cas_login=true", "https://vpn.jlu.edu.cn/"),
 }
+BROWSER_TARGETS = {**{k: v[1] for k, v in SSO_TARGETS.items()}, "pay": "https://ip.jlu.edu.cn/pay/"}
+MESSAGES = {
+    "issued": "已发起免登跳转",
+    "missing": "没有可用的统一认证会话，请返回「更多 → 登录」重新登录后重试。",
+    "expired": "统一认证会话已过期，请返回「更多 → 登录」重新登录后重试。",
+    "network": "连接学校认证服务失败，请检查网络后重试；已保留应用内会话和本地数据。",
+    "unconfirmed": "学校没有返回有效的登录票据，尚未完成免登。可重试或在网站独立登录。",
+}
+_status_lock = threading.Lock()
 
 
 def _jlu_https(url: str) -> bool:
-    u = urllib.parse.urlparse(url or "")
-    h = (u.hostname or "").lower()
-    return u.scheme == "https" and (h == "jlu.edu.cn" or h.endswith(".jlu.edu.cn"))
+    try:
+        u = urllib.parse.urlsplit(url or "")
+        return (u.scheme == "https" and not u.username and not u.password
+                and u.port in (None, 443) and not u.fragment
+                and (u.hostname == "jlu.edu.cn" or (u.hostname or "").endswith(".jlu.edu.cn")))
+    except ValueError:
+        return False
 
 
 def capable(site_id: str) -> bool:
@@ -35,37 +47,103 @@ def with_flag(url: str, flag: str = "sso=failed") -> str:
     return url + ("&" if "?" in url else "?") + flag
 
 
-def jump_url(site_id: str, c: Optional[jwxt.JwxtClient] = None) -> Tuple[str, bool]:
-    """返回 (浏览器应跳去的 URL, 是否拿到了 ticket)。失败时退回普通目标 URL 并带 ?sso=failed。"""
-    service, fallback = SSO_TARGETS[site_id]
-    fail = with_flag(fallback)
+def _read_status() -> dict:
+    try:
+        obj = json.loads((jwxt.config_dir() / "browser-handoff.json").read_text(encoding="utf-8"))
+        return obj if isinstance(obj, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def last_status(site_id: str) -> dict:
+    with _status_lock:
+        r = _read_status().get(site_id, {})
+    if not isinstance(r, dict) or r.get("state") not in MESSAGES:
+        return {}
+    return {"state": r["state"], "message": MESSAGES[r["state"]],
+            "route": "webvpn" if r.get("route") == "webvpn" else "direct",
+            "checked_at": r.get("checked_at")}
+
+
+def _record(site_id: str, state: str, route: str) -> None:
+    # Never persist URLs, tickets, cookies or raw exception text.
+    with _status_lock:
+        obj = {k: v for k, v in _read_status().items() if k in SSO_TARGETS}
+        obj[site_id] = {"state": state, "route": route, "checked_at": int(time.time())}
+        p = jwxt.config_dir() / "browser-handoff.json"
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            temp = p.with_suffix(".tmp")
+            temp.write_text(json.dumps(obj), encoding="utf-8")
+            temp.replace(p)
+        except OSError:
+            pass  # Do not discard an issued ticket if status persistence fails.
+
+
+class BrowserJumpError(Exception):
+    def __init__(self, state: str):
+        self.state = state
+        super().__init__(MESSAGES[state])
+
+
+def issue_ticket(site_id: str, route: str = "direct", c: Optional[jwxt.JwxtClient] = None) -> str:
+    """Issue once, without following the callback or replaying credentials."""
+    if route not in ("direct", "webvpn") or site_id not in SSO_TARGETS:
+        raise ValueError("不支持的校园服务或连接方式")
+    service, _ = SSO_TARGETS[site_id]
+
+    def fail(state):
+        _record(site_id, state, route)
+        raise BrowserJumpError(state)
+
     try:
         sessions.migrate_cas_from_jwxt()
     except Exception:
         pass
     cas = sessions.load_cookies("cas")
     if not cas:
-        return fail, False
-    c = c or jwxt.JwxtClient()
+        fail("missing")
+    # CAS is public. App VPN cookies do not authenticate the external browser.
+    c = c or jwxt.JwxtClient(timeout=12, route="direct")
     c.jar = jwxt.jar_from_list(cas)
     c._rebuild_opener()
     url = f"{jwxt.CAS_LOGIN}?service={urllib.parse.quote(service, safe='')}"
     try:
         code, html, final, _ = c._request(url, headers={"Accept": "text/html,*/*"}, allow_redirects=False)
     except jwxt.NetworkError:
-        return fail, False
-    q = urllib.parse.parse_qs(urllib.parse.urlparse(final or "").query)
-    ticket = (q.get("ticket") or [""])[0]
-    if code in (301, 302, 303, 307) and ticket.startswith("ST-") and _jlu_https(final) \
-            and (urllib.parse.urlparse(final).hostname or "").lower() != sessions.SITES["cas"].host:
+        fail("network")
+    try:
+        u, expected = urllib.parse.urlsplit(final or ""), urllib.parse.urlsplit(service)
+    except ValueError:
+        fail("unconfirmed")
+    query = urllib.parse.parse_qs(u.query)
+    tickets = query.get("ticket", [])
+    exact_service = (u.scheme, u.netloc, u.path) == (expected.scheme, expected.netloc, expected.path)
+    expected_query = urllib.parse.parse_qs(expected.query)
+    if (code in (301, 302, 303, 307, 308) and _jlu_https(final) and exact_service
+            and len(tickets) == 1 and tickets[0].startswith("ST-")
+            and all(query.get(k) == v for k, v in expected_query.items())):
         try:
-            sessions.save_cas_from_jar(c.jar)  # CAS 可能续发了 TGC
+            sessions.save_cas_from_jar(c.jar)
         except Exception:
             pass
-        return final, True
-    if jwxt.looks_like_login_redirect(final, html) or code == 200:
+        if route == "webvpn" and site_id != "vpn":
+            from .campus import vpn_url
+            final = vpn_url(final)
+        _record(site_id, "issued", route)
+        return final
+    if jwxt.looks_like_login_redirect(final, html):
         try:
             sessions.mark_expired("cas", "统一认证登录已失效")
-        except Exception:
+        except OSError:
             pass
-    return fail, False
+        fail("expired")
+    fail("unconfirmed")
+
+
+def jump_url(site_id: str, c: Optional[jwxt.JwxtClient] = None) -> Tuple[str, bool]:
+    """Legacy helper; new UI reports errors instead of silently falling back."""
+    try:
+        return issue_ticket(site_id, c=c), True
+    except BrowserJumpError:
+        return with_flag(SSO_TARGETS[site_id][1]), False

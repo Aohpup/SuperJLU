@@ -4,6 +4,14 @@
     <string name="app_subtitle">吉大人的一站式服务</string>
     <string name="starting">正在启动本地服务…</string>
     <string name="browser_unsupported">不支持打开此类链接</string>
-    <string name="browser_open_failed">无法打开网页，请检查手机的默认浏览器设置。</string>
-    <string name="browser_disabled">指定浏览器功能暂不可用，当前使用系统默认浏览器。</string>
+    <string name="browser_chooser_title">选择浏览器打开</string>
+    <string name="browser_open_failed">无法打开网页，请检查手机是否有可用浏览器。</string>
+    <string name="browser_settings_title">默认浏览器</string>
+    <string name="browser_settings_hint">仅用于 SuperJLU。可跟随系统默认浏览器、指定一个应用，或每次打开外链时询问。</string>
+    <string name="browser_always_ask">每次询问</string>
+    <string name="browser_use_system_panel">使用系统选择面板…</string>
+    <string name="browser_follow_system">跟随系统默认浏览器</string>
+    <string name="browser_save_default">保存</string>
+    <string name="browser_default_unavailable">默认浏览器暂不可用，已恢复跟随系统。</string>
+    <string name="browser_saved_missing">之前选择的浏览器当前不可用，请重新选择。</string>
 </resources>

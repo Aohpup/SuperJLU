@@ -35,7 +35,22 @@
 ## 它能帮你做什么
 
 ### 📅 课表：今天上什么课，一眼就知道
-按周翻看课表，当天高亮，还会在顶部提醒你下一场考试还有几天。也可以导出到手机日历，课前 15 分钟自动提醒。
+按周翻看课表，当天高亮，并按当前时间在课表上方提示正在上或下一节课。考试倒计时在「考试」页查看。也可以导出到手机日历，课前 15 分钟自动提醒。
+
+- **翻周**：点「上一周 / 下一周」，或在课表上**横向快速划过大半屏**（轻扫、斜划和上下滚动不会误翻周）。
+- **加课**：双击空白格子即可添加自己的课程。
+
+### 📱 桌面小组件（Android）
+长按桌面空白处 → 「小组件」→ 找到 SuperJLU，可以添加：
+
+| 小组件 | 显示内容 |
+| --- | --- |
+| **今日课程**（2×2） | 正在上 / 下一节课的课程名、时间、节次、教室，以及今天还剩几节 |
+| **本周剩余课程**（4×2） | 今天剩下的课和本周之后几天的课，按时间排列 |
+
+- 数据来自 App 里已缓存的课表，**打开过一次 App 并同步课表后**小组件才有内容；之后每次刷新课表都会自动更新。
+- 会在每节课开始、结束、课前 15 分钟以及午夜自动刷新；跟随系统深色模式；点小组件打开 App。
+- **锁屏**：多数手机不支持锁屏小组件。可在「更多 → 小组件与后台」打开「锁屏显示下一节课」（一条常驻通知，默认关闭）。
 
 ### 📊 成绩与绩点：保研、评奖学金前不用再手算
 - 一键切换「保研加权」「奖学金加权」「全部课程」等计算方式，加权成绩和绩点马上算好。
@@ -73,6 +88,35 @@
 
 如需使用或咨询微信小程序，请联系小程序负责人 [@Dramadan-wow](https://github.com/Dramadan-wow)，邮箱 `dramadan070925@qq.com`。**其他 SuperJLU 项目参与者与小程序无关，请勿向其咨询小程序事宜。**
 
+> 随 [v1.0.8](https://github.com/Runa-Asahi/SuperJLU/releases/tag/v1.0.8) 发布，代码在仓库的 `wechat/` 目录。
+
+SuperJLU 现在多了一个**微信原生小程序**，没有安卓 App 的同学（比如 iPhone 用户）也能在手机上查自己的教务数据。原有的桌面端、安卓 App 和 Python 包都不受影响。小程序共 12 个页面：课表、成绩与绩点、考试、学业、校园入口、个人设置、隐私说明等。
+
+### 怎么用
+
+1. 在手机浏览器（如 Safari）里登录学校教务系统。
+2. 运行 SuperJLU 提供的同步书签，复制这次读取到的结果。
+3. 打开小程序，预览、确认后导入本机。
+
+导入后可以离线查看；想更新数据时，重新读取一次即可，**不需要电脑开着**。
+
+### 隐私与安全
+
+- 同步书签只在学校教务域名下运行，不加载远程脚本。
+- 不导出 Cookie、密码或验证码，也不把结果上传到任何自建云端。
+- 导入时会校验来源、时间、大小和字段，读取失败的模块会明确标出来。
+- 默认不调用微信登录或任何后端。
+
+### 目前的限制
+
+- 小程序直连教务、云端查询这两种方式还在试验阶段，暂不支持后台自动同步。
+- 手机浏览器模式不提供实时的空教室和通知查询。
+- 成绩、考试等模块还没逐项在真机上验收，安卓浏览器也还没实测。
+- 本地缓存没有额外加密，导入结果会暂时留在剪贴板里，可以手动清除。
+- 小程序还要另外经过微信平台审核才能正式上架。
+
+详细说明见 [`wechat/README.md`](wechat/README.md) 和 [`wechat/docs/backend.md`](wechat/docs/backend.md)。
+
 ## 常见问题
 
 **登录要用什么账号？**
@@ -90,6 +134,15 @@
 **数据不是最新的怎么办？**
 点右上角的「刷新」按钮，会重新从教务系统同步一次。
 
+**装的是 1.2.0，App 里检查不到新版本？**
+1.2.0 的「检查更新」本身有 bug，不管有没有新版都会显示查不到。请到 [Releases 页面](https://github.com/Runa-Asahi/SuperJLU/releases/latest) **手动下载安装一次**最新版（覆盖安装，数据保留），之后的版本就能在 App 里正常检测到了。
+
+**小组件不刷新 / 时间不准？**
+部分国产系统会限制后台。到「更多 → 小组件与后台」：点「允许后台运行（忽略电池优化）」和「自启动 / 后台管理设置」，按提示把 SuperJLU 设为允许自启动、不限制后台；再在最近任务里把 SuperJLU **加锁**（这一步只能在系统界面手动操作，App 无法代为设置）。
+
+**课表左右滑动老是误翻周？**
+新版只在明确的横向快速长划时翻周，轻扫、斜划、上下滚动都不会触发；也可以直接点「上一周 / 下一周」按钮。
+
 **装过旧版「JLU Toolkit」？**
 旧版包名不同，请先卸载旧版再安装 SuperJLU。
 
@@ -104,12 +157,20 @@
 
 SuperJLU 也能接入 AI 助手（MCP），让 Claude、Cursor 等 AI 助手直接回答「我明天有什么课」「这学期绩点多少」；也可以用命令行查课表、成绩和考试。命令行和 MCP 的安装与使用步骤见 [命令行与开发者文档](docs/cli.md#命令行与-mcp-快速上手)。
 
+### 从源码构建
+
+- **运行测试**：`pip install ".[captcha]" pytest && pytest -q`（部分界面测试需要 Node.js）。
+- **Android APK**：需要 JDK 17、Android SDK（platform 35）和 Python 3.13，在 `android/` 下执行 `./gradlew testDebugUnitTest assembleDebug -PbuildPython=/path/to/python3.13`，详见 [`android/README.md`](android/README.md)。
+- **Windows / 本地调试**：见下文。
+
 本地修改源码后，Windows 可运行仓库内的 `启动SuperJLU.cmd`（需先安装 uv），或在项目目录执行 `uv run --extra captcha python start_local.py`。启动器会运行当前源码、自动打开浏览器，并打印实际地址；8765 已占用时使用其他端口，测试时以本次输出的网址为准。使用期间请保留启动窗口，按 Ctrl+C 停止。
 
 ## 特别鸣谢
 
-- **[@Dramadan-wow](https://github.com/Dramadan-wow)**：微信小程序端（[PR #82](https://github.com/Runa-Asahi/SuperJLU/pull/82)）。小程序相关需求请联系 `dramadan070925@qq.com`；其他项目参与者与小程序无关。
-- **[@Aohpup](https://github.com/Aohpup)**：成绩加权分析、模板与导入等（[PR #44](https://github.com/Runa-Asahi/SuperJLU/pull/44) / [#45](https://github.com/Runa-Asahi/SuperJLU/pull/45)、[#67](https://github.com/Runa-Asahi/SuperJLU/pull/67)、[#81](https://github.com/Runa-Asahi/SuperJLU/pull/81)）。
+- **[@Aohpup](https://github.com/Aohpup)**：成绩加权分析、模板与导入等（[PR #44](https://github.com/Runa-Asahi/SuperJLU/pull/44)、[#45](https://github.com/Runa-Asahi/SuperJLU/pull/45)、[#67](https://github.com/Runa-Asahi/SuperJLU/pull/67)、[#81](https://github.com/Runa-Asahi/SuperJLU/pull/81)、[#85](https://github.com/Runa-Asahi/SuperJLU/pull/85)）。
+- **[@Dramadan-wow](https://github.com/Dramadan-wow)**：微信小程序端（[PR #82](https://github.com/Runa-Asahi/SuperJLU/pull/82)）。
+
+> 小程序相关需求请联系 `dramadan070925@qq.com`；其他项目参与者与小程序无关。
 
 欢迎关注他们的 GitHub ⭐
 

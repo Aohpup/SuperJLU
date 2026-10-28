@@ -39,6 +39,15 @@ def test_builtin_links(srv):
         assert x["name"] and x["purpose"] and x["login"] and isinstance(x["campus_only"], bool)
     il = next(x for x in j["links"] if x["id"] == "ilearn")
     assert "验证码" in il["login"]
+    assert il["campus_only"] is False and "vpn_url" not in il and "vpn_sso_url" not in il
+
+
+def test_ilearn_old_override_cannot_force_vpn(srv):
+    _override({"links": [{"id": "ilearn", "campus_only": True,
+                          "vpn_url": "https://vpn.jlu.edu.cn/old"}]})
+    _, j = _get(srv + "/api/links")
+    il = next(x for x in j["links"] if x["id"] == "ilearn")
+    assert il["campus_only"] is False and "vpn_url" not in il and "vpn_sso_url" not in il
 
 
 def test_override_merge_hide_add_and_allowlist(srv):

@@ -29,3 +29,12 @@ def test_campus_links_are_compact_tiles():
 def test_grad_students_not_supported_note():
     assert "目前仅支持本科生教务，研究生暂不支持" in PAGE
     assert "研究生能用吗" in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
+def test_campus_links_keep_sso_controls():
+    assert 'id="links-refresh"' in PAGE
+    assert 'id="links-check"' in PAGE
+    assert "function renderServiceLinks" in PAGE
+    assert "function servicePrimary" in PAGE
+    assert "minmax(88px,1fr)" in PAGE
+    assert "offcampus_banner" not in (ROOT / "android/app/src/main/res/values/strings.xml").read_text(encoding="utf-8")

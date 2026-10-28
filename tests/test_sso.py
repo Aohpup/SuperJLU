@@ -46,7 +46,7 @@ def _mock(monkeypatch, cookies, resp, seen=None):
 
 def test_jump_ok(monkeypatch):
     seen = []
-    _mock(monkeypatch, CK, (302, "", "https://iedu.jlu.edu.cn/?ticket=ST-1-abc", b""), seen)
+    _mock(monkeypatch, CK, (302, "", jwxt.IEDU_PORTAL + "?ticket=ST-1-abc", b""), seen)
     url, ok = sso.jump_url("jwxt")
     assert ok and url.endswith("ticket=ST-1-abc")
     assert seen[0].startswith("https://cas.jlu.edu.cn/tpass/login?service=https%3A%2F%2Fiedu")
@@ -77,7 +77,7 @@ def test_no_cas_cookies(monkeypatch):
 
 
 def test_http_endpoint(monkeypatch, srv):
-    _mock(monkeypatch, CK, (302, "", "https://iedu.jlu.edu.cn/?ticket=ST-1-abc", b""))
+    _mock(monkeypatch, CK, (302, "", jwxt.IEDU_PORTAL + "?ticket=ST-1-abc", b""))
     h = {"Host": "127.0.0.1"}
     st, _, body = _req(srv, "/api/links", h)
     j = json.loads(body)
@@ -90,7 +90,7 @@ def test_http_endpoint(monkeypatch, srv):
     assert _req(srv, "/api/sso/jump?id=jwxt&n=bad", h)[0] == 403
     assert _req(srv, links["jwxt"]["sso_url"], {**h, "Sec-Fetch-Site": "cross-site"})[0] == 403
     n = links["jwxt"]["sso_url"].split("n=")[1]
-    assert _req(srv, "/api/sso/jump?id=pay&n=" + n, h)[0] == 404
+    assert _req(srv, "/api/sso/jump?id=unknown&n=" + n, h)[0] == 404
 
 
 def test_jwxt_service_is_portal_entry(monkeypatch):

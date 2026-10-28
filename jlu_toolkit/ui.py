@@ -13,6 +13,7 @@ import datetime as dt
 import base64
 import binascii
 import json
+import os
 import re
 import shutil
 import threading
@@ -29,6 +30,8 @@ ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 
 TEACHING_ACTIONS = {
     "/api/rooms": "空教室查询", "/api/rooms/campuses": "校区加载",
+    "/api/rooms/day-period": "全天空闲加载",
+    "/api/rooms/day": "全天空闲加载",
     "/api/rooms/buildings": "教学楼加载", "/api/rooms/types": "教室类型加载",
     "/api/rooms/fields": "查询条件加载", "/api/grades/refresh": "成绩同步",
     "/api/refresh": "教务同步", "/api/session/keepalive": "会话检查",
@@ -53,14 +56,78 @@ def data_dir() -> Path:
     return d
 
 
+import hmac as _hmac
 import secrets as _secrets
 SSO_NONCE = _secrets.token_urlsafe(18)  # 每次启动换新；只经同源 /api/links 下发
+
+# 本地接口令牌：只监听 127.0.0.1 挡不住同机的其它程序（Android 上任何有联网权限的 App
+# 都能连 127.0.0.1:18765 读成绩、换 CAS 票据），所以除图标外的请求都要带令牌——
+# 浏览器 / WebView 用 HttpOnly Cookie，原生代码（Android Java、自检脚本）用请求头。
+# 令牌存在私有配置目录，重启后不变，已打开的标签页和书签照常可用。
+TOKEN_COOKIE = "superjlu_t"
+TOKEN_HEADER = "X-SuperJLU-Token"
+TOKEN_FILE = "ui_token"
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+_PUBLIC_PATHS = ("/favicon.svg", "/favicon.ico")
+_PAGE_PATHS = ("/", "/index.html")
+LOCKED_PAGE = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>SuperJLU</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:32em;margin:15vh auto;padding:0 16px;line-height:1.7">
+<h2>请从 SuperJLU 打开界面</h2>
+<p>为保护你的账号和成绩，本地界面只接受 SuperJLU 自己打开的页面。
+请点系统托盘里的「打开 SuperJLU」，或重新运行 SuperJLU。</p>
+<p>命令行启动时，请使用终端里打印的完整地址。</p></body></html>"""
+
+
+def token_path() -> Path:
+    return jwxt.config_dir() / TOKEN_FILE
+
+
+def load_or_create_token() -> str:
+    """读取（缺失或损坏时生成）本地接口令牌，文件权限 0600。"""
+    p = token_path()
+    try:
+        t = p.read_text(encoding="utf-8").strip()
+        if _TOKEN_RE.match(t):
+            return t
+    except OSError:
+        pass
+    t = _secrets.token_urlsafe(32)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(TOKEN_FILE + ".tmp")
+    tmp.write_text(t, encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, p)
+    return t
+
+
+def launch_url(base: str, token: Optional[str] = None) -> str:
+    """打开界面用的地址：服务端校验 ?t= 后种 Cookie，再 302 回不带令牌的 /。"""
+    return base.rstrip("/") + "/?t=" + (token or load_or_create_token())
+
+
+def _token_ok(headers, token: str) -> bool:
+    got = headers.get(TOKEN_HEADER) or ""
+    if not got:
+        for part in (headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == TOKEN_COOKIE:
+                got = v
+                break
+    return bool(got) and _hmac.compare_digest(got.encode(), token.encode())
 
 
 class Store:
     def __init__(self, root: Path):
         self.root = root
         self.lock = threading.Lock()
+        # Public room availability only; bounded, short-lived, memory-only cache.
+        self.room_day_lock = threading.Lock()
+        self.room_day_cache: dict = {}
+        self.room_day_warm = None
 
     def p(self, name: str) -> Path:
         return self.root / name
@@ -517,6 +584,12 @@ def rooms_api(store: Store, body: dict) -> dict:
     c = _client()
     found, prof = rooms.query_rooms_any(c, q, store.p("rooms_profile.json"), store.first_monday())
     c.save_session()
+    if store.room_day_lock.acquire(blocking=False):
+        try:
+            import time
+            store.room_day_warm = (_room_session_scope(c), time.monotonic())
+        finally:
+            store.room_day_lock.release()
     hidden = 0
     if body.get("hide_special"):
         kept = [r for r in found if not rooms.is_special_room(r)]
@@ -525,6 +598,156 @@ def rooms_api(store: Store, body: dict) -> dict:
     return {"mode": q.mode, "date": q.date, "week": week, "weeks": q.weeks, "weekday": q.weekday,
             "periods": [q.start, q.end], "total": prof.get("total"), "hidden_special": hidden,
             "rooms": [r.to_dict() for r in found]}
+
+
+def room_day_period_api(store: Store, body: dict) -> dict:
+    """Compatibility endpoint for a single complete period observation."""
+    q = build_room_query(store, body)
+    if q.mode != "date" or q.start != q.end or not 1 <= q.start <= 12:
+        raise ValueError("全天概览需要单个日期和第 1–12 节中的单节查询")
+    return _room_day_batch(store, body, [q.start], partial=False)["records"][0]
+
+
+def room_day_api(store: Store, body: dict) -> dict:
+    """At most four concurrent queries, using isolated copies of a warmed session."""
+    if "day_ranges" in body:
+        ranges = body["day_ranges"]
+        if ("day_periods" in body or not isinstance(ranges, list) or not 1 <= len(ranges) <= 4
+                or any(not isinstance(r, list) or len(r) != 2
+                       or any(type(p) is not int for p in r)
+                       or r[0] not in (1, 3, 5, 7, 9, 11) or r[1] != r[0] + 1
+                       for r in ranges)
+                or len({tuple(r) for r in ranges}) != len(ranges)):
+            raise ValueError("每批需指定 1–4 个不重复的两节时段（1–2 至 11–12）")
+        return _room_day_batch(store, body, [tuple(r) for r in ranges], partial=True)
+    periods = body.get("day_periods")
+    if (not isinstance(periods, list) or not 1 <= len(periods) <= 4
+            or any(type(p) is not int or not 1 <= p <= 12 for p in periods)
+            or len(set(periods)) != len(periods)):
+        raise ValueError("每批需指定 1–4 个不重复的节次（第 1–12 节）")
+    return _room_day_batch(store, body, periods, partial=True)
+
+
+def _room_query_client(parent):
+    """Independent opener and cookie jar; workers never refresh or save sessions."""
+    import copy
+    child = jwxt.JwxtClient(timeout=parent.timeout, debug=parent.debug, route=parent.route)
+    for cookie in parent.jar:
+        child.jar.set_cookie(copy.copy(cookie))
+    child._native_hosts = set(parent._native_hosts)
+    child._logged_in = parent._logged_in
+    child._restore_saved_cas = False
+    child._vpn_cookies_loaded = True
+    child._cas_tried = True
+    child._rebuild_opener()
+    return child
+
+
+def _room_session_scope(client):
+    import hashlib
+    return hashlib.sha256(json.dumps(
+        [client.route, jwxt.jar_to_list(client.jar)], sort_keys=True, ensure_ascii=True,
+    ).encode()).hexdigest()
+
+
+def _room_day_batch(store: Store, body: dict, periods: list, partial: bool) -> dict:
+    """Bounded parallel reads; complete pagination, isolated clients, partial retry.
+
+    The batch lock caps each Store at four school queries, including concurrent
+    HTTP callers. Only the coordinator prepares/saves authentication. Workers
+    use immutable profile/metadata snapshots and never write profile files.
+    """
+    import copy
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from . import rooms
+
+    first = periods[0][0] if isinstance(periods[0], tuple) else periods[0]
+    base = build_room_query(store, {**body, "periods": str(first)})
+    if base.mode != "date":
+        raise ValueError("全天概览需要单个日期")
+    profile = store.p("rooms_profile.json")
+    if not profile.exists():
+        raise ValueError("请先查询空教室，再加载全天空闲")
+    c = _client()  # Cache still requires a saved session, including after logout.
+    if not store.room_day_lock.acquire(blocking=False):
+        raise ValueError("全天空闲正在加载，请稍后重试")
+    try:
+        now, scope = time.monotonic(), _room_session_scope(c)
+        store.room_day_cache = {k: v for k, v in store.room_day_cache.items() if now - v[0] < 300}
+        queries = {}
+        for period in periods:
+            q = copy.deepcopy(base)
+            q.start, q.end = period if isinstance(period, tuple) else (period, period)
+            queries[period] = q
+
+        def key_for(period):
+            return (scope, json.dumps(queries[period].__dict__, sort_keys=True, ensure_ascii=True))
+
+        records = {p: {**store.room_day_cache[key_for(p)][1], "cached": True}
+                   for p in periods if key_for(p) in store.room_day_cache}
+        missing = [p for p in periods if p not in records]
+        errors = {}
+        if missing:
+            try:
+                # Warm once per route/session, not once per period or batch.
+                warm = store.room_day_warm
+                if not warm or warm[0] != scope or now - warm[1] >= 60:
+                    c.enter_emap_app(rooms.APP)
+                    c.save_session()
+                    scope = _room_session_scope(c)
+                    store.room_day_warm = (scope, time.monotonic())
+                meta = rooms.cached_meta(c)
+                profile_data = json.loads(profile.read_text(encoding="utf-8"))
+                if not isinstance(profile_data, dict):
+                    raise ValueError("请重新查询空教室以更新查询配置")
+                # Construct independent clients before starting any workers.
+                clients = {p: _room_query_client(c) for p in missing}
+                def query(period):
+                    found, _ = rooms.query_rooms(
+                        clients[period], queries[period], profile, meta=copy.deepcopy(meta),
+                        max_tries=1, require_complete=True, enter_app=False,
+                        profile_data=copy.deepcopy(profile_data))
+                    result = {"date": base.date, "complete": True,
+                              "fetched_at": dt.datetime.now().isoformat(timespec="seconds"),
+                              # Full metadata lets time changes filter the complete
+                              # inventories locally, including special-room rules.
+                              "rooms": [{**r.to_dict(), "special": rooms.is_special_room(r)} for r in found]}
+                    result["range" if isinstance(period, tuple) else "period"] = (
+                        list(period) if isinstance(period, tuple) else period)
+                    return result
+                with ThreadPoolExecutor(max_workers=min(4, len(missing)), thread_name_prefix="room-day") as pool:
+                    futures = {pool.submit(query, p): p for p in missing}
+                    for future in as_completed(futures):
+                        period = futures[future]
+                        try:
+                            result = future.result()
+                        except jwxt.JwxtError as error:
+                            errors[period] = error
+                            continue
+                        key = key_for(period)
+                        if len(store.room_day_cache) >= 36 and key not in store.room_day_cache:
+                            del store.room_day_cache[min(store.room_day_cache, key=lambda k: store.room_day_cache[k][0])]
+                        store.room_day_cache[key] = (time.monotonic(), result)
+                        records[period] = {**result, "cached": False}
+            except jwxt.JwxtError as error:
+                errors.update({p: error for p in missing if p not in records})
+        ordered = [records[p] for p in periods if p in records]
+        if errors:
+            # Never save an older successful worker's cookies over expiry.
+            store.room_day_warm = None
+            error = next((e for e in errors.values() if isinstance(e, jwxt.LoginError)), next(iter(errors.values())))
+            if not partial:
+                raise error
+            message, action = teaching_error("/api/rooms/day", error)
+            return {"date": base.date, "records": ordered, "partial": True,
+                    "failed_period": next(p for p in periods if p in errors),
+                    "failed_periods": [p for p in periods if p in errors],
+                    "error": message, "connection_action": action,
+                    "session_expired": isinstance(error, jwxt.SessionExpiredError)}
+        return {"date": base.date, "records": ordered, "partial": False}
+    finally:
+        store.room_day_lock.release()
 
 
 def _cached(store: Store, name: str, fn):
@@ -797,7 +1020,7 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
         y["campus_only"] = bool(y.get("campus_only"))
         if y["id"] == "jwxt":
             y["campus_only"] = True
-        if y["id"] == "xsxk":
+        if y["id"] in ("xsxk", "ilearn"):
             # This public service must not inherit an obsolete VPN override.
             y["campus_only"] = False
             y.pop("vpn_url", None)
@@ -815,19 +1038,21 @@ def campus_links_api(override: Optional[Path] = None) -> dict:
     return r
 
 
-def make_handler(store: Store, login: Optional[LoginFlow] = None):
+def make_handler(store: Store, login: Optional[LoginFlow] = None, token: Optional[str] = None):
     from . import webvpn
     login = login or webvpn.direct_login_flow()
     vpn_login = webvpn.login_flow()
+    token = token or load_or_create_token()
 
     class H(BaseHTTPRequestHandler):
         server_version = "SuperJLU-UI"
+        auth_token = token
 
         def log_message(self, fmt, *args):  # 安静
             pass
 
         def _sso_jump(self):
-            """GET /api/sso/jump?id=&n= —— 同源 nonce 校验后 302 到带 ST 的目标；失败退回普通地址 ?sso=failed。"""
+            """Authenticated browser handoff; setup instructions are explicitly requested."""
             import hmac, urllib.parse
             from . import sso
             q = {k: v[0] for k, v in urllib.parse.parse_qs(self.path.partition("?")[2]).items()}
@@ -837,9 +1062,65 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             site = (self.headers.get("Sec-Fetch-Site") or "").lower()
             if site and site not in ("same-origin", "none"):
                 return self._send(403, b"cross-site", "text/plain")
-            if not sso.capable(sid):
+            if sid not in sso.BROWSER_TARGETS:
                 return self._send(404, b"not sso-capable", "text/plain")
-            loc, _ok = sso.jump_url(sid)
+            route, stage = q.get("route", "direct"), q.get("stage", "target")
+            if route not in ("direct", "webvpn") or stage not in ("start", "target", "setup"):
+                return self._send(400, b"bad route or stage", "text/plain")
+            from html import escape
+            from . import ui_prefs
+
+            def jump_link(site_id, via="direct", step="start"):
+                return "/api/sso/jump?" + urllib.parse.urlencode({"id": site_id, "route": via,
+                                                                "stage": step, "n": SSO_NONCE})
+
+            def page(title, content, status=200):
+                # Reuse the app's design tokens, including the selected theme.
+                css = re.search(r"<style>(.*?)</style>", PAGE, re.S).group(1)
+                theme = ui_prefs.load(store.root).get("jlu-theme", "system")
+                theme_attr = f' data-theme="{theme}"' if theme in ("light", "dark") else ""
+                html = (f'<!doctype html><html lang="zh-CN"{theme_attr}><head><meta charset="utf-8">'
+                        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                        f'<title>{escape(title)} · SuperJLU</title><style>{css}'
+                        'body{padding:24px 12px}main{max-width:680px;margin:0 auto}'
+                        '.handoff-step{padding:16px 0;border-top:1px solid var(--line)}'
+                        '.handoff-step p{line-height:1.7}</style></head><body><main><div class="card">'
+                        f'<h2>{escape(title)}</h2>{content}<p><a href="/#sz">返回校园服务</a></p>'
+                        '</div></main></body></html>')
+                return self._send(status, html.encode(), "text/html; charset=utf-8", {
+                    "Referrer-Policy": "no-referrer",
+                    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"})
+
+            if route == "webvpn" and sid != "vpn" and stage == "setup":
+                # No undocumented redirect parameter or cross-origin cookie injection.
+                # The user completes the official VPN callback in the same browser,
+                # then requests a fresh site ticket only when clicking step two.
+                native = "SuperJLU-Android" in self.headers.get("User-Agent", "")
+                target = "" if native else ' target="_blank"'
+                return page("浏览器 VPN 登录说明", '<p class="sub">应用内与外部浏览器的登录会话独立。首次使用或浏览器登录过期时，请先完成第 1 步；已在该浏览器登录 WebVPN 可直接继续。</p>'
+                    '<div class="handoff-step"><h3>1. 在浏览器连接 WebVPN</h3>'
+                    '<p>尝试使用统一认证免登打开学校 VPN。看到 VPN 门户后，回到本页继续；若仍要求认证，请先完成学校页面上的登录。</p>'
+                    f'<a class="btn pri" href="{escape(jump_link("vpn"))}"{target} rel="noopener noreferrer">连接浏览器 WebVPN ↗</a></div>'
+                    '<div class="handoff-step"><h3>2. 进入目标服务</h3>'
+                    '<p>请使用与第 1 步相同的浏览器。校园网缴费仍需网站账号登录。</p>'
+                    f'<a class="btn pri" href="{escape(jump_link(sid, "webvpn", "target"))}"{target} rel="noopener noreferrer">继续打开服务 ↗</a></div>')
+            try:
+                if sso.capable(sid):
+                    loc = sso.issue_ticket(sid, route=route)
+                else:
+                    loc = sso.BROWSER_TARGETS[sid]
+                    if route == "webvpn":
+                        from .campus import vpn_url
+                        loc = vpn_url(loc)
+            except sso.BrowserJumpError as error:
+                fallback = sso.BROWSER_TARGETS[sid]
+                if route == "webvpn" and sid != "vpn":
+                    from .campus import vpn_url
+                    fallback = vpn_url(fallback)
+                return page("暂未完成免登", f'<p role="alert">{escape(str(error))}</p>'
+                    '<p class="sub">未将浏览器标记为已登录。应用内现有会话和本地数据保留。</p>'
+                    f'<div class="row"><a class="btn pri" href="{escape(jump_link(sid, route, stage))}">重试免登</a>'
+                    f'<a class="btn ghost" href="{escape(fallback)}" rel="noreferrer">在网站独立登录 ↗</a></div>', 409)
             if not sso._jlu_https(loc):
                 return self._send(502, b"bad target", "text/plain")
             return self._send(302, b"", "text/plain", {"Location": loc, "Referrer-Policy": "no-referrer"})
@@ -847,6 +1128,32 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
         def _host_ok(self) -> bool:
             host = (self.headers.get("Host") or "").split(":")[0]
             return host in ALLOWED_HOSTS
+
+        def _gate(self) -> bool:
+            """Host 校验 + 本地令牌；返回 True 表示已经回应（拒绝，或种 Cookie 后跳转）。"""
+            import urllib.parse
+            if not self._host_ok():
+                self._send(403, b"forbidden", "text/plain")
+                return True
+            u = urllib.parse.urlsplit(self.path)
+            if u.path in _PUBLIC_PATHS:
+                return False
+            t = urllib.parse.parse_qs(u.query).get("t", [""])[0]
+            if self.command == "GET" and u.path in _PAGE_PATHS and t \
+                    and _hmac.compare_digest(t.encode(), token.encode()):
+                cookie = f"{TOKEN_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"
+                self._send(302, b"", "text/plain",
+                           {"Location": "/", "Set-Cookie": cookie, "Referrer-Policy": "no-referrer"})
+                return True
+            if _token_ok(self.headers, token):
+                return False
+            if self.command == "GET" and u.path in _PAGE_PATHS:
+                self._send(401, LOCKED_PAGE.encode(), "text/html; charset=utf-8",
+                           {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
+            else:
+                self._json({"ok": False, "auth_required": True,
+                            "error": "未授权的本地请求：请从 SuperJLU 重新打开界面"}, 401)
+            return True
 
         def _send(self, code: int, body: bytes, ctype: str, extra: Optional[dict] = None):
             self.send_response(code)
@@ -886,8 +1193,8 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             return True
 
         def do_DELETE(self):
-            if not self._host_ok():
-                return self._send(403, b"forbidden", "text/plain")
+            if self._gate():
+                return
             path = self.path.split("?")[0]
             if path.startswith("/api/login/accounts/"):
                 import urllib.parse
@@ -898,14 +1205,17 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 self._send(404, b"not found", "text/plain")
 
         def do_GET(self):
-            if not self._host_ok():
-                return self._send(403, b"forbidden", "text/plain")
+            if self._gate():
+                return
             path = self.path.split("?")[0]
             if self._oa_sub("GET"):
                 return
             if path in ("/", "/index.html"):
                 from . import ui_prefs
-                page = PAGE.replace("<script>/* 首帧前应用主题", ui_prefs.inline_script(store.root) + "<script>/* 首帧前应用主题", 1)
+                import html as _html
+                from . import update_check
+                page = PAGE.replace('<span id="upd-v"></span>', '<span id="upd-v">' + _html.escape(update_check.current_version()) + '</span>', 1)
+                page = page.replace("<script>/* 首帧前应用主题", ui_prefs.inline_script(store.root) + "<script>/* 首帧前应用主题", 1)
                 return self._send(200, page.encode(), "text/html; charset=utf-8",
                                   {"Content-Security-Policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
             if path in ("/favicon.svg", "/favicon.ico"):  # SuperJLU 官方标志
@@ -958,14 +1268,20 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 from urllib.parse import parse_qs, urlsplit
                 q = parse_qs(urlsplit(self.path).query)
                 if q.get("local") == ["1"]:  # 关闭自动检查时只显示本机版本，不联网
-                    return self._json({"ok": True, "current": update_check.__version__, "has_update": False})
+                    return self._json(update_check.local())
                 return self._json(update_check.check(force=q.get("force") == ["1"]))
             if path == "/api/links":
-                from . import sso
+                from . import sso, webvpn
                 j = campus_links_api()
                 for x in j.get("links") or []:
                     if isinstance(x, dict) and sso.capable(x.get("id", "")):
                         x["sso_url"] = "/api/sso/jump?id=" + x["id"] + "&n=" + SSO_NONCE
+                        x["handoff"] = sso.last_status(x["id"])
+                        if x["id"] == "vpn":
+                            x["vpn_help_url"] = "/api/sso/jump?id=jwxt&route=webvpn&stage=setup&n=" + SSO_NONCE
+                    if isinstance(x, dict) and x.get("vpn_url") and x.get("id") in sso.BROWSER_TARGETS:
+                        x["vpn_sso_url"] = "/api/sso/jump?id=" + x["id"] + "&route=webvpn&stage=target&n=" + SSO_NONCE
+                j["route"] = webvpn.mode()
                 return self._json(j)
             if path == "/api/sso/jump":
                 return self._sso_jump()
@@ -996,7 +1312,9 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
             self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            if not self._host_ok() or "application/json" not in (self.headers.get("Content-Type") or ""):
+            if self._gate():
+                return
+            if "application/json" not in (self.headers.get("Content-Type") or ""):
                 return self._send(403, b"forbidden", "text/plain")
             if self._oa_sub("POST"):
                 return
@@ -1005,6 +1323,12 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                 if self.path == "/api/prefs":
                     from . import ui_prefs
                     return self._json({"ok": True, "prefs": ui_prefs.update(store.root, body.get("set"), body.get("remove"))})
+                elif self.path == "/api/sessions/check":
+                    from . import sessions
+                    sid = body.get("site", "jwxt")
+                    if sid not in ("jwxt", "vpn"):
+                        raise ValueError("仅支持验证应用内教务或 WebVPN；外部浏览器登录结果无法由应用确认")
+                    return self._json({"ok": True, "site": sessions.check(sid)})
                 elif self.path == "/api/schemes":
                     store.save_scheme(body.get("name", ""), body.get("include") or [], body.get("base"),
                                       body.get("grade_source", "jwxt"))
@@ -1026,6 +1350,10 @@ def make_handler(store: Store, login: Optional[LoginFlow] = None):
                     store.save_settings(body)
                 elif self.path == "/api/rooms":
                     return self._json({"ok": True, **rooms_api(store, body)})
+                elif self.path == "/api/rooms/day":
+                    return self._json({"ok": True, **room_day_api(store, body)})
+                elif self.path == "/api/rooms/day-period":
+                    return self._json({"ok": True, **room_day_period_api(store, body)})
                 elif self.path == "/api/network/check":
                     from . import connectivity
                     return self._json(connectivity.check_all())
@@ -1160,8 +1488,9 @@ def seed_demo(root: Path) -> None:
 
 def serve(port: int = 8765, root: Optional[Path] = None, open_browser: bool = False) -> None:
     store = Store(root or data_dir())
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(store))
-    url = f"http://127.0.0.1:{httpd.server_address[1]}/"
+    handler = make_handler(store)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    url = launch_url(f"http://127.0.0.1:{httpd.server_address[1]}/", handler.auth_token)
     print(f"SuperJLU 界面已启动：{url}\n数据目录：{store.root}\n按 Ctrl+C 退出。", flush=True)
     if open_browser:
         import webbrowser

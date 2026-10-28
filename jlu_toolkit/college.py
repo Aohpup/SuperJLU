@@ -1,11 +1,12 @@
 """学院新闻/通知（只读、免登录、只取列表第 1 页）。
 
-软件学院 csw.jlu.edu.cn、计算机科学与技术学院 ccst.jlu.edu.cn 都是博达站群：
-列表页每条是 <li> 里一个 YYYY-MM-DD 日期 + 指向 info/<栏目>/<id>.htm 的链接。
+多数学院官网是博达站群：列表页每条是 <li> 里的日期 + 指向 info/<栏目>/<id>.htm 的链接。
+白求恩第三临床医学院是 div.li 列表；第二临床医学院是 content_<id>.html；
+第一临床医学院是 eyoucms 的 View&aid=。这三种都走栏目列表，用法与软件学院、计算机学院相同。
 学院站点直接访问；连接失败不推断为校园网限制，保留缓存并显示网络错误。
 
-学院目录见 data/college_catalog.json。scrape=true 的栏目可抓取；其余仅作入口
-（channel id = <college_id>-site），选中后提示打开官网，暂不解析列表。
+学院目录见 data/college_catalog.json。scrape=true 的栏目可抓取；没有栏目的学院仅作入口
+（channel id = <college_id>-site），选中后提示打开官网。
 用户偏好（已选信息源顺序）保存在本地 oa_source_prefs.json。
 """
 from __future__ import annotations
@@ -70,6 +71,7 @@ def _build_sources(catalog: Optional[dict] = None) -> dict:
                     "name": str(col.get("name") or cid),
                     "host": str(col.get("host") or ""),
                     "cols": cols,
+                    "parser": str(col.get("parser") or "boda"),
                 }
     return out or dict(_FALLBACK_SOURCES)
 
@@ -167,7 +169,7 @@ def _split(ch: str):
 
 def list_url(ch: str) -> str:
     src, c = _split(ch)
-    return f"https://{src['host']}/{src['cols'][c][1]}"
+    return f"https://{src['host']}/{str(src['cols'][c][1]).lstrip('/')}"
 
 
 def link_home(ch: str) -> str:
@@ -192,7 +194,7 @@ def default_channels_for_college(college_id: str) -> list:
     if college_id in SOURCES:
         cols = SOURCES[college_id]["cols"]
         # 优先学院通知
-        prefer = ["xytz", "xyxw", "jxtz"]
+        prefer = ["xytz", "tzgg", "tztg", "xxgg", "xwgg", "xyxw", "jxtz", "xwzx", "kx"]
         ordered = [f"{college_id}-{c}" for c in prefer if c in cols]
         ordered += [f"{college_id}-{c}" for c in cols if f"{college_id}-{c}" not in ordered]
         return ordered[:2]  # 默认只开两个，避免芯片栏过长
@@ -217,9 +219,80 @@ _A = re.compile(r"<a\b([^>]*?)href=\"([^\"]*info/\d+/\d+\.htm)\"([^>]*)>(.*?)</a
 _TITLE = re.compile(r"title=\"([^\"]*)\"", re.I)
 
 
-def parse_list(html: str, ch: str) -> list:
-    src, _ = _split(ch)
-    base = list_url(ch)
+_SKIP_TITLE = {"查看详情", "查看详情+", "更多", "更多+", "查看更多", "查看更多+", "more"}
+_DIVLI = re.compile(
+    r'<div class="li">\s*<a\b[^>]*href="([^"]+)"[^>]*>\s*<div class="p">(.*?)</div>\s*<div class="y">(.*?)</div>',
+    re.S | re.I)
+_CONTENT = re.compile(
+    r'<a\b[^>]*href="([^"]*content_(\d+)\.html)"[^>]*>(.*?)</a>(?:\s*<span[^>]*>(.*?)</span>)?',
+    re.S | re.I)
+_EYOU = re.compile(
+    r'<a\b[^>]*href="([^"]*?c=View[^"]*?aid=(\d+)[^"]*)"[^>]*>(.*?)</a>(?:\s*<span[^>]*>(.*?)</span>)?',
+    re.S | re.I)
+
+
+_NAMED_TITLE = re.compile(
+    r"<(?:span|p|div|h3)\b[^>]*\bclass=\"[^\"]*\b(?:tit|title)\b[^\"]*\"[^>]*>(.*?)</(?:span|p|div|h3)>",
+    re.S | re.I)
+_H3 = re.compile(r"<h3\b[^>]*>(.*?)</h3>", re.S | re.I)
+_LEAD_INDEX = re.compile(r"^\s*<strong>\s*\d{1,3}\s*</strong>", re.I)
+_WIDGET_STRONG = re.compile(
+    r"<strong>\s*(\d{1,2})\s*</strong>\s*(\d{4})[-/.](\d{1,2})", re.I)
+_WIDGET_B = re.compile(
+    r"<b>\s*(\d{1,2})\s*</b>\s*(?:<[^>]+>\s*)?\s*/?\s*(\d{4})[-/.](\d{1,2})", re.I)
+_WIDGET_P = re.compile(
+    r"<p>\s*(\d{1,2})\s*</p>\s*<p>\s*(\d{4})[-/.](\d{1,2})", re.I)
+
+
+def _plain(s: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", _html.unescape(s or ""))).strip()
+
+
+def _date_of(text: str) -> str:
+    d = _DATE.search(text or "")
+    return f"{d.group(1)}-{int(d.group(2)):02d}-{int(d.group(3)):02d}" if d else ""
+
+
+def _date_parts(day: str, year: str, month: str) -> str:
+    d, y, m = int(day), int(year), int(month)
+    if 1 <= d <= 31 and 1990 <= y <= 2100 and 1 <= m <= 12:
+        return f"{y}-{m:02d}-{d:02d}"
+    return ""
+
+
+def _widget_date(html: str) -> str:
+    """列表卡片把「日」和「年-月」拆开时，不从正文里猜日期。"""
+    for rx in (_WIDGET_STRONG, _WIDGET_B, _WIDGET_P):
+        m = rx.search(html or "")
+        if not m:
+            continue
+        got = _date_parts(m.group(1), m.group(2), m.group(3))
+        if got:
+            return got
+    return ""
+
+
+def _inner_title(inner: str) -> str:
+    """优先栏目标题节点；否则去掉行首序号。摘要留在标题外。"""
+    named = _NAMED_TITLE.search(inner or "")
+    if named:
+        title = _plain(named.group(1))
+        if title:
+            return title
+    h3 = _H3.search(inner or "")
+    if h3:
+        title = _plain(h3.group(1))
+        if title:
+            return title
+    return _plain(_LEAD_INDEX.sub("", inner or "", count=1))
+
+
+def _row(ch: str, dept: str, nid: str, title: str, date: str, url: str) -> dict:
+    return {"id": f"{ch}:{nid}", "title": title, "time": date, "dept": dept,
+            "top": False, "url": url, "channel": ch}
+
+
+def _parse_boda(html: str, ch: str, src: dict, base: str, dept: str) -> list:
     out, seen = [], set()
     for blk in _LI.findall(html or ""):
         a = _A.search(blk)
@@ -229,16 +302,80 @@ def parse_list(html: str, ch: str) -> list:
         if not url or url in seen:
             continue
         t = _TITLE.search(a.group(1) + a.group(3))
-        title = _html.unescape(t.group(1) if t else re.sub(r"<[^>]+>", "", a.group(4))).strip()
-        if not title:
+        title = _html.unescape(t.group(1)).strip() if t else _inner_title(a.group(4))
+        if not title or title in _SKIP_TITLE:
             continue
-        d = _DATE.search(re.sub(r"<a\b.*?</a>", "", blk, flags=re.S))
-        date = f"{d.group(1)}-{int(d.group(2)):02d}-{int(d.group(3)):02d}" if d else ""
+        outside = re.sub(r"<a\b.*?</a>", "", blk, flags=re.S)
+        date = _date_of(outside) or _widget_date(a.group(4)) or _date_of(_plain(blk))
         m = re.search(r"info/(\d+)/(\d+)\.htm", url)
         seen.add(url)
-        out.append({"id": f"{ch}:{m.group(1)}-{m.group(2)}", "title": title, "time": date,
-                    "dept": channels()[ch], "top": False, "url": url, "channel": ch})
+        out.append(_row(ch, dept, f"{m.group(1)}-{m.group(2)}", title, date, url))
     return out
+
+
+def _parse_divli(html: str, ch: str, src: dict, base: str, dept: str) -> list:
+    """白求恩第三临床医学院：<div class="li"><a><div class="p">标题</div><div class="y">日期</div>."""
+    out, seen = [], set()
+    for href, title_html, date_html in _DIVLI.findall(html or ""):
+        url = safe_url(href, src["host"], base)
+        title = _plain(title_html)
+        if not url or not title or url in seen:
+            continue
+        m = re.search(r"/(\d+)\.html", url)
+        seen.add(url)
+        out.append(_row(ch, dept, m.group(1) if m else str(len(out) + 1), title, _date_of(_plain(date_html)), url))
+    return out
+
+
+def _parse_content(html: str, ch: str, src: dict, col: str, base: str, dept: str) -> list:
+    """白求恩第二临床医学院：只收当前栏目路径下的 content_<id>.html。"""
+    prefix = "/" + str(src["cols"][col][1]).strip("/") + "/"
+    out, seen = [], set()
+    for href, cid, inner, date_html in _CONTENT.findall(html or ""):
+        url = safe_url(_html.unescape(href), src["host"], base)
+        if not url or url in seen:
+            continue
+        path = urllib.parse.urlparse(url).path
+        if not path.startswith(prefix):
+            continue
+        title = _inner_title(inner)
+        if len(title) < 4 or title in _SKIP_TITLE:
+            continue
+        seen.add(url)
+        date = _date_of(_plain(date_html or "")) or _widget_date(inner) or _date_of(title)
+        out.append(_row(ch, dept, cid, title, date, url))
+    return out
+
+
+def _parse_eyou(html: str, ch: str, src: dict, base: str, dept: str) -> list:
+    """白求恩第一临床医学院：index.php?m=home&c=View&a=index&aid=。"""
+    out, seen = [], set()
+    for href, aid, inner, date_html in _EYOU.findall(html or ""):
+        if aid in seen:
+            continue
+        url = safe_url(_html.unescape(href), src["host"], base)
+        title = _plain(inner)
+        if not url or len(title) < 4 or title in _SKIP_TITLE:
+            continue
+        seen.add(aid)
+        out.append(_row(ch, dept, aid, title, _date_of(_plain(date_html or "")), url))
+        if len(out) >= 30:
+            break
+    return out
+
+
+def parse_list(html: str, ch: str) -> list:
+    src, col = _split(ch)
+    base = list_url(ch)
+    dept = channels()[ch]
+    kind = src.get("parser") or "boda"
+    if kind == "divli":
+        return _parse_divli(html, ch, src, base, dept)
+    if kind == "content":
+        return _parse_content(html, ch, src, col, base, dept)
+    if kind == "eyou":
+        return _parse_eyou(html, ch, src, base, dept)
+    return _parse_boda(html, ch, src, base, dept)
 
 
 def _get(url: str, timeout: int = TIMEOUT) -> str:
