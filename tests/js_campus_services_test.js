@@ -3,7 +3,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const page=fs.readFileSync('jlu_toolkit/ui_page.py','utf8');
 const lines=page.split('\n');
 const prefixes=['function siteHasLoginStatus(','function stBadge(','function serviceTime(',
- 'function serviceLink(','function serviceActions(','function serviceHelp(','function serviceResult(','function renderServiceLinks(',
+ 'function serviceLink(','function serviceActions(','function serviceHelp(','function serviceResult(','function servicePrimary(','function serviceVpnAlt(','function serviceTip(','function serviceDot(','function renderServiceLinks(',
  'let LINKS_LAST=','async function loadLinks('];
 const nodes=new Map();
 const $=key=>{if(!nodes.has(key))nodes.set(key,{innerHTML:'',textContent:'',disabled:false});return nodes.get(key)};
@@ -49,7 +49,7 @@ assert.doesNotMatch(ctx.serviceResult({handoff:{state:'issued',message:'已发�
  const a=ctx.loadLinks(),b=ctx.loadLinks();
  assert.equal(requests,1);release();release=null;
  await Promise.all([a,b]);
- assert.match($('#links-b').innerHTML,/直接打开/);
+ assert.match($('#links-b').innerHTML,/class="go"/); assert.match($('#links-b').innerHTML,/\/api\/sso\/jump/); assert.match($('#links-b').innerHTML,/经 WebVPN/);
  assert.doesNotMatch($('#links-b').innerHTML,/1792901046/);
  assert.equal($('#links-refresh').disabled,false);
  await ctx.loadLinks(false);assert.equal(requests,1); // TTL suppresses repeated navigation reads.

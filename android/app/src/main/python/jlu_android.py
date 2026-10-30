@@ -60,9 +60,3 @@ def stop() -> None:
         _httpd.server_close()
         _httpd = None
 
-
-def campus_reachable(timeout: float = 3.0) -> bool:
-    """兼容旧入口：实际 HTTPS 检查，不再把旧站点 TCP:80 当校园网判据。"""
-    from jlu_toolkit.connectivity import TARGETS, check_one
-    # Only a warning about JWXT: OA has its own campus-network requirement.
-    return check_one(TARGETS[1], timeout)["reachable"]

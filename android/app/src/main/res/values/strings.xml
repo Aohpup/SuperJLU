@@ -14,5 +14,4 @@
     <string name="browser_save_default">保存</string>
     <string name="browser_default_unavailable">默认浏览器暂不可用，已恢复跟随系统。</string>
     <string name="browser_saved_missing">之前选择的浏览器当前不可用，请重新选择。</string>
-    <string name="offcampus_banner">教务直连暂未连通。校园网内可直连登录；校外请在「更多 → 登录」选择「校外 WebVPN」。OA 原站可经校园网或学校 VPN 访问。点此关闭</string>
 </resources>

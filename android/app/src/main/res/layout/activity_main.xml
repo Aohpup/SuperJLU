@@ -27,11 +27,6 @@
                 android:layout_marginTop="12dp" android:textColor="#6B7280"
                 android:layout_width="wrap_content" android:layout_height="wrap_content" />
         </LinearLayout>
-        <TextView android:id="@+id/banner" android:visibility="gone"
-            android:layout_gravity="bottom" android:background="#E6B45309" android:textColor="#FFFFFF"
-            android:padding="12dp" android:textSize="14sp"
-            android:text="@string/offcampus_banner"
-            android:layout_width="match_parent" android:layout_height="wrap_content" />
     </FrameLayout>
     <View android:id="@+id/nav_inset" android:background="#ffffff"
         android:layout_width="match_parent" android:layout_height="0dp" />
