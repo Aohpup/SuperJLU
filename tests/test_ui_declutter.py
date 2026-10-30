@@ -38,3 +38,13 @@ def test_campus_links_keep_sso_controls():
     assert "function servicePrimary" in PAGE
     assert "minmax(88px,1fr)" in PAGE
     assert "offcampus_banner" not in (ROOT / "android/app/src/main/res/values/strings.xml").read_text(encoding="utf-8")
+
+
+def test_more_page_is_compact_settings_list():
+    sz = PAGE[PAGE.index('id="t-sz"'):]
+    sz = sz[:sz.index("</section>")]
+    assert sz.count('class="card') <= 6  # 校园服务/账号/设置/关于 + 两张安卓专用卡片
+    for k in ('id="lgbtn"', 'id="network-check"', 'id="fm"', 'id="adj-on"', 'id="kb-edits-card"',
+              'id="ics"', 'id="upd-chk"', 'id="upd-auto"', 'data-theme="dark"', "研究生暂不支持"):
+        assert k in sz
+    assert sz.count('class="srow') >= 5
