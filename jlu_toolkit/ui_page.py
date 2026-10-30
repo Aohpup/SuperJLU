@@ -149,7 +149,7 @@ th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left}
 tbody tr:last-child td{border-bottom:0}
 th{font-size:12px;color:var(--sub);font-weight:600;position:sticky;top:58px;background:var(--card)}
 #network-report th{position:static;white-space:nowrap}#network-report td{vertical-align:top;font-size:12px;overflow-wrap:anywhere}#network-report td:first-child{min-width:90px}#network-report td:nth-child(2){white-space:nowrap}#network-report th:nth-child(2){width:60px}
-#network-route{display:flex;flex-direction:column;gap:4px;margin:12px 0 4px;padding:10px 14px;border:1px solid color-mix(in srgb,var(--pri) 35%,var(--line));border-radius:var(--r-sm);background:var(--pri2);color:var(--pri)}.login-route-label{font-size:12px;font-weight:600}#network-route-current{font-size:16px;font-weight:700;line-height:1.4}#network-route-last{font-size:12px;font-weight:600}.room-error{margin-top:14px;flex-wrap:wrap}.room-error[hidden]{display:none}.room-error>div{flex:1;min-width:180px}
+#network-route{font-size:12.5px}#network-route strong{color:var(--pri);font-weight:650}.login-route-label{font-size:12px;font-weight:600}#network-route-current{font-size:16px;font-weight:700;line-height:1.4}#network-route-last{font-size:12px;font-weight:600}.room-error{margin-top:14px;flex-wrap:wrap}.room-error[hidden]{display:none}.room-error>div{flex:1;min-width:180px}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
 tbody tr:hover td{background:var(--card2)}
 tr.off td{opacity:.42}
@@ -234,6 +234,12 @@ details.tn[open]{border-left-color:color-mix(in srgb,var(--pri) 35%,var(--line))
 #oa-ch button{flex:none;white-space:nowrap;padding:7px 14px}.oaf{display:flex;gap:8px;flex-wrap:wrap}.oaf input{flex:2;min-width:160px}.oaf select{flex:1;min-width:120px}
 .oad h2{font-size:18px;line-height:1.45}.oad .body{white-space:pre-wrap;line-height:1.8;margin:14px 0;word-break:break-word}.oad .att{display:flex;flex-direction:column;gap:6px;margin-top:8px}.oad .att a{color:var(--pri);text-decoration:none;font-weight:550}.oad .att a:hover{text-decoration:underline}
 .soon{display:inline-block;background:var(--pri2);color:var(--pri);font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;vertical-align:2px;margin-left:6px}
+/* 「更多」设置列表 */
+.sl h2{margin-bottom:8px}.sl .seg{margin:8px 0 6px}.sl .row{margin:8px 0 2px;align-items:center}.sl-note{font-size:12px;margin:8px 0 0}
+.srow{border-top:1px solid var(--line);padding:11px 2px;margin:0}.sl h2+.srow,.sl .srow:first-of-type{}
+.srow.flat{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.srow.flat>span:first-child{flex:1;min-width:120px;font-size:14px}.srow.flat small{display:block;font-size:12px;margin-top:1px}
+.srow>summary{cursor:pointer;font-size:14px;list-style:none;display:flex;align-items:center}.srow>summary::-webkit-details-marker{display:none}.srow>summary::after{content:"›";margin-left:auto;color:var(--sub);font-size:18px;transition:transform .15s}.srow[open]>summary::after{transform:rotate(90deg)}.srow[open]>summary{margin-bottom:8px}
+label.srow{cursor:pointer}.srow .btn{padding:6px 12px;font-size:13px}.srow .thm button{padding:5px 10px;font-size:12.5px}
 /* 校园服务：小方块 + #140 免登/状态 */
 .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
 .lk{position:relative;display:flex;flex-direction:column;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);min-width:0}
@@ -369,22 +375,30 @@ dialog#login .vpn-hint a{color:var(--pri);font-weight:600}
 </section>
 <section class="tab" id="t-sz">
  <div class="card" id="links"><h2>校园服务</h2><div class="row links-toolbar"><button id="links-refresh" class="btn ghost" type="button">刷新</button><button id="links-check" class="btn ghost" type="button">验证教务</button></div><p id="links-state" class="links-caption" role="status"></p><div id="links-b"><p class="sub" style="margin:0">读取中…</p></div></div>
- <h2 style="margin:18px 4px 10px;font-size:14px;color:var(--sub)">设置</h2>
- <div class="card"><h2>学期</h2><p class="sub" id="calinfo"></p>
-  <details><summary class="sub">手动设置开学日期</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details><label class="adj-toggle"><input type="checkbox" id="adj-on" checked> 自动应用调课/停课</label><p class="sub" id="adj-info" style="margin:4px 0 0"></p></div>
- <div class="card"><h2>外观</h2><div class="row"><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div></div>
- <div class="card"><h2>登录</h2><p class="sub" id="lginfo">登录后同步课表、成绩和考试。</p><p class="sub" style="margin:0 0 8px">目前仅支持本科生教务，研究生暂不支持。</p><div class="seg" role="group" aria-label="连接方式"><button type="button" data-login-mode="direct" class="on" aria-pressed="true">校园网直连</button><button type="button" data-login-mode="webvpn" aria-pressed="false">校外 WebVPN</button></div><p class="sub" id="login-method-hint">连着校园网时选这个。</p><p class="sub device-net-hint" id="device-net-hint" role="status" hidden></p><button class="btn pri" id="lgbtn" type="button">登录并同步</button><div id="network-route" role="status"><span class="login-route-label">当前连接方式</span><strong id="network-route-current">校园网直连</strong><span id="network-route-last" hidden></span></div><p class="sub" id="login-feedback" role="status" hidden></p></div>
- <div class="card"><h2>连接检测</h2><p class="sub" id="network-summary" role="status">看看现在能不能连上学校网站。</p><button class="btn" id="network-check">检测连接</button><div id="network-report" aria-live="polite"></div></div>
- <!--BROWSER_PREFERENCES_CARD-->
- <!--ANDROID_EXTRAS_CARD-->
- <div class="card"><h2>导出</h2><p class="sub">导入手机日历，课前 15 分钟提醒。</p><a class="btn pri" id="ics" href="/api/ics" download>导出 iCal (.ics)</a></div>
-
- <div class="card" id="kb-edits-card"><h2>我的课表修改</h2><p class="sub" id="kb-edits-sum"></p><div id="kb-edits-list"></div>
+ <div class="card sl"><h2>账号</h2>
+  <p class="sub" id="lginfo">登录后同步课表、成绩和考试。</p><div class="seg" role="group" aria-label="连接方式"><button type="button" data-login-mode="direct" class="on" aria-pressed="true">校园网直连</button><button type="button" data-login-mode="webvpn" aria-pressed="false">校外 WebVPN</button></div>
+  <p class="sub" id="login-method-hint">连着校园网时选这个。</p><p class="sub device-net-hint" id="device-net-hint" role="status" hidden></p>
+  <div class="row"><button class="btn pri" id="lgbtn" type="button">登录并同步</button><span class="sp"></span><span id="network-route" role="status" class="sub">当前：<strong id="network-route-current">校园网直连</strong><span id="network-route-last" hidden></span></span></div>
+  <p class="sub" id="login-feedback" role="status" hidden></p><p class="sub sl-note">目前仅支持本科生教务，研究生暂不支持。</p>
+  <details class="srow"><summary>连接检测</summary><p class="sub" id="network-summary" role="status">看看现在能不能连上学校网站。</p><button class="btn" id="network-check">检测连接</button><div id="network-report" aria-live="polite"></div></details>
+ </div>
+ <div class="card sl"><h2>设置</h2>
+  <div class="srow flat"><span>外观</span><div class="thm" role="group" aria-label="外观"><button type="button" data-theme="system" aria-pressed="true" title="跟随系统">跟随系统</button><button type="button" data-theme="light" aria-pressed="false" title="浅色">浅色</button><button type="button" data-theme="dark" aria-pressed="false" title="深色">深色</button></div></div>
+  <details class="srow"><summary>学期与调课</summary><p class="sub" id="calinfo"></p><details><summary class="sub">手动设置开学日期</summary><div class="row" style="margin-top:8px"><input type="date" id="fm"><button class="btn pri" id="savefm">保存覆盖</button><button class="btn ghost" id="clrfm">恢复教务校历</button></div></details><label class="adj-toggle"><input type="checkbox" id="adj-on" checked> 自动应用调课/停课</label><p class="sub" id="adj-info" style="margin:4px 0 0"></p></details>
+  <details class="srow" id="kb-edits-card"><summary>我的课表修改</summary><p class="sub" id="kb-edits-sum"></p><div id="kb-edits-list"></div>
   <div class="row" style="margin-top:10px"><a class="btn" id="kb-export" href="/api/schedule/overlay" download="superjlu-schedule-edits.json">导出备份</a><button type="button" class="btn" id="kb-import-btn">导入备份</button><input type="file" id="kb-import" accept=".json,application/json,text/plain" hidden><button type="button" class="btn ghost" id="kb-reset" hidden>恢复教务原样</button><button type="button" class="btn ghost" id="kb-undo" hidden>撤销恢复</button></div>
   <div id="kb-backup-box" hidden><p class="sub">把下面的内容复制下来保存好（比如发给自己），换手机后用「粘贴备份内容」恢复。</p><textarea id="kb-backup-text" readonly rows="5"></textarea><button type="button" class="btn" id="kb-copy">复制</button></div>
-  <details style="margin-top:8px"><summary class="sub">粘贴备份内容</summary><textarea id="kb-paste" rows="4" placeholder="把之前复制的备份内容粘贴到这里"></textarea><button type="button" class="btn" id="kb-paste-ok">导入</button></details></div>
- <div class="card" id="ver-card"><h2>版本</h2><p class="sub" id="upd-s" role="status">当前版本 v<span id="upd-v"></span><span id="upd-m"></span></p><details class="sub" id="upd-tech" hidden><summary>技术信息</summary><code id="upd-why" style="word-break:break-all"></code></details><div class="row" style="flex-wrap:wrap;gap:8px"><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button><label class="sub" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="upd-auto" checked>自动检查新版本</label></div></div>
- <div class="card"><h2>数据与隐私</h2><p class="sub">所有数据只保存在本机，不会上传到任何服务器。“刷新”使用已保存的登录会话；会话失效时请到「登录」重新登录。</p></div>
+  <details style="margin-top:8px"><summary class="sub">粘贴备份内容</summary><textarea id="kb-paste" rows="4" placeholder="把之前复制的备份内容粘贴到这里"></textarea><button type="button" class="btn" id="kb-paste-ok">导入</button></details></details>
+  <div class="srow flat"><span>导出到手机日历<small class="sub">课前 15 分钟提醒</small></span><a class="btn" id="ics" href="/api/ics" download>导出</a></div>
+ </div>
+ <!--BROWSER_PREFERENCES_CARD-->
+ <!--ANDROID_EXTRAS_CARD-->
+ <div class="card sl" id="ver-card"><h2>关于</h2>
+  <div class="srow flat"><span id="upd-s" role="status">版本 v<span id="upd-v"></span><span id="upd-m"></span></span><a class="btn pri" id="upd-go" href="#" target="_blank" rel="noopener noreferrer" hidden>前往下载</a><button type="button" class="btn ghost" id="upd-chk">检查更新</button></div>
+  <details class="sub" id="upd-tech" hidden><summary>详细原因</summary><code id="upd-why" style="word-break:break-all"></code></details>
+  <label class="srow flat"><span>自动检查新版本</span><input type="checkbox" id="upd-auto" checked></label>
+  <p class="sub sl-note">数据与隐私：所有数据只保存在本机，不会上传到任何服务器。</p>
+ </div>
 </section>
 </main>
 <nav><button class="on" data-t="kb"><b>▦</b>课表</button><button data-t="cj"><b>◎</b>成绩</button><button data-t="xy"><b>◔</b>学业</button><button data-t="js"><b>⌂</b>教室</button><button data-t="ks"><b>⏱</b>考试</button><button data-t="oa"><b>✉</b>通知</button><button data-t="sz"><b>☰</b>更多</button></nav>
