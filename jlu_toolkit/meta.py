@@ -334,11 +334,14 @@ def _post(client: "jwxt.JwxtClient", path: str, fields: dict, app: str) -> dict:
     if code != 200:
         raise jwxt.JwxtError(f"{path} HTTP {code}")
     try:
-        return json.loads(text)
+        data = json.loads(text)
     except json.JSONDecodeError as e:
         if "loginForm" in text:
             raise jwxt.LoginError("会话已失效，请重新登录") from e
         raise jwxt.JwxtError(f"{path} 返回非 JSON") from e
+    if not isinstance(data, dict):
+        raise jwxt.JwxtError(f"{path} 返回格式异常")
+    return data
 
 
 def fetch_calendar(client, term: Optional[str] = None) -> dict:
