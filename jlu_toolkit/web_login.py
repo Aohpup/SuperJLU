@@ -114,7 +114,8 @@ class LoginFlow:
                 return self._finish()
             if step == jwxt.LoginStep.NEED_SECOND_FACTOR:
                 return {"step": "need_second_factor"}
-            err = getattr(self._client, "last_error_text", "") or ""
+            err = jwxt.friendly_cas_error(getattr(self._client, "last_error_text", "") or "",
+                                          webvpn=getattr(self._client, "route", "") == "webvpn")
             self._reset()
             if step == jwxt.LoginStep.WRONG_PASSWORD:
                 raise ValueError(err or "用户名或密码错误（账号用邮箱前缀，不是学号）")
