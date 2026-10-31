@@ -298,7 +298,46 @@ def merge(plan: list, done: list, grades=None, courses_now=None) -> list:
         c["status_code"] = STATUS_CODE.get(st, "todo")
         c.pop("status_raw", None)
         res.append(c)
+    if plan:
+        res.extend(_extras(res, done, courses_now))
     return res
+
+
+def _extras(res: list, done: list, courses_now) -> list:
+    """培养方案只列出固定课程；限选/通识等课程池里自己选的课（如卓工限选、艺术类）常常不在方案课程表里。
+
+    把修读记录（done，带教务课组号）和本学期课表里、方案里找不到的课补进来，避免「选了却不显示」。
+    """
+    codes = {c.get("code") for c in res if c.get("code")}
+    names = {c.get("name") for c in res if c.get("name")}
+    out = []
+
+    def known(code, name):
+        return (code and code in codes) or (name and name in names)
+
+    for d in done or []:
+        if known(d.get("code"), d.get("name")):
+            continue
+        c = dict(d)
+        st = _status(c.pop("status_raw", "") or "", c.get("score", ""))
+        c.pop("selected", None)
+        if st in ("", "未修"):  # 出现在修读记录里却没成绩 → 已选、在修
+            st = "在修"
+        c["status"] = st
+        c["status_code"] = STATUS_CODE.get(st, "todo")
+        c["extra"] = "record"
+        out.append(c)
+        codes.add(c.get("code")); names.add(c.get("name"))
+    for x in courses_now or []:
+        name, code = (x.name or "").strip(), (getattr(x, "kch", "") or "").strip()
+        if not name or known(code, name):
+            continue
+        c = {k: "" for k in COLS}
+        c.update(code=code, name=name, status="在修", status_code="inprog", extra="schedule")
+        c.pop("status_raw", None); c.pop("selected", None)
+        out.append(c)
+        codes.add(code); names.add(name)
+    return out
 
 
 def _cache_path():
@@ -486,6 +525,7 @@ def build_tree(nodes: list[dict], courses: list[dict], comp_groups=None) -> dict
             n["courses"].append(c)
             continue
         why = ("substitute" if c.get("sub_rd") or c.get("sub_td")
+               else "selected_now" if c.get("extra") == "schedule"
                else "no_kzh" if not c.get("group_code") else "kzh_not_in_tree")
         c["unmatched_reason"] = why
         reasons[why] = reasons.get(why, 0) + 1
