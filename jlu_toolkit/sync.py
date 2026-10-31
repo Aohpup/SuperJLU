@@ -69,6 +69,10 @@ def sync_all(client: "jwxt.JwxtClient", root: Path, term: str | None = None) -> 
             s[name] = {"ok": True, "available": False, "note": str(e)[:300]}
         except (jwxt.JwxtError, ValueError, KeyError) as e:
             s[name] = {"ok": False, "error": str(e)[:200]}
+        except Exception as e:  # noqa: BLE001 — 单个模块的意外数据不能拖垮整次刷新
+            import logging
+            logging.getLogger("superjlu.sync").exception("同步步骤 %s 失败", name)
+            s[name] = {"ok": False, "error": f"读取出错（{type(e).__name__}）"}
 
     term = term or client.current_semester()
     s["term"] = term
