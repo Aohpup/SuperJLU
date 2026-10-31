@@ -394,6 +394,22 @@ def extract_cas_error(html: str) -> Optional[str]:
     return None
 
 
+_CAS_SERVER_FAULT = ("认证中心异常", "系统繁忙", "系统异常", "服务异常", "稍后再试", "稍后重试")
+
+
+def friendly_cas_error(msg: str, webvpn: bool = False) -> str:
+    """统一认证服务器自身出错（如「CA认证中心异常，请稍后再试」）时补一句普通人看得懂的说明。
+
+    这类文案是学校服务器返回的，不代表账号或密码错误。
+    """
+    m = (msg or "").strip()
+    if not m or not any(k in m for k in _CAS_SERVER_FAULT):
+        return m
+    tip = "这是学校统一身份认证系统暂时出了问题，不是账号或密码错误。请过几分钟再试"
+    tip += "。" if webvpn else "；如果一直这样，也可以在登录框换成「校外 WebVPN」方式试试。"
+    return f"{m}（{tip}）"
+
+
 def normalize_username(username: str) -> str:
     """login10.js 会对账号 trim；若粘贴了完整吉大邮箱则剥成前缀。"""
     u = (username or "").strip()
