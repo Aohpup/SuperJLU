@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> 原作者的 GitHub 账号目前受限，原仓库暂时无法正常访问。本仓库暂保留官方 **v1.3.4** 源码，方便大家继续获取和使用；原作者署名、贡献记录及 MIT 许可证保持不变。下方指向原仓库的下载链接可能暂时不可用。
+> 原作者的 GitHub 账号目前受限，原仓库暂时无法正常访问。本仓库暂保留官方 **v1.3.4** 源码，并提供 [Windows 下载与 Android 独立分发版](https://github.com/Aohpup/SuperJLU/releases/latest)；原作者署名、贡献记录及 MIT 许可证保持不变。Android 独立版可与原版共存，安装后需重新登录。
 
 <p align="center">
   <img src="assets/brand/superjlu-wordmark.png" alt="SuperJLU" width="420">
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Runa-Asahi/SuperJLU/releases/latest"><b>⬇️ 立即下载</b></a>
+  <a href="https://github.com/Aohpup/SuperJLU/releases/latest"><b>⬇️ 立即下载</b></a>
   ·
   <a href="#它能帮你做什么">看看能做什么</a>
   ·
@@ -79,13 +79,13 @@
 
 ## 三步开始
 
-1. **下载**：到 [Releases 页面](https://github.com/Runa-Asahi/SuperJLU/releases/latest) 下载最新版。
-   - **Android 手机**：下载 `SuperJLU-版本号.apk`，直接安装。
+1. **下载**：到 [本仓库 Releases 页面](https://github.com/Aohpup/SuperJLU/releases/latest) 下载。
+   - **Android 手机**：下载 `SuperJLU-1.3.4-aohpup.1.apk`（SuperJLU 独立版），可与原版共存，安装后需重新登录。
    - **Windows 电脑**：下载 `SuperJLU.exe`，双击运行，会自动在浏览器里打开界面，右下角托盘里也能找到它。
 2. **登录**：第一次打开会弹出登录框。账号是你的**吉大邮箱前缀**（不是学号），输入密码后，在「智慧吉大」里收微信验证码填进去。
 3. **探索**：登录后会自动把课表、成绩、学业等数据同步下来，接下来就随便点点看吧 ✨
 
-> 以后有新版本，直接下载新的安装包覆盖安装即可，数据和登录状态都会保留。
+> Android 独立版使用单独的包名和签名，不能覆盖原版，也不会自动迁移原版数据。后续同一独立分发版的更新需保持相同签名。当前请通过本仓库 Releases 页面手动下载；应用内检查更新仍指向原仓库。
 
 ## 微信小程序（实验版）
 
@@ -140,7 +140,7 @@ SuperJLU 现在多了一个**微信原生小程序**，没有安卓 App 的同�
 点右上角的「刷新」按钮，会重新从教务系统同步一次。
 
 **装的是 1.2.0，App 里检查不到新版本？**
-1.2.0 的「检查更新」本身有 bug，不管有没有新版都会显示查不到。请到 [Releases 页面](https://github.com/Runa-Asahi/SuperJLU/releases/latest) **手动下载安装一次**最新版（覆盖安装，数据保留），之后的版本就能在 App 里正常检测到了。
+1.2.0 的「检查更新」本身有 bug，不管有没有新版都会显示查不到。目前原仓库暂时无法访问，请到 [本仓库 Releases 页面](https://github.com/Aohpup/SuperJLU/releases/latest) 手动下载。Android 独立版可与原版共存，需重新登录；应用内检查更新仍指向原仓库。
 
 **小组件不刷新 / 时间不准？**
 部分国产系统会限制后台。到「更多 → 小组件与后台」：点「允许后台运行（忽略电池优化）」和「自启动 / 后台管理设置」，按提示把 SuperJLU 设为允许自启动、不限制后台；再在最近任务里把 SuperJLU **加锁**（这一步只能在系统界面手动操作，App 无法代为设置）。
