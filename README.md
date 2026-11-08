@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> 原作者的 GitHub 账号目前受限，原仓库暂时无法正常访问。本仓库暂保留官方 **v1.3.4** 源码，方便大家继续获取和使用；原作者署名、贡献记录及 MIT 许可证保持不变。下方指向原仓库的下载链接可能暂时不可用。
+
 <p align="center">
   <img src="assets/brand/superjlu-wordmark.png" alt="SuperJLU" width="420">
 </p>
