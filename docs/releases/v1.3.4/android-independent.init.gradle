@@ -1,0 +1,8 @@
+allprojects {
+    afterEvaluate { project ->
+        if (project.path == ':app') {
+            project.android.defaultConfig.applicationId = 'cn.superjlu.app.aohpup'
+            project.android.buildToolsVersion = '35.0.0'
+        }
+    }
+}

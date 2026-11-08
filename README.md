@@ -1,4 +1,4 @@
-> [!IMPORTANT]
+> [!CAUTION]
 > 原作者的 GitHub 账号目前受限，原仓库暂时无法正常访问。本仓库暂保留官方 **v1.3.4** 源码，并提供 [Windows 下载与 Android 独立分发版](https://github.com/Aohpup/SuperJLU/releases/latest)；原作者署名、贡献记录及 MIT 许可证保持不变。Android 独立版可与原版共存，安装后需重新登录。
 
 <p align="center">
